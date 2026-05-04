@@ -31,7 +31,7 @@ st.markdown("""
 
     /* TITOLO PRINCIPALE: Dimensioni corrette e nessun accavallamento */
     .main-title {
-        font-size: 4.0rem !important; /* Aumentato da 4.5 a 6.0 */
+        font-size: 3.0rem !important; /* Aumentato da 4.5 a 6.0 */
         color: #FFFFFF !important; 
         text-align: center;
         font-weight: 900;
