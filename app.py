@@ -2,20 +2,58 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
-import zipfile
 import re
+import zipfile
 import openpyxl
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
 
+# ==========================================
+# IMPOSTAZIONI PAGINA WEB E GRAFICA (CSS)
+# ==========================================
+st.set_page_config(page_title="FinHack", page_icon="💹", layout="wide")
 
-# ==========================================
-# IMPOSTAZIONI PAGINA WEB
-# ==========================================
-st.set_page_config(page_title="FinHack", layout="wide", page_icon="💹")
-st.title("📊 FinHack 😈: Generatore Report")
+# --- INIEZIONE CSS PER GRAFICA MIGLIORATA ---
+st.markdown("""
+<style>
+    /* Titolo principale iper-moderno */
+    .main-title {
+        font-size: 3.5rem;
+        color: #1E3A8A;
+        text-align: center;
+        font-weight: 800;
+        margin-bottom: 0px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .sub-title {
+        text-align: center;
+        color: #64748B;
+        font-size: 1.2rem;
+        margin-bottom: 2rem;
+        font-style: italic;
+    }
+    /* Arrotonda i box dei messaggi */
+    div.stAlert > div {
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    /* Personalizza la barra di caricamento file */
+    [data-testid="stFileUploadDropzone"] {
+        border: 2px dashed #1E3A8A;
+        border-radius: 15px;
+        background-color: #F8FAFC;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Titoli visivi
+st.markdown('<p class="main-title">📊 FinHack ☠️</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Generazione avanzata e automatizzata dei Report Economico-Finanziari da ORBIS</p>', unsafe_allow_html=True)
+st.divider() # Linea di separazione elegante
+
+st.info("💡 **ISTRUZIONI:** Carica un export diretto da **ORBIS** in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA UNIVERSAL**.")
 
 # ==========================================
 # 1. FUNZIONI DEI CAPITOLI (Moduli)
@@ -1823,12 +1861,26 @@ if uploaded_file is not None:
         righe_finali = len(df_orbis)
         righe_scartate = righe_iniziali - righe_finali
 
-    # Mostra i risultati del filtro a schermo
-    if righe_scartate > 0:
-        st.warning(f"🧹 **Pulizia automatica:** Rimosse **{righe_scartate}** aziende perché mancavano dati al 2024 o la rotazione era ≤ 0. L'ordine è stato ricalcolato. (Aziende valide: **{righe_finali}**)")
-    else:
-        st.success(f"✅ **Dati perfetti!** Tutte le {righe_finali} aziende hanno passato i controlli e sono pronte all'uso.")
+    # ==========================================
+    # DASHBOARD DATI CARICATI
+    # ==========================================
+    st.markdown("### 📊 Analisi Qualità del Dato")
+    
+    # Creiamo 3 colonne visive
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(label="📄 Aziende Totali nel File", value=righe_iniziali)
+        
+    with col2:
+        # Mostra in rosso i dati scartati
+        st.metric(label="🗑️ Aziende Scartate (Rotazione ≤0 o n.d.)", value=righe_scartate, delta=f"-{righe_scartate} escluse", delta_color="inverse")
+        
+    with col3:
+        # Mostra in verde i dati pronti
+        st.metric(label="✅ Aziende Valide", value=righe_finali, delta="Pronte per l'analisi", delta_color="normal")
 
+    st.divider() # Un'altra bella linea prima delle Tabs
 
     # ==========================================
     # 3. GESTIONE DELLE TABS (I Pulsanti)
