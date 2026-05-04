@@ -31,15 +31,15 @@ st.markdown("""
 
     /* TITOLO PRINCIPALE: Dimensioni corrette e nessun accavallamento */
     .main-title {
-        font-size: 4.5rem; /* Grande, ma non esce dallo schermo */
+        font-size: 6.0rem !important; /* Aumentato da 4.5 a 6.0 */
         color: #FFFFFF !important; 
         text-align: center;
         font-weight: 900;
         margin-top: 1rem;
-        margin-bottom: 0px; /* Rimosso margine negativo che causava l'accavallamento! */
-        line-height: 1.2;
+        margin-bottom: 0px; 
+        line-height: 1.1; /* Lo tiene compatto anche se è gigante */
         font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-        text-shadow: 0px 4px 20px rgba(56, 189, 248, 0.15); /* Leggero alone luminoso */
+        text-shadow: 0px 4px 20px rgba(56, 189, 248, 0.15); 
     }
     
     /* SOTTOTITOLO: Distanziato e pulito */
