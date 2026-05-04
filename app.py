@@ -15,35 +15,73 @@ from xlsxwriter.utility import xl_rowcol_to_cell
 # ==========================================
 st.set_page_config(page_title="FinHack", page_icon="💹", layout="wide")
 
-# --- INIEZIONE CSS PER GRAFICA MIGLIORATA ---
+# --- INIEZIONE CSS PER TEMA SCURO PREMIUM ---
 st.markdown("""
 <style>
-    /* Titolo principale iper-moderno */
-    .main-title {
-        font-size: 3.5rem;
-        color: #1E3A8A;
-        text-align: center;
-        font-weight: 800;
-        margin-bottom: 0px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* Forza lo sfondo scuro con sfumatura elegante su tutta l'app */
+    [data-testid="stAppViewContainer"] {
+        background-color: #0E1117;
+        background-image: radial-gradient(circle at top right, #1E293B, #0E1117);
     }
+    
+    /* Forza il colore del testo principale (per i tab e testi normali) */
+    .stMarkdown, p, h1, h2, h3 {
+        color: #F8FAFC !important;
+    }
+
+    /* Titolo principale GIGANTE e Bianco */
+    .main-title {
+        font-size: 5.5rem;
+        color: #FFFFFF !important; 
+        text-align: center;
+        font-weight: 900;
+        margin-bottom: -15px;
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+        letter-spacing: -2px;
+        text-shadow: 0px 4px 10px rgba(0,0,0,0.5); /* Effetto profondità sul nero */
+    }
+    
+    /* Sottotitolo chiaro e leggibile */
     .sub-title {
         text-align: center;
-        color: #64748B;
-        font-size: 1.2rem;
-        margin-bottom: 2rem;
-        font-style: italic;
+        color: #94A3B8 !important; /* Grigio argento */
+        font-size: 1.8rem;
+        margin-bottom: 2.5rem;
     }
-    /* Arrotonda i box dei messaggi */
+    
+    /* Box dei messaggi (arrotondati e scuri con bordo leggero) */
     div.stAlert > div {
         border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        font-size: 1.1rem;
+        background-color: rgba(30, 41, 59, 0.6); /* Sfondo traslucido elegante */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
-    /* Personalizza la barra di caricamento file */
+    
+    /* Barra di caricamento file (Tema Scuro) */
     [data-testid="stFileUploadDropzone"] {
-        border: 2px dashed #1E3A8A;
+        border: 3px dashed #38BDF8 !important; /* Bordo azzurro elettrico/neon */
         border-radius: 15px;
-        background-color: #F8FAFC;
+        background-color: rgba(15, 23, 42, 0.8) !important;
+        padding: 3rem !important; 
+    }
+    /* Testo dentro l'area di caricamento */
+    [data-testid="stFileUploadDropzone"] * {
+        color: #F8FAFC !important;
+    }
+    
+    /* NUMERI DELLA DASHBOARD (Giganti e Azzurro Neon) */
+    [data-testid="stMetricValue"] {
+        font-size: 3.8rem !important;
+        font-weight: 800 !important;
+        color: #38BDF8 !important; /* Azzurro luminoso per staccare sul nero */
+    }
+    
+    /* ETICHETTE DELLA DASHBOARD */
+    [data-testid="stMetricLabel"] p {
+        font-size: 1.4rem !important;
+        font-weight: bold !important;
+        color: #E2E8F0 !important; /* Bianco sporco */
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1772,8 +1810,6 @@ def elabora_capitolo_7(df_filtered):
 # ==========================================
 # 2. INTERFACCIA WEB (Il "Capitolo 0" + Filtri)
 # ==========================================
-
-st.info("💡 **ATTENZIONE:** Il file caricato deve essere un export diretto da **ORBIS** in formato `.xlsx`, generato utilizzando gli specifici filtri e il formato di esportazione **LISTA UNIVERSAL**.")
 
 uploaded_file = st.file_uploader("Trascina qui l'export grezzo di ORBIS (.xlsx)", type=["xlsx"])
 
