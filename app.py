@@ -101,7 +101,7 @@ st.markdown('<p class="main-title">📊 FinHack ☠️</p>', unsafe_allow_html=T
 st.markdown('<div class="sub-title">Generazione avanzata e automatizzata dei Report Finanziari da ORBIS</div>', unsafe_allow_html=True)
 st.divider()
 
-st.info("💡 **ISTRUZIONI:** Carica un export diretto da **ORBIS** in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA UNIVERSAL**.")
+st.info("💡 **ISTRUZIONI:** Carica un export di **ORBIS** in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA UNIVERSAL**.")
 
 # ==========================================
 # 1. FUNZIONI DEI CAPITOLI (Moduli)
