@@ -14,7 +14,7 @@ from xlsxwriter.utility import xl_rowcol_to_cell
 # ==========================================
 # IMPOSTAZIONI PAGINA WEB
 # ==========================================
-st.set_page_config(page_title="FinHack Report Generator", layout="wide", page_icon="💹")
+st.set_page_config(page_title="FinHack", layout="wide", page_icon="💹")
 st.title("📊 FinHack 😈: Generatore Report")
 
 # ==========================================
