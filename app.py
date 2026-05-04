@@ -18,78 +18,88 @@ st.set_page_config(page_title="FinHack", page_icon="💹", layout="wide")
 # --- INIEZIONE CSS PER TEMA SCURO PREMIUM ---
 st.markdown("""
 <style>
-    /* Forza lo sfondo scuro con sfumatura elegante su tutta l'app */
+    /* Sfondo principale: Gradiente diagonale elegante (Midnight Blue to Deep Black) */
     [data-testid="stAppViewContainer"] {
-        background-color: #0E1117;
-        background-image: radial-gradient(circle at top right, #1E293B, #0E1117);
+        background: linear-gradient(135deg, #0B101E 0%, #05070A 100%);
+        background-attachment: fixed;
     }
     
-    /* Forza il colore del testo principale (per i tab e testi normali) */
-    .stMarkdown, p, h1, h2, h3 {
+    /* Colore testo base globale */
+    .stMarkdown, p, h1, h2, h3, span {
         color: #F8FAFC !important;
     }
 
-    /* Titolo principale GIGANTE e Bianco */
+    /* TITOLO PRINCIPALE: Dimensioni corrette e nessun accavallamento */
     .main-title {
-        font-size: 5.5rem;
+        font-size: 4.5rem; /* Grande, ma non esce dallo schermo */
         color: #FFFFFF !important; 
         text-align: center;
         font-weight: 900;
-        margin-bottom: -15px;
-        font-family: 'Helvetica Neue', Arial, sans-serif;
-        letter-spacing: -2px;
-        text-shadow: 0px 4px 10px rgba(0,0,0,0.5); /* Effetto profondità sul nero */
+        margin-top: 1rem;
+        margin-bottom: 0px; /* Rimosso margine negativo che causava l'accavallamento! */
+        line-height: 1.2;
+        font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+        text-shadow: 0px 4px 20px rgba(56, 189, 248, 0.15); /* Leggero alone luminoso */
     }
     
-    /* Sottotitolo chiaro e leggibile */
+    /* SOTTOTITOLO: Distanziato e pulito */
     .sub-title {
         text-align: center;
-        color: #94A3B8 !important; /* Grigio argento */
-        font-size: 1.8rem;
-        margin-bottom: 2.5rem;
+        color: #94A3B8 !important; 
+        font-size: 1.5rem;
+        margin-top: 8px;
+        margin-bottom: 3.5rem; /* Tanto respiro prima della linea divisoria */
+        font-weight: 300;
+        letter-spacing: 0.5px;
     }
     
-    /* Box dei messaggi (arrotondati e scuri con bordo leggero) */
+    /* Box Messaggi (Effetto Vetro / Glassmorphism) */
     div.stAlert > div {
         border-radius: 12px;
         font-size: 1.1rem;
-        background-color: rgba(30, 41, 59, 0.6); /* Sfondo traslucido elegante */
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        background: rgba(30, 41, 59, 0.3) !important; /* Semi-trasparente */
+        backdrop-filter: blur(10px); /* Sfoca quello che c'è dietro */
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
     }
     
-    /* Barra di caricamento file (Tema Scuro) */
+    /* Barra di caricamento file (Effetto Vetro Hover) */
     [data-testid="stFileUploadDropzone"] {
-        border: 3px dashed #38BDF8 !important; /* Bordo azzurro elettrico/neon */
-        border-radius: 15px;
-        background-color: rgba(15, 23, 42, 0.8) !important;
+        border: 2px dashed #38BDF8 !important;
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.4) !important;
+        backdrop-filter: blur(5px);
         padding: 3rem !important; 
+        transition: all 0.3s ease; /* Animazione morbida */
     }
-    /* Testo dentro l'area di caricamento */
+    [data-testid="stFileUploadDropzone"]:hover {
+        border-color: #7DD3FC !important;
+        background: rgba(15, 23, 42, 0.7) !important;
+    }
     [data-testid="stFileUploadDropzone"] * {
         color: #F8FAFC !important;
     }
     
-    /* NUMERI DELLA DASHBOARD (Giganti e Azzurro Neon) */
+    /* NUMERI DASHBOARD (Grandi e Azzurri) */
     [data-testid="stMetricValue"] {
-        font-size: 3.8rem !important;
+        font-size: 3.5rem !important;
         font-weight: 800 !important;
-        color: #38BDF8 !important; /* Azzurro luminoso per staccare sul nero */
+        color: #38BDF8 !important; 
     }
     
-    /* ETICHETTE DELLA DASHBOARD */
+    /* ETICHETTE DASHBOARD */
     [data-testid="stMetricLabel"] p {
-        font-size: 1.4rem !important;
-        font-weight: bold !important;
-        color: #E2E8F0 !important; /* Bianco sporco */
+        font-size: 1.2rem !important;
+        font-weight: 600 !important;
+        color: #CBD5E1 !important; 
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Titoli visivi
+# Titoli visivi (Uso <div> al posto di <p> per evitare i margini imposti da Streamlit)
 st.markdown('<p class="main-title">📊 FinHack ☠️</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Generazione avanzata e automatizzata dei Report Economico-Finanziari da ORBIS</p>', unsafe_allow_html=True)
-st.divider() # Linea di separazione elegante
+st.markdown('<div class="sub-title">Generazione avanzata e automatizzata dei Report Finanziari da ORBIS</div>', unsafe_allow_html=True)
+st.divider()
 
 st.info("💡 **ISTRUZIONI:** Carica un export diretto da **ORBIS** in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA UNIVERSAL**.")
 
