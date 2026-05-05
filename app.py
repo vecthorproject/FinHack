@@ -1758,8 +1758,11 @@ def elabora_capitolo_7(df_filtered):
             excel_buffer = io.BytesIO()
             with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
                 if 'Rating Combinato' in df_cat.columns:
-                    colonne_rank = [c for c in df_cat.columns if '_NAZ' in c]
-                    col_rank_spareggio = colonne_rank[0] if colonne_rank else col_societa
+                    # ORA TENIAMO SIA I RANK NAZIONALI CHE QUELLI REGIONALI
+                    colonne_rank = [c for c in df_cat.columns if '_NAZ' in c or '_REG' in c]
+                    # Per lo spareggio nel foglio TOP RATING usiamo il primo rank nazionale
+                    colonne_rank_naz = [c for c in df_cat.columns if '_NAZ' in c]
+                    col_rank_spareggio = colonne_rank_naz[0] if colonne_rank_naz else col_societa
                     
                     df_rating = df_cat.sort_values(
                         by=['Rating Combinato', 'Benchmark Totale', col_rank_spareggio], 
