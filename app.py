@@ -107,7 +107,7 @@ st.info("💡 **ISTRUZIONI:** Carica un export di **ORBIS** in formato `.xlsx`. 
 # 1. FUNZIONI DEI CAPITOLI (Moduli)
 # ==========================================
 
-def elabora_capitolo_1(df_filtered):
+def elabora_capitolo_1(df_filtered, azienda_target):
     # ==========================================
     # GANCI INIZIALI
     # ==========================================
@@ -129,6 +129,11 @@ def elabora_capitolo_1(df_filtered):
     df['Forma Giuridica Pulita'] = df[colonna_fg].str.replace(r'\s*\(Italia\)', '', regex=True).str.strip()
     df['Macro Forma Giuridica'] = df['Forma Giuridica Pulita'].map(mappatura_fg)
     df_cap1 = df.dropna(subset=['Forma Giuridica Pulita'])
+
+    # 🟢 ESTRATTO TARGET: Individua la forma giuridica specifica e macro dell'azienda target
+    df_target_check = df_cap1[df_cap1['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    target_fg_pulita = df_target_check.iloc[0]['Forma Giuridica Pulita'] if not df_target_check.empty else None
+    target_fg_macro = df_target_check.iloc[0]['Macro Forma Giuridica'] if not df_target_check.empty else None
 
     # FOGLIO "FG"
     fg_detail = df_cap1['Forma Giuridica Pulita'].value_counts().reset_index()
@@ -189,13 +194,26 @@ def elabora_capitolo_1(df_filtered):
     # ==========================================
     # GANCIO DI MEZZO (Scrive in RAM invece che su disco)
     # ==========================================
+    # Estrazione riga isolata dell'azienda target
+    df_target_cap1 = df_cap1[df_cap1['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    if not df_target_cap1.empty:
+        forma_p = df_target_cap1.iloc[0]['Forma Giuridica Pulita']
+        macro_p = df_target_cap1.iloc[0]['Macro Forma Giuridica']
+        info_target_data = pd.DataFrame({
+            'Metrica Target': ['Ragione Sociale', 'Forma Giuridica Specifica', 'Macro Categoria Appartenenza'],
+            'Valore': [azienda_target, forma_p, macro_p]
+        })
+    else:
+        info_target_data = pd.DataFrame({'Nota': ['Azienda Target non trovata nel campione corrente']})
+
     output_buffer = io.BytesIO()
     with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
         fg_detail.to_excel(writer, sheet_name='FG', index=False, startcol=0, startrow=0)
         fg_macro.to_excel(writer, sheet_name='FG', index=False, startcol=4, startrow=3)
         fin_detail.to_excel(writer, sheet_name='Liv.Agg. per FG', index=False, startcol=0, startrow=0)
         fin_macro.to_excel(writer, sheet_name='Liv.Agg. per FG', index=False, startcol=4, startrow=3)
-
+        # Scrittura del foglio di isolamento dedicato
+        info_target_data.to_excel(writer, sheet_name='Target_Forma_Giuridica', index=False)
 
     # ==========================================
     # GANCIO DI FORMATTAZIONE
@@ -209,26 +227,40 @@ def elabora_capitolo_1(df_filtered):
     total_font = Font(bold=True)
     thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    def format_table(worksheet, start_row, start_col, dataframe, is_count=False, has_total_row=True):
+    def format_table(worksheet, start_row, start_col, dataframe, is_count=False, has_total_row=True, highlight_value=None):
         end_row = start_row + len(dataframe)
         end_col = start_col + len(dataframe.columns) - 1
-        
+
+        # Stili di evidenziazione gialla per la riga ministeriale o societaria corrispondente
+        highlight_fill = PatternFill(start_color='FFF2CC', end_color='FFF2CC', fill_type='solid')
+        highlight_font = Font(bold=True, color='000000')
+
         for row in range(start_row, end_row + 1):
+            # Controlla se la prima cella descrittiva della riga combacia con il nostro target
+            is_highlight = False
+            if row > start_row and highlight_value is not None:
+                cell_descr = str(worksheet.cell(row=row, column=start_col).value).strip()
+                if cell_descr.lower() == str(highlight_value).lower().strip():
+                    is_highlight = True
+
             for col in range(start_col, end_col + 1):
                 cell = worksheet.cell(row=row, column=col)
-                
                 if row == start_row:
                     cell.fill = header_fill
                     cell.font = header_font
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                 else:
                     cell.border = thin_border
-                    if row % 2 != 0:
-                        cell.fill = alt_row_fill
-                
-                if has_total_row and row == end_row:
-                    cell.font = total_font
-                    cell.fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
+                    if is_highlight and not (has_total_row and row == end_row):
+                        # Colora l'intera riga di giallo se appartiene alla categoria dell'azienda target
+                        cell.fill = highlight_fill
+                        cell.font = highlight_font
+                    else:
+                        if row % 2 != 0:
+                            cell.fill = alt_row_fill
+                        if has_total_row and row == end_row:
+                            cell.font = total_font
+                            cell.fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
 
                 if row > start_row and col > start_col:
                     header_val = str(worksheet.cell(row=start_row, column=col).value)
@@ -240,14 +272,18 @@ def elabora_capitolo_1(df_filtered):
                         cell.number_format = '#,##0.00'
 
     ws_fg = wb['FG']
-    format_table(ws_fg, 1, 1, fg_detail, is_count=True, has_total_row=True)
-    format_table(ws_fg, 4, 5, fg_macro, is_count=True, has_total_row=True)
+    # Evidenzia la forma giuridica specifica (es. Società per azioni) e quella macro
+    format_table(ws_fg, 1, 1, fg_detail, is_count=True, has_total_row=True, highlight_value=target_fg_pulita)
+    format_table(ws_fg, 4, 5, fg_macro, is_count=True, has_total_row=True, highlight_value=target_fg_macro)
 
     ws_fin = wb['Liv.Agg. per FG']
-    format_table(ws_fin, 1, 1, fin_detail, is_count=False, has_total_row=True)
-    format_table(ws_fin, 4, 5, fin_macro, is_count=False, has_total_row=False) 
+    format_table(ws_fin, 1, 1, fin_detail, is_count=False, has_total_row=True, highlight_value=target_fg_pulita)
+    format_table(ws_fin, 4, 5, fin_macro, is_count=False, has_total_row=False) # Mantiene standard
 
-    for ws in [ws_fg, ws_fin]:
+    ws_target_1 = wb['Target_Forma_Giuridica']
+    format_table(ws_target_1, 1, 1, info_target_data, is_count=False, has_total_row=False)
+
+    for ws in [ws_fg, ws_fin, ws_target_1]:
         for col in ws.columns:
             max_length = 0
             column = col[0].column_letter
@@ -271,7 +307,7 @@ def elabora_capitolo_1(df_filtered):
 
 
 
-def elabora_capitolo_2(df_filtered):
+def elabora_capitolo_2(df_filtered, azienda_target):
     import io
     import pandas as pd
 
@@ -338,15 +374,24 @@ def elabora_capitolo_2(df_filtered):
     pivot_reg['Numero dipendenti 2024'] = pivot_reg['Numero dipendenti 2024'].fillna(0).astype(int)
     pivot_reg['Imprese'] = pivot_reg['Imprese'].fillna(0).astype(int)
 
+    # 🟢 ESTRATTO TARGET: Trova la regione (NUTS2) e la macroregione dell'azienda bersaglio
+    df_az_geo_check = df_base[df_base['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    target_regione_nome = df_az_geo_check.iloc[0]['Nome Regione'] if not df_az_geo_check.empty else None
+    target_macro_nome = df_az_geo_check.iloc[0]['Macroregione'] if not df_az_geo_check.empty else None
 
     # ==========================================
     # GANCIO DI MEZZO E FORMATTAZIONE CON XLSXWRITER
     # ==========================================
     output_buffer = io.BytesIO()
-    
     writer = pd.ExcelWriter(output_buffer, engine='xlsxwriter')
     workbook = writer.book
     worksheet = workbook.add_worksheet('Dati Aggregate')
+
+    # 🟢 STILI HIGHLIGHT: Creazione dei formati di riga gialla per xlsxwriter
+    fmt_hl_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'bold': True})
+    fmt_hl_int  = workbook.add_format({'num_format': '#,##0', 'border': 1, 'bg_color': '#FFF2CC', 'bold': True})
+    fmt_hl_dec  = workbook.add_format({'num_format': '#,##0.00', 'border': 1, 'bg_color': '#FFF2CC', 'bold': True})
+    fmt_hl_perc = workbook.add_format({'num_format': '0.00%', 'border': 1, 'bg_color': '#FFF2CC', 'bold': True})
 
     # Palette Stili
     format_header_blue = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#4F81BD', 'font_color': 'white', 'border': 1})
@@ -396,22 +441,44 @@ def elabora_capitolo_2(df_filtered):
     for macro in macros_present:
         df_macro = pivot_reg.loc[macro]
         start_reg_idx = current_idx
+
+        # Ciclo delle singole Regioni
         for reg, row_data in df_macro.iterrows():
-            worksheet.write(current_idx, 0, reg, format_regione)
-            worksheet.write(current_idx, 1, row_data['Imprese'], f_int)
-            worksheet.write(current_idx, 3, row_data['Totale Ricavi migl EUR 2024'], f_dec)
-            worksheet.write(current_idx, 5, row_data['Totale Attivo migl EUR 2024'], f_dec)
-            worksheet.write(current_idx, 7, row_data['Numero dipendenti 2024'], f_int)
+            # Controlla se la regione corrente è quella dell'azienda target
+            is_reg_target = (target_regione_nome is not None and str(reg).lower().strip() == str(target_regione_nome).lower().strip())
+
+            # Sceglie al volo il formato (Giallo se target, standard altrimenti)
+            f_r = fmt_hl_text if is_reg_target else format_regione
+            f_i = fmt_hl_int if is_reg_target else f_int
+            f_d = fmt_hl_dec if is_reg_target else f_dec
+            f_p = fmt_hl_perc if is_reg_target else f_perc
+
+            worksheet.write(current_idx, 0, reg, f_r)
+            worksheet.write(current_idx, 1, row_data['Imprese'], f_i)
+            worksheet.write(current_idx, 3, row_data['Totale Ricavi migl EUR 2024'], f_d)
+            worksheet.write(current_idx, 5, row_data['Totale Attivo migl EUR 2024'], f_d)
+            worksheet.write(current_idx, 7, row_data['Numero dipendenti 2024'], f_i)
             for c, v_col in zip([2, 4, 6, 8], ['B', 'D', 'F', 'H']):
-                worksheet.write_formula(current_idx, c, f"={v_col}{current_idx+1}/{v_col}${riga_italia_excel}", f_perc)
+                worksheet.write_formula(current_idx, c, f"={v_col}{current_idx+1}/{v_col}${riga_italia_excel}", f_p)
             current_idx += 1
+
         end_reg_idx = current_idx - 1
 
-        worksheet.write(current_idx, 0, macro, format_macro_bold)
+        # Totale della Macroregione
+        is_macro_target = (target_macro_nome is not None and str(macro).lower().strip() == str(target_macro_nome).lower().strip())
+
+        # Formati dedicati con sfondo giallo per il sub-totale della macroregione dell'azienda target
+        f_m_b = workbook.add_format({'bold': True, 'bg_color': '#FFF2CC', 'border': 1}) if is_macro_target else format_macro_bold
+        f_m_i = workbook.add_format({'bold': True, 'num_format': '#,##0', 'bg_color': '#FFF2CC', 'border': 1}) if is_macro_target else f_macro_int
+        f_m_d = workbook.add_format({'bold': True, 'num_format': '#,##0.00', 'bg_color': '#FFF2CC', 'border': 1}) if is_macro_target else f_macro_dec
+        f_m_p = workbook.add_format({'bold': True, 'num_format': '0.00%', 'bg_color': '#FFF2CC', 'border': 1}) if is_macro_target else f_macro_perc
+
+        worksheet.write(current_idx, 0, macro, f_m_b)
         for c, v_col in zip([1, 3, 5, 7], ['B', 'D', 'F', 'H']):
-            worksheet.write_formula(current_idx, c, f"=SUM({v_col}{start_reg_idx+1}:{v_col}{end_reg_idx+1})", f_macro_int if c in [1,7] else f_macro_dec)
+            worksheet_formula = f"=SUM({v_col}{start_reg_idx+1}:{v_col}{end_reg_idx+1})"
+            worksheet.write_formula(current_idx, c, worksheet_formula, f_m_i if c in [1,7] else f_m_d)
         for c, v_col in zip([2, 4, 6, 8], ['B', 'D', 'F', 'H']):
-            worksheet.write_formula(current_idx, c, f"={v_col}{current_idx+1}/{v_col}${riga_italia_excel}", f_macro_perc)
+            worksheet.write_formula(current_idx, c, f"={v_col}{current_idx+1}/{v_col}${riga_italia_excel}", f_m_p)
         macro_tot_rows.append(current_idx)
         current_idx += 1
 
@@ -554,13 +621,39 @@ def elabora_capitolo_2(df_filtered):
     # ==========================================
     # GANCI FINALI
     # ==========================================
+    # Isolamento dati geografici e dimensionali dell'azienda target
+    df_az_geo = df_base[df_base['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    ws_target_geo = workbook.add_worksheet('Target_Posizionamento_Geo')
+
+    ws_target_geo.set_column('A:A', 30)
+    ws_target_geo.set_column('B:B', 35)
+
+    ws_target_geo.write(0, 0, 'Anagrafica / Geometria Territorial', format_header_blue)
+    ws_target_geo.write(0, 1, 'Dettaglio Azienda Target', format_header_blue)
+
+    if not df_az_geo.empty:
+        riga_g = df_az_geo.iloc[0]
+        voci_geo = [
+            ('Ragione Sociale', riga_g['Ragione Sociale'], format_regione),
+            ('Macroregione Appartenenza', riga_g['Macroregione'], format_regione),
+            ('Regione Specifica (NUTS2)', riga_g['Nome Regione'], format_regione),
+            ('Totale Ricavi 2024 (€)', riga_g['Totale Ricavi migl EUR 2024'], f_dec),
+            ('Totale Attivo 2024 (€)', riga_g['Totale Attivo migl EUR 2024'], f_dec),
+            ('Numero Dipendenti 2024', riga_g['Numero dipendenti 2024'], f_int)
+        ]
+        for idx, (voce, valore, formato_cella) in enumerate(voci_geo, 1):
+            ws_target_geo.write(idx, 0, voce, format_macro_bold)
+            ws_target_geo.write(idx, 1, valore, formato_cella)
+    else:
+        ws_target_geo.write(1, 0, 'Azienda Target non trovata', format_regione)
+
     writer.close()
     output_buffer.seek(0)
     
     return output_buffer
 
 
-def elabora_capitolo_3(df_filtered):
+def elabora_capitolo_3(df_filtered, azienda_target):
     import io
     import pandas as pd
     import numpy as np
@@ -569,9 +662,9 @@ def elabora_capitolo_3(df_filtered):
     import re
 
     # Funzione interna che hai creato tu, adattata per girare qui dentro
-    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict):
+    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target):
         # 1. Filtro Colonne per la sezione corrente
-        base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower()]
+        base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower() or 'nuts2' in str(c).lower() or 'nuts3' in str(c).lower()]
         metric_cols = [c for c in df_raw.columns if keyword_ricerca in str(c).lower()]
         
         if not metric_cols:
@@ -581,25 +674,37 @@ def elabora_capitolo_3(df_filtered):
         df = df.replace(['n.d.', 'n.a.', 'n.s.', ''], np.nan)
         num_rows = len(df)
 
+        col_ragione_idx = [idx for idx, c in enumerate(df.columns) if 'ragione' in str(c).lower()][0]
+        col_ragione = df.columns[col_ragione_idx]
+
         # 2. Creazione Fogli
         df.to_excel(writer, sheet_name=sheet_data, index=False, startrow=0)
         worksheet_data = writer.sheets[sheet_data]
         worksheet_stats = workbook.add_worksheet(sheet_stats)
 
-        # 3. Compilazione Foglio 1: Dati e Autofit
+        # 3. Compilazione Foglio 1: Dati, Autofit ed EVIDENZIAZIONE AZIENDA TARGET
+        fmt_target_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
+        fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
+
         for i, col in enumerate(df.columns):
             worksheet_data.write(0, i, col, formati['header'])
             col_data = df[col].dropna()
-            max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2 
+            max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2
             worksheet_data.set_column(i, i, min(max_len, 45))
+
             for row in range(1, num_rows + 1):
                 val = df.iat[row-1, i]
+                is_target = azienda_target.lower().strip() in str(df.iat[row-1, col_ragione_idx]).lower().strip()
+
+                f_text = fmt_target_text if is_target else formati['data_text']
+                f_num = fmt_target_num if is_target else formati['data_num']
+
                 if pd.isna(val):
-                    worksheet_data.write(row, i, "", formati['data_text'])
+                    worksheet_data.write(row, i, "", f_text)
                 elif isinstance(val, (int, float)):
-                    worksheet_data.write_number(row, i, val, formati['data_num'])
+                    worksheet_data.write_number(row, i, val, f_num)
                 else:
-                    worksheet_data.write_string(row, i, str(val), formati['data_text'])
+                    worksheet_data.write_string(row, i, str(val), f_text)
 
         # 4. Preparazione Metriche per il Foglio 2
         numeric_cols_idx = [df.columns.get_loc(c) for c in metric_cols]
@@ -620,7 +725,11 @@ def elabora_capitolo_3(df_filtered):
 
         all_years = sorted(list(set(anno for m in metrics_dict for anno in metrics_dict[m].keys())))
         metrics_list = list(metrics_dict.keys())
-
+        
+        # --- NUOVA REGOLA: FORZA L'ORDINE SU EBITDA -> EBIT -> PROFITTO ---
+        ordine_desiderato = ['ebitda', 'ebit', 'profit']
+        metrics_list = sorted(metrics_list, key=lambda x: next((i for i, k in enumerate(ordine_desiderato) if k in x.lower()), 99))
+        
         col_left = 0
         col_mid = len(all_years) + 2
         col_right = col_mid + (len(all_years)*2 - 1) + 2
@@ -697,47 +806,159 @@ def elabora_capitolo_3(df_filtered):
 
             current_row += 8 
 
-        # 6. Costruzione Blocco Destro (Riassunto Consolidato)
+        # 6. Costruzione Blocco Destro: CONFRONTO DIRETTO RIGHE SETTORE VS AZIENDA TARGET
         r_right = 1
-        worksheet_stats.write(r_right, col_right, "", formati['header'])
+        worksheet_stats.write(r_right, col_right, "Confronto Benchmark", formati['header'])
         for i, year in enumerate(all_years):
             worksheet_stats.write(r_right, col_right + 1 + i, year, formati['header'])
-            
-        for m_idx, metric in enumerate(metrics_list):
-            r_right_data = r_right + 1 + m_idx
-            worksheet_stats.write(r_right_data, col_right, metric, formati['label'])
+
+        df_azienda = df[df[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        fmt_az_label = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'font_color': '#002060', 'border': 1, 'align': 'left'})
+        fmt_az_num = workbook.add_format({'bg_color': '#F2F4F8', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'bold': True})
+
+        row_cursor = r_right + 1
+        for metric in metrics_list:
+            # Riga 1: Settore
+            worksheet_stats.write(row_cursor, col_right, f"{metric} (Settore)", formati['label'])
             for i, year in enumerate(all_years):
                 if year in median_cells[metric]:
-                    source_cell = median_cells[metric][year]
-                    worksheet_stats.write_formula(r_right_data, col_right + 1 + i, f"={source_cell}", formati['data_num'])
+                    worksheet_stats.write_formula(row_cursor, col_right + 1 + i, f"={median_cells[metric][year]}", formati['data_num'])
                 else:
-                    worksheet_stats.write(r_right_data, col_right + 1 + i, "n.d.", formati['data_text'])
+                    worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+            row_cursor += 1
 
-        # 7. Inserimento Grafico Dinamico
-        if metrics_list:
-            chart = workbook.add_chart({'type': 'column'})
-            for m_idx, metric in enumerate(metrics_list):
-                r_idx = r_right + 1 + m_idx
-                start_col = xlsxwriter.utility.xl_col_to_name(col_right + 1)
-                end_col = xlsxwriter.utility.xl_col_to_name(col_right + len(all_years))
-                
-                chart.add_series({
-                    'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_idx + 1}",
-                    'categories': f"='{sheet_stats}'!${start_col}$2:${end_col}$2",
-                    'values': f"='{sheet_stats}'!${start_col}${r_idx + 1}:${end_col}${r_idx + 1}",
-                    'data_labels': {'value': True, 'num_format': '#,##0.##'}
-                })
-                
-            chart.set_legend({'position': 'bottom'})
-            chart.set_style(11)
-            chart.set_y_axis({'name': y_axis_name, 'major_gridlines': {'visible': True}})
-            chart.set_title({'name': chart_title})
-            chart.set_size({'width': 600, 'height': 350})
+            # Riga 2: Azienda Target
+            worksheet_stats.write(row_cursor, col_right, f"{metric} ({azienda_target})", fmt_az_label)
+            for i, year in enumerate(all_years):
+                if year in metrics_dict[metric] and not df_azienda.empty:
+                    val_az = df_azienda.iloc[0, metrics_dict[metric][year]]
+                    if pd.isna(val_az) or val_az == "":
+                        worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+                    else:
+                        worksheet_stats.write_number(row_cursor, col_right + 1 + i, float(val_az), fmt_az_num)
+                else:
+                    worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+            row_cursor += 1
 
-            chart_row = r_right + len(metrics_list) + 3 
-            worksheet_stats.insert_chart(chart_row, col_right, chart)
+        # ==========================================
+        # 7. INSERIMENTO GRAFICI DINAMICI UNIFORMI (CAP 3, 4, 5)
+        # ==========================================
+        row_start_metrics = r_right + 1
+        start_col_letter = xlsxwriter.utility.xl_col_to_name(col_right + 1)
+        end_col_letter = xlsxwriter.utility.xl_col_to_name(col_right + len(all_years))
+        last_year_col = end_col_letter 
+        
+        safe_chart_row = max(current_row, row_cursor)
 
-        worksheet_stats.ignore_errors({'formula_differs': 'G1:Z500', 'number_stored_as_text': 'A1:Z500'})
+        # 🟢 IMPOSTAZIONI ANTI-ACCAVALLAMENTO UNIVERSALI
+        # Riduciamo i font per impedire che i numeri giganteschi sfondino i margini del grafico
+        font_assi = {'size': 9}
+        font_etichette = {'size': 8}
+        
+        # --- GRAFICO 1 (LINEE CUMULATIVE): Trend Settore ---
+        chart_trend_settore = workbook.add_chart({'type': 'line'})
+        for m_idx, metric in enumerate(metrics_list):
+            r_settore = row_start_metrics + (m_idx * 2)
+            chart_trend_settore.add_series({
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_settore + 1}:${end_col_letter}${r_settore + 1}",
+                'marker': {'type': 'circle'}
+            })
+        chart_trend_settore.set_title({'name': f'Andamento Storico di Settore ({chart_title.replace("Andamento Mediano ", "")})'})
+        chart_trend_settore.set_legend({'position': 'bottom', 'font': font_assi})
+        chart_trend_settore.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
+        chart_trend_settore.set_y_axis({'name_font': font_assi, 'num_font': font_assi})
+        chart_trend_settore.set_size({'width': 650, 'height': 350})
+        chart_trend_settore.set_style(11)
+        worksheet_stats.insert_chart(safe_chart_row, col_left, chart_trend_settore)
+
+        # --- GRAFICI MULTIPLI (COPPIE) ---
+        chart_offset_y = safe_chart_row
+        
+        for m_idx, metric in enumerate(metrics_list):
+            r_settore = row_start_metrics + (m_idx * 2)
+            r_azienda = r_settore + 1
+            
+            # 🟢 FIX ISTOGRAMMA: Se la metrica riguarda grandi volumi, abbandona la linea e crea un istogramma standard
+            is_volumi = any(k in metric.lower() for k in ['ricavi', 'attivo', 'produzione'])
+            tipo_storico = 'column' if is_volumi else 'line'
+
+            # A) Grafico Storico (Linee o Colonne in base alla metrica)
+            chart_storico = workbook.add_chart({'type': tipo_storico})
+            
+            # Setup posizioni etichette: se istogramma vanno "sopra il tetto" della barra, se linea le separiamo (Sopra/Sotto)
+            pos_label_settore = 'outside_end' if is_volumi else 'below'
+            pos_label_azienda = 'outside_end' if is_volumi else 'above'
+
+            # 🟢 Disattiviamo i numeri fluttuanti: i valori precisi saranno nella Tabella in basso
+            serie_settore_storico = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_settore + 1}:${end_col_letter}${r_settore + 1}"
+            }
+            serie_azienda_storico = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_azienda + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_azienda + 1}:${end_col_letter}${r_azienda + 1}"
+            }
+
+            # ... (codice marker rimane intatto) ...
+            if not is_volumi:
+                serie_settore_storico['marker'] = {'type': 'circle'}
+                serie_azienda_storico['marker'] = {'type': 'square'}
+
+            chart_storico.add_series(serie_azienda_storico)
+            chart_storico.add_series(serie_settore_storico)
+            chart_storico.set_title({'name': f'Benchmark Storico - {metric}'})
+
+            # 🟢 Nessuna legenda necessaria: la tabella dati include già i nomi delle serie!
+            chart_storico.set_legend({'none': True}) 
+
+            # 🟢 ATTIVAZIONE MATRICE DATI (DATA TABLE)
+            chart_storico.set_table({'show_keys': True})
+
+            chart_storico.set_x_axis({'name_font': font_assi, 'num_font': font_assi})
+            # 🟢 Togli la griglia orizzontale SOLO se il grafico storico è un istogramma (es. Ricavi)
+            if is_volumi:
+                chart_storico.set_y_axis({'name_font': font_assi, 'num_font': font_assi, 'major_gridlines': {'visible': False}})
+            else:
+                chart_storico.set_y_axis({'name_font': font_assi, 'num_font': font_assi})
+            chart_storico.set_size({'width': 550, 'height': 350}) 
+            chart_storico.set_style(11)
+            
+            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - Solo anno 2024)
+            chart_col_singolo = workbook.add_chart({'type': 'column'})
+            
+            serie_settore_col = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${last_year_col}$2:${last_year_col}$2",
+                'values': f"='{sheet_stats}'!${last_year_col}${r_settore + 1}:${last_year_col}${r_settore + 1}",
+                'data_labels': {'value': True, 'num_format': '#,##0.00', 'font': font_etichette, 'position': 'outside_end'} 
+            }
+            serie_azienda_col = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_azienda + 1}",
+                'categories': f"='{sheet_stats}'!${last_year_col}$2:${last_year_col}$2",
+                'values': f"='{sheet_stats}'!${last_year_col}${r_azienda + 1}:${last_year_col}${r_azienda + 1}",
+                'data_labels': {'value': True, 'num_format': '#,##0.00', 'font': font_etichette, 'position': 'outside_end'} 
+            }
+            chart_col_singolo.add_series(serie_azienda_col)
+            chart_col_singolo.add_series(serie_settore_col)
+            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno 2024)'})
+            chart_col_singolo.set_legend({'position': 'bottom', 'font': font_assi})
+            chart_col_singolo.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
+            chart_col_singolo.set_y_axis({'name_font': font_assi, 'num_font': font_assi, 'major_gridlines': {'visible': False}})
+            chart_col_singolo.set_size({'width': 350, 'height': 350})
+            chart_col_singolo.set_style(11)
+
+            # Inseriamo i grafici distanziandoli a dovere sulla destra
+            worksheet_stats.insert_chart(chart_offset_y, col_right + 1, chart_storico)
+            worksheet_stats.insert_chart(chart_offset_y, col_right + 9, chart_col_singolo)
+            
+            # Incremento dello step verticale da 16 a 18 righe per distanziare nettamente una metrica dall'altra
+            chart_offset_y += 20
+
+        worksheet_stats.ignore_errors({'formula_differs': 'A1:Z500', 'number_stored_as_text': 'A1:Z500'})
 
     # ==========================================
     # LOGICA DI ESECUZIONE 
@@ -763,7 +984,8 @@ def elabora_capitolo_3(df_filtered):
         sheet_stats='3b. Stat. Eq. Economico',
         chart_title='Andamento Mediano Margini',
         y_axis_name='Percentuale (%)',
-        rename_dict={} 
+        rename_dict={} ,
+        azienda_target=azienda_target
     )
 
     costruisci_sezione_analisi(
@@ -773,7 +995,8 @@ def elabora_capitolo_3(df_filtered):
         sheet_stats='4b. Stat. Svil. Dimensionale',
         chart_title='Andamento Mediano Ricavi',
         y_axis_name='Migliaia di Euro (€)',
-        rename_dict={'produzione': 'Ricavi'} 
+        rename_dict={'produzione': 'Ricavi'} ,
+        azienda_target=azienda_target
     )
 
     writer.close()
@@ -782,7 +1005,7 @@ def elabora_capitolo_3(df_filtered):
     return output_buffer
 
 
-def elabora_capitolo_4(df_filtered):
+def elabora_capitolo_4(df_filtered, azienda_target):
     import io
     import pandas as pd
     import numpy as np
@@ -790,9 +1013,9 @@ def elabora_capitolo_4(df_filtered):
     from xlsxwriter.utility import xl_rowcol_to_cell
     import re
 
-    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict):
+    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target):
         # 1. Filtro Colonne
-        base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower()]
+        base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower() or 'nuts2' in str(c).lower() or 'nuts3' in str(c).lower()]
         
         if isinstance(keyword_ricerca, list):
             metric_cols = [c for c in df_raw.columns if any(kw.lower() in str(c).lower() for kw in keyword_ricerca)]
@@ -806,25 +1029,37 @@ def elabora_capitolo_4(df_filtered):
         df = df.replace(['n.d.', 'n.a.', 'n.s.', ''], np.nan)
         num_rows = len(df)
 
+        col_ragione_idx = [idx for idx, c in enumerate(df.columns) if 'ragione' in str(c).lower()][0]
+        col_ragione = df.columns[col_ragione_idx]
+
         # 2. Creazione Fogli
         df.to_excel(writer, sheet_name=sheet_data, index=False, startrow=0)
         worksheet_data = writer.sheets[sheet_data]
         worksheet_stats = workbook.add_worksheet(sheet_stats)
 
-        # 3. Compilazione Foglio 1: Dati e Autofit
+        # 3. Compilazione Foglio 1: Dati, Autofit ed EVIDENZIAZIONE AZIENDA TARGET
+        fmt_target_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
+        fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
+
         for i, col in enumerate(df.columns):
             worksheet_data.write(0, i, col, formati['header'])
             col_data = df[col].dropna()
             max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2
             worksheet_data.set_column(i, i, min(max_len, 45))
+
             for row in range(1, num_rows + 1):
                 val = df.iat[row-1, i]
+                is_target = azienda_target.lower().strip() in str(df.iat[row-1, col_ragione_idx]).lower().strip()
+
+                f_text = fmt_target_text if is_target else formati['data_text']
+                f_num = fmt_target_num if is_target else formati['data_num']
+
                 if pd.isna(val):
-                    worksheet_data.write(row, i, "", formati['data_text'])
+                    worksheet_data.write(row, i, "", f_text)
                 elif isinstance(val, (int, float)):
-                    worksheet_data.write_number(row, i, val, formati['data_num'])
+                    worksheet_data.write_number(row, i, val, f_num)
                 else:
-                    worksheet_data.write_string(row, i, str(val), formati['data_text'])
+                    worksheet_data.write_string(row, i, str(val), f_text)
 
         # 4. Preparazione Metriche per il Foglio 2
         numeric_cols_idx = [df.columns.get_loc(c) for c in metric_cols]
@@ -924,69 +1159,164 @@ def elabora_capitolo_4(df_filtered):
 
             current_row += 8 
 
-        # 6. Costruzione Blocco Destro (Riassunto Consolidato)
+        # 6. Costruzione Blocco Destro: CONFRONTO DIRETTO RIGHE SETTORE VS AZIENDA TARGET
         r_right = 1
-        worksheet_stats.write(r_right, col_right, "", formati['header'])
+        worksheet_stats.write(r_right, col_right, "Confronto Benchmark", formati['header'])
         for i, year in enumerate(all_years):
             worksheet_stats.write(r_right, col_right + 1 + i, year, formati['header'])
 
-        for m_idx, metric in enumerate(metrics_list):
-            r_right_data = r_right + 1 + m_idx
-            worksheet_stats.write(r_right_data, col_right, metric, formati['label'])
+        df_azienda = df[df[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        fmt_az_label = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'font_color': '#002060', 'border': 1, 'align': 'left'})
+        fmt_az_num = workbook.add_format({'bg_color': '#F2F4F8', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'bold': True})
+
+        row_cursor = r_right + 1
+        for metric in metrics_list:
+            # Riga 1: Settore
+            worksheet_stats.write(row_cursor, col_right, f"{metric} (Settore)", formati['label'])
             for i, year in enumerate(all_years):
                 if year in median_cells[metric]:
-                    source_cell = median_cells[metric][year]
-                    worksheet_stats.write_formula(r_right_data, col_right + 1 + i, f"={source_cell}", formati['data_num'])
+                    worksheet_stats.write_formula(row_cursor, col_right + 1 + i, f"={median_cells[metric][year]}", formati['data_num'])
                 else:
-                    worksheet_stats.write(r_right_data, col_right + 1 + i, "n.d.", formati['data_text'])
+                    worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+            row_cursor += 1
 
-        # 7. Inserimento Grafici Dinamici (Separati)
-        chart_main = workbook.add_chart({'type': 'column'})
-        chart_sec = workbook.add_chart({'type': 'column'})
+            # Riga 2: Azienda Target
+            worksheet_stats.write(row_cursor, col_right, f"{metric} ({azienda_target})", fmt_az_label)
+            for i, year in enumerate(all_years):
+                if year in metrics_dict[metric] and not df_azienda.empty:
+                    val_az = df_azienda.iloc[0, metrics_dict[metric][year]]
+                    if pd.isna(val_az) or val_az == "":
+                        worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+                    else:
+                        worksheet_stats.write_number(row_cursor, col_right + 1 + i, float(val_az), fmt_az_num)
+                else:
+                    worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+            row_cursor += 1
+
+        # ==========================================
+        # 7. INSERIMENTO GRAFICI DINAMICI UNIFORMI (CAP 3, 4, 5)
+        # ==========================================
+        row_start_metrics = r_right + 1
+        start_col_letter = xlsxwriter.utility.xl_col_to_name(col_right + 1)
+        end_col_letter = xlsxwriter.utility.xl_col_to_name(col_right + len(all_years))
+        last_year_col = end_col_letter 
         
-        metriche_isolate = ['Indice Rotazione Cap.Inv.', 'Gearing']
-        has_sec_chart = False
-        titolo_sec = ""
+        safe_chart_row = max(current_row, row_cursor)
 
+        # 🟢 IMPOSTAZIONI ANTI-ACCAVALLAMENTO UNIVERSALI
+        # Riduciamo i font per impedire che i numeri giganteschi sfondino i margini del grafico
+        font_assi = {'size': 9}
+        font_etichette = {'size': 8}
+        
+        # --- GRAFICO 1 (LINEE CUMULATIVE): Trend Settore ---
+        chart_trend_settore = workbook.add_chart({'type': 'line'})
         for m_idx, metric in enumerate(metrics_list):
-            r_idx = r_right + 1 + m_idx
-            start_col = xlsxwriter.utility.xl_col_to_name(col_right + 1)
-            end_col = xlsxwriter.utility.xl_col_to_name(col_right + len(all_years))
+            r_settore = row_start_metrics + (m_idx * 2)
+            chart_trend_settore.add_series({
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_settore + 1}:${end_col_letter}${r_settore + 1}",
+                'marker': {'type': 'circle'}
+            })
+        chart_trend_settore.set_title({'name': f'Andamento Storico di Settore ({chart_title.replace("Andamento Mediano ", "")})'})
+        chart_trend_settore.set_legend({'position': 'bottom', 'font': font_assi})
+        chart_trend_settore.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
+        chart_trend_settore.set_y_axis({'name_font': font_assi, 'num_font': font_assi})
+        chart_trend_settore.set_size({'width': 650, 'height': 350})
+        chart_trend_settore.set_style(11)
+        worksheet_stats.insert_chart(safe_chart_row, col_left, chart_trend_settore)
+
+        # --- GRAFICI MULTIPLI (COPPIE) ---
+        chart_offset_y = safe_chart_row
+        
+        for m_idx, metric in enumerate(metrics_list):
+            r_settore = row_start_metrics + (m_idx * 2)
+            r_azienda = r_settore + 1
             
-            serie = {
-                'name':       f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_idx + 1}",
-                'categories': f"='{sheet_stats}'!${start_col}$2:${end_col}$2",
-                'values':     f"='{sheet_stats}'!${start_col}${r_idx + 1}:${end_col}${r_idx + 1}",
-                'data_labels': {'value': True, 'num_format': '#,##0.00'}
+            # 🟢 FIX ISTOGRAMMA: Se la metrica riguarda grandi volumi, abbandona la linea e crea un istogramma standard
+            is_volumi = any(k in metric.lower() for k in ['ricavi', 'attivo', 'produzione'])
+            tipo_storico = 'column' if is_volumi else 'line'
+
+            # A) Grafico Storico (Linee o Colonne in base alla metrica)
+            chart_storico = workbook.add_chart({'type': tipo_storico})
+            
+            # Setup posizioni etichette: se istogramma vanno "sopra il tetto" della barra, se linea le separiamo (Sopra/Sotto)
+            pos_label_settore = 'outside_end' if is_volumi else 'below'
+            pos_label_azienda = 'outside_end' if is_volumi else 'above'
+
+            # 🟢 Disattiviamo i numeri fluttuanti: i valori precisi saranno nella Tabella in basso
+            serie_settore_storico = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_settore + 1}:${end_col_letter}${r_settore + 1}"
             }
-            
-            if metric in metriche_isolate:
-                chart_sec.add_series(serie)
-                has_sec_chart = True
-                titolo_sec = f"Andamento Mediano {metric}"
+            serie_azienda_storico = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_azienda + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_azienda + 1}:${end_col_letter}${r_azienda + 1}"
+            }
+
+            # ... (codice marker rimane intatto) ...
+            if not is_volumi:
+                serie_settore_storico['marker'] = {'type': 'circle'}
+                serie_azienda_storico['marker'] = {'type': 'square'}
+
+            chart_storico.add_series(serie_azienda_storico)
+            chart_storico.add_series(serie_settore_storico)
+            chart_storico.set_title({'name': f'Benchmark Storico - {metric}'})
+
+            # 🟢 Nessuna legenda necessaria: la tabella dati include già i nomi delle serie!
+            chart_storico.set_legend({'none': True}) 
+
+            # 🟢 ATTIVAZIONE MATRICE DATI (DATA TABLE)
+            chart_storico.set_table({'show_keys': True})
+
+            chart_storico.set_x_axis({'name_font': font_assi, 'num_font': font_assi})
+            # 🟢 Togli la griglia orizzontale SOLO se il grafico storico è un istogramma (es. Ricavi)
+            if is_volumi:
+                chart_storico.set_y_axis({'name_font': font_assi, 'num_font': font_assi, 'major_gridlines': {'visible': False}})
             else:
-                chart_main.add_series(serie)
-
-        if metrics_list:
-            chart_main.set_legend({'position': 'bottom'})
-            chart_main.set_style(11)
-            chart_main.set_y_axis({'name': y_axis_name, 'major_gridlines': {'visible': True}})
-            chart_main.set_title({'name': chart_title})
-            chart_main.set_size({'width': 600, 'height': 350})
+                chart_storico.set_y_axis({'name_font': font_assi, 'num_font': font_assi})
+            chart_storico.set_size({'width': 550, 'height': 350}) 
+            chart_storico.set_style(11)
             
-            chart_row = r_right + len(metrics_list) + 3
-            worksheet_stats.insert_chart(chart_row, col_right, chart_main)
+            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - Solo anno 2024)
+            chart_col_singolo = workbook.add_chart({'type': 'column'})
+            
+            serie_settore_col = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${last_year_col}$2:${last_year_col}$2",
+                'values': f"='{sheet_stats}'!${last_year_col}${r_settore + 1}:${last_year_col}${r_settore + 1}",
+                'data_labels': {'value': True, 'num_format': '#,##0.00', 'font': font_etichette, 'position': 'outside_end'} 
+            }
+            serie_azienda_col = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_azienda + 1}",
+                'categories': f"='{sheet_stats}'!${last_year_col}$2:${last_year_col}$2",
+                'values': f"='{sheet_stats}'!${last_year_col}${r_azienda + 1}:${last_year_col}${r_azienda + 1}",
+                'data_labels': {'value': True, 'num_format': '#,##0.00', 'font': font_etichette, 'position': 'outside_end'} 
+            }
+            chart_col_singolo.add_series(serie_azienda_col)
+            chart_col_singolo.add_series(serie_settore_col)
+            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno 2024)'})
+            chart_col_singolo.set_legend({'position': 'bottom', 'font': font_assi})
+            chart_col_singolo.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
+            # 🟢 Rimuove la griglia orizzontale di sfondo dall'istogramma
+            chart_col_singolo.set_y_axis({
+                'name_font': font_assi, 
+                'num_font': font_assi, 
+                'major_gridlines': {'visible': False}
+            })
+            chart_col_singolo.set_size({'width': 350, 'height': 350})
+            chart_col_singolo.set_style(11)
 
-            if has_sec_chart:
-                chart_sec.set_legend({'position': 'bottom'})
-                chart_sec.set_style(11)
-                chart_sec.set_y_axis({'name': 'Valori', 'major_gridlines': {'visible': True}})
-                chart_sec.set_title({'name': titolo_sec})
-                chart_sec.set_size({'width': 600, 'height': 350})
-                
-                worksheet_stats.insert_chart(chart_row + 18, col_right, chart_sec)
+            # Inseriamo i grafici distanziandoli a dovere sulla destra
+            worksheet_stats.insert_chart(chart_offset_y, col_right + 1, chart_storico)
+            worksheet_stats.insert_chart(chart_offset_y, col_right + 9, chart_col_singolo)
+            
+            # Incremento dello step verticale da 16 a 18 righe per distanziare nettamente una metrica dall'altra
+            chart_offset_y += 20 
 
-        worksheet_stats.ignore_errors({'formula_differs': 'G1:Z500', 'number_stored_as_text': 'A1:Z500'})
+        worksheet_stats.ignore_errors({'formula_differs': 'A1:Z500', 'number_stored_as_text': 'A1:Z500'})
 
     # ==========================================
     # LOGICA DI ESECUZIONE 
@@ -1016,7 +1346,8 @@ def elabora_capitolo_4(df_filtered):
             'struttura 1° livello': 'Indice Struttura 1° Liv.',
             'struttura 2° livello': 'Indice Struttura 2° Liv.',
             'gearing': 'Gearing'
-        }
+        },
+        azienda_target=azienda_target
     )
 
     writer.close()
@@ -1025,7 +1356,7 @@ def elabora_capitolo_4(df_filtered):
     return output_buffer
 
 
-def elabora_capitolo_5(df_filtered):
+def elabora_capitolo_5(df_filtered, azienda_target):
     import io
     import pandas as pd
     import numpy as np
@@ -1033,8 +1364,8 @@ def elabora_capitolo_5(df_filtered):
     from xlsxwriter.utility import xl_rowcol_to_cell
     import re
 
-    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict):
-        base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower()]
+    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target):
+        base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower() or 'nuts2' in str(c).lower() or 'nuts3' in str(c).lower()]
         
         if isinstance(keyword_ricerca, list):
             metric_cols = [c for c in df_raw.columns if any(kw.lower() in str(c).lower() for kw in keyword_ricerca)]
@@ -1048,23 +1379,36 @@ def elabora_capitolo_5(df_filtered):
         df = df.replace(['n.d.', 'n.a.', 'n.s.', ''], np.nan)
         num_rows = len(df)
 
+        col_ragione_idx = [idx for idx, c in enumerate(df.columns) if 'ragione' in str(c).lower()][0]
+        col_ragione = df.columns[col_ragione_idx]
+
         df.to_excel(writer, sheet_name=sheet_data, index=False, startrow=0)
         worksheet_data = writer.sheets[sheet_data]
         worksheet_stats = workbook.add_worksheet(sheet_stats)
+
+        # 3. Compilazione Foglio 1: Dati, Autofit ed EVIDENZIAZIONE AZIENDA TARGET
+        fmt_target_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
+        fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
 
         for i, col in enumerate(df.columns):
             worksheet_data.write(0, i, col, formati['header'])
             col_data = df[col].dropna()
             max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2
             worksheet_data.set_column(i, i, min(max_len, 45))
+
             for row in range(1, num_rows + 1):
                 val = df.iat[row-1, i]
+                is_target = azienda_target.lower().strip() in str(df.iat[row-1, col_ragione_idx]).lower().strip()
+
+                f_text = fmt_target_text if is_target else formati['data_text']
+                f_num = fmt_target_num if is_target else formati['data_num']
+
                 if pd.isna(val):
-                    worksheet_data.write(row, i, "", formati['data_text'])
+                    worksheet_data.write(row, i, "", f_text)
                 elif isinstance(val, (int, float)):
-                    worksheet_data.write_number(row, i, val, formati['data_num'])
+                    worksheet_data.write_number(row, i, val, f_num)
                 else:
-                    worksheet_data.write_string(row, i, str(val), formati['data_text'])
+                    worksheet_data.write_string(row, i, str(val), f_text)
 
         numeric_cols_idx = [df.columns.get_loc(c) for c in metric_cols]
         metrics_dict = {}
@@ -1162,67 +1506,164 @@ def elabora_capitolo_5(df_filtered):
 
             current_row += 8 
 
+        # 6. Costruzione Blocco Destro: CONFRONTO DIRETTO RIGHE SETTORE VS AZIENDA TARGET
         r_right = 1
-        worksheet_stats.write(r_right, col_right, "", formati['header'])
+        worksheet_stats.write(r_right, col_right, "Confronto Benchmark", formati['header'])
         for i, year in enumerate(all_years):
             worksheet_stats.write(r_right, col_right + 1 + i, year, formati['header'])
 
-        for m_idx, metric in enumerate(metrics_list):
-            r_right_data = r_right + 1 + m_idx
-            worksheet_stats.write(r_right_data, col_right, metric, formati['label'])
+        df_azienda = df[df[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        fmt_az_label = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'font_color': '#002060', 'border': 1, 'align': 'left'})
+        fmt_az_num = workbook.add_format({'bg_color': '#F2F4F8', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'bold': True})
+
+        row_cursor = r_right + 1
+        for metric in metrics_list:
+            # Riga 1: Settore
+            worksheet_stats.write(row_cursor, col_right, f"{metric} (Settore)", formati['label'])
             for i, year in enumerate(all_years):
                 if year in median_cells[metric]:
-                    source_cell = median_cells[metric][year]
-                    worksheet_stats.write_formula(r_right_data, col_right + 1 + i, f"={source_cell}", formati['data_num'])
+                    worksheet_stats.write_formula(row_cursor, col_right + 1 + i, f"={median_cells[metric][year]}", formati['data_num'])
                 else:
-                    worksheet_stats.write(r_right_data, col_right + 1 + i, "n.d.", formati['data_text'])
+                    worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+            row_cursor += 1
 
-        chart_main = workbook.add_chart({'type': 'column'})
-        chart_sec = workbook.add_chart({'type': 'column'})
+            # Riga 2: Azienda Target
+            worksheet_stats.write(row_cursor, col_right, f"{metric} ({azienda_target})", fmt_az_label)
+            for i, year in enumerate(all_years):
+                if year in metrics_dict[metric] and not df_azienda.empty:
+                    val_az = df_azienda.iloc[0, metrics_dict[metric][year]]
+                    if pd.isna(val_az) or val_az == "":
+                        worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+                    else:
+                        worksheet_stats.write_number(row_cursor, col_right + 1 + i, float(val_az), fmt_az_num)
+                else:
+                    worksheet_stats.write(row_cursor, col_right + 1 + i, "n.d.", formati['data_text'])
+            row_cursor += 1
+
+        # ==========================================
+        # 7. INSERIMENTO GRAFICI DINAMICI UNIFORMI (CAP 3, 4, 5)
+        # ==========================================
+        row_start_metrics = r_right + 1
+        start_col_letter = xlsxwriter.utility.xl_col_to_name(col_right + 1)
+        end_col_letter = xlsxwriter.utility.xl_col_to_name(col_right + len(all_years))
+        last_year_col = end_col_letter 
         
-        metriche_isolate = ['Indice Rotazione Cap.Inv.', 'Gearing']
-        has_sec_chart = False
-        titolo_sec = ""
+        safe_chart_row = max(current_row, row_cursor)
 
+        # 🟢 IMPOSTAZIONI ANTI-ACCAVALLAMENTO UNIVERSALI
+        # Riduciamo i font per impedire che i numeri giganteschi sfondino i margini del grafico
+        font_assi = {'size': 9}
+        font_etichette = {'size': 8}
+        
+        # --- GRAFICO 1 (LINEE CUMULATIVE): Trend Settore ---
+        chart_trend_settore = workbook.add_chart({'type': 'line'})
         for m_idx, metric in enumerate(metrics_list):
-            r_idx = r_right + 1 + m_idx
-            start_col = xlsxwriter.utility.xl_col_to_name(col_right + 1)
-            end_col = xlsxwriter.utility.xl_col_to_name(col_right + len(all_years))
+            r_settore = row_start_metrics + (m_idx * 2)
+            chart_trend_settore.add_series({
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_settore + 1}:${end_col_letter}${r_settore + 1}",
+                'marker': {'type': 'circle'}
+            })
+        chart_trend_settore.set_title({'name': f'Andamento Storico di Settore ({chart_title.replace("Andamento Mediano ", "")})'})
+        chart_trend_settore.set_legend({'position': 'bottom', 'font': font_assi})
+        chart_trend_settore.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
+        chart_trend_settore.set_y_axis({'name_font': font_assi, 'num_font': font_assi})
+        chart_trend_settore.set_size({'width': 650, 'height': 350})
+        chart_trend_settore.set_style(11)
+        worksheet_stats.insert_chart(safe_chart_row, col_left, chart_trend_settore)
+
+        # --- GRAFICI MULTIPLI (COPPIE) ---
+        chart_offset_y = safe_chart_row
+        
+        for m_idx, metric in enumerate(metrics_list):
+            r_settore = row_start_metrics + (m_idx * 2)
+            r_azienda = r_settore + 1
             
-            serie = {
-                'name':       f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_idx + 1}",
-                'categories': f"='{sheet_stats}'!${start_col}$2:${end_col}$2",
-                'values':     f"='{sheet_stats}'!${start_col}${r_idx + 1}:${end_col}${r_idx + 1}",
-                'data_labels': {'value': True, 'num_format': '#,##0.00'}
+            # 🟢 FIX ISTOGRAMMA: Se la metrica riguarda grandi volumi, abbandona la linea e crea un istogramma standard
+            is_volumi = any(k in metric.lower() for k in ['ricavi', 'attivo', 'produzione'])
+            tipo_storico = 'column' if is_volumi else 'line'
+
+            # A) Grafico Storico (Linee o Colonne in base alla metrica)
+            chart_storico = workbook.add_chart({'type': tipo_storico})
+            
+            # Setup posizioni etichette: se istogramma vanno "sopra il tetto" della barra, se linea le separiamo (Sopra/Sotto)
+            pos_label_settore = 'outside_end' if is_volumi else 'below'
+            pos_label_azienda = 'outside_end' if is_volumi else 'above'
+
+            # 🟢 Disattiviamo i numeri fluttuanti: i valori precisi saranno nella Tabella in basso
+            serie_settore_storico = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_settore + 1}:${end_col_letter}${r_settore + 1}"
             }
-            
-            if metric in metriche_isolate:
-                chart_sec.add_series(serie)
-                has_sec_chart = True
-                titolo_sec = f"Andamento Mediano {metric}"
+            serie_azienda_storico = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_azienda + 1}",
+                'categories': f"='{sheet_stats}'!${start_col_letter}$2:${end_col_letter}$2",
+                'values': f"='{sheet_stats}'!${start_col_letter}${r_azienda + 1}:${end_col_letter}${r_azienda + 1}"
+            }
+
+            # ... (codice marker rimane intatto) ...
+            if not is_volumi:
+                serie_settore_storico['marker'] = {'type': 'circle'}
+                serie_azienda_storico['marker'] = {'type': 'square'}
+
+            chart_storico.add_series(serie_azienda_storico)
+            chart_storico.add_series(serie_settore_storico)
+            chart_storico.set_title({'name': f'Benchmark Storico - {metric}'})
+
+            # 🟢 Nessuna legenda necessaria: la tabella dati include già i nomi delle serie!
+            chart_storico.set_legend({'none': True}) 
+
+            # 🟢 ATTIVAZIONE MATRICE DATI (DATA TABLE)
+            chart_storico.set_table({'show_keys': True})
+
+            chart_storico.set_x_axis({'name_font': font_assi, 'num_font': font_assi})
+            # 🟢 Togli la griglia orizzontale SOLO se il grafico storico è un istogramma (es. Ricavi)
+            if is_volumi:
+                chart_storico.set_y_axis({'name_font': font_assi, 'num_font': font_assi, 'major_gridlines': {'visible': False}})
             else:
-                chart_main.add_series(serie)
-
-        if metrics_list:
-            chart_main.set_legend({'position': 'bottom'})
-            chart_main.set_style(11)
-            chart_main.set_y_axis({'name': y_axis_name, 'major_gridlines': {'visible': True}})
-            chart_main.set_title({'name': chart_title})
-            chart_main.set_size({'width': 600, 'height': 350})
+                chart_storico.set_y_axis({'name_font': font_assi, 'num_font': font_assi})
+            chart_storico.set_size({'width': 550, 'height': 350}) 
+            chart_storico.set_style(11)
             
-            chart_row = r_right + len(metrics_list) + 3
-            worksheet_stats.insert_chart(chart_row, col_right, chart_main)
+            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - Solo anno 2024)
+            chart_col_singolo = workbook.add_chart({'type': 'column'})
+            
+            serie_settore_col = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_settore + 1}",
+                'categories': f"='{sheet_stats}'!${last_year_col}$2:${last_year_col}$2",
+                'values': f"='{sheet_stats}'!${last_year_col}${r_settore + 1}:${last_year_col}${r_settore + 1}",
+                'data_labels': {'value': True, 'num_format': '#,##0.00', 'font': font_etichette, 'position': 'outside_end'} 
+            }
+            serie_azienda_col = {
+                'name': f"='{sheet_stats}'!${xlsxwriter.utility.xl_col_to_name(col_right)}${r_azienda + 1}",
+                'categories': f"='{sheet_stats}'!${last_year_col}$2:${last_year_col}$2",
+                'values': f"='{sheet_stats}'!${last_year_col}${r_azienda + 1}:${last_year_col}${r_azienda + 1}",
+                'data_labels': {'value': True, 'num_format': '#,##0.00', 'font': font_etichette, 'position': 'outside_end'} 
+            }
+            chart_col_singolo.add_series(serie_azienda_col)
+            chart_col_singolo.add_series(serie_settore_col)
+            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno 2024)'})
+            chart_col_singolo.set_legend({'position': 'bottom', 'font': font_assi})
+            chart_col_singolo.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
+            # 🟢 Rimuove la griglia orizzontale di sfondo dall'istogramma
+            chart_col_singolo.set_y_axis({
+                'name_font': font_assi, 
+                'num_font': font_assi, 
+                'major_gridlines': {'visible': False}
+            })
+            chart_col_singolo.set_size({'width': 350, 'height': 350})
+            chart_col_singolo.set_style(11)
 
-            if has_sec_chart:
-                chart_sec.set_legend({'position': 'bottom'})
-                chart_sec.set_style(11)
-                chart_sec.set_y_axis({'name': 'Valori', 'major_gridlines': {'visible': True}})
-                chart_sec.set_title({'name': titolo_sec})
-                chart_sec.set_size({'width': 600, 'height': 350})
-                
-                worksheet_stats.insert_chart(chart_row + 18, col_right, chart_sec)
+            # Inseriamo i grafici distanziandoli a dovere sulla destra
+            worksheet_stats.insert_chart(chart_offset_y, col_right + 1, chart_storico)
+            worksheet_stats.insert_chart(chart_offset_y, col_right + 9, chart_col_singolo)
+            
+            # Incremento dello step verticale da 16 a 18 righe per distanziare nettamente una metrica dall'altra
+            chart_offset_y += 20 
 
-        worksheet_stats.ignore_errors({'formula_differs': 'G1:Z500', 'number_stored_as_text': 'A1:Z500'})
+        worksheet_stats.ignore_errors({'formula_differs': 'A1:Z500', 'number_stored_as_text': 'A1:Z500'})
 
     df_raw = df_filtered.copy()
     output_buffer = io.BytesIO()
@@ -1249,7 +1690,8 @@ def elabora_capitolo_5(df_filtered):
             'current ratio': 'Current Ratio',
             'quick ratio': 'Quick Ratio',
             'rotazione del capitale investito': 'Indice Rotazione Cap.Inv.'
-        }
+        },
+        azienda_target=azienda_target
     )
 
     writer.close()
@@ -1258,7 +1700,7 @@ def elabora_capitolo_5(df_filtered):
     return output_buffer
 
 
-def elabora_capitolo_6(df_filtered):
+def elabora_capitolo_6(df_filtered, azienda_target):
     import io
     import pandas as pd
     import numpy as np
@@ -1369,54 +1811,65 @@ def elabora_capitolo_6(df_filtered):
             formato = fmt_header_metric if '2024' in col_name else fmt_header
             worksheet.write(0, col_num, col_name, formato)
         
+    # Creazione degli stili di evidenziazione per l'azienda target nella lista
+    fmt_target_data = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
+    fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
+    fmt_target_center = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'center', 'valign': 'vcenter', 'bold': True})
+
+    idx_target_salvata = None # Ci servirà per rintracciare la riga esatta e clonarla sopra
+
     for row_num, row_data in enumerate(df_out.values):
-        row_ex = row_num + 2 
+        row_ex = row_num + 2
+        # Verifica se la riga corrente appartiene all'azienda target
+        is_target_row = azienda_target.lower().strip() in str(row_data[0]).lower().strip()
+
+        if is_target_row:
+            idx_target_salvata = row_ex # Salva l'indice di riga excel attuale
+
+        # Sostituiamo i formati standard con quelli target se is_target_row è True
+        f_dat = fmt_target_data if is_target_row else fmt_data
+        f_nm = fmt_target_num if is_target_row else fmt_num
+        f_cntr = fmt_target_center if is_target_row else fmt_center
+
         for col_num, val in enumerate(row_data):
             col_name = df_out.columns[col_num]
-            
             if col_name.strip() == '':
                 worksheet.write(row_ex - 1, col_num, "", fmt_space)
-            
             elif col_name == 'Benchmark Economico':
                 cond_D = f"IF(D{row_ex}>=${col_T2}$4,3,IF(D{row_ex}>=${col_T1}$4,2,1))"
                 cond_E = f"IF(E{row_ex}>=${col_T2}$5,3,IF(E{row_ex}>=${col_T1}$5,2,1))"
                 cond_F = f"IF(F{row_ex}>=${col_T2}$6,3,IF(F{row_ex}>=${col_T1}$6,2,1))"
                 formula = f'=IF(({cond_D}+{cond_E}+{cond_F})>=8,"A",IF(({cond_D}+{cond_E}+{cond_F})>=5,"B","C"))'
-                worksheet.write_formula(row_ex - 1, col_num, formula, fmt_center)
-                
+                worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Finanziario':
-                cond_H = f"IF(H{row_ex}<=${col_T1}$7,3,IF(H{row_ex}<=${col_T2}$7,2,1))" 
+                cond_H = f"IF(H{row_ex}<=${col_T1}$7,3,IF(H{row_ex}<=${col_T2}$7,2,1))"
                 cond_I = f"IF(I{row_ex}>=${col_T2}$8,3,IF(I{row_ex}>=${col_T1}$8,2,1))"
                 cond_J = f"IF(J{row_ex}>=${col_T2}$9,3,IF(J{row_ex}>=${col_T1}$9,2,1))"
                 formula = f'=IF(({cond_H}+{cond_I}+{cond_J})>=8,"A",IF(({cond_H}+{cond_I}+{cond_J})>=5,"B","C"))'
-                worksheet.write_formula(row_ex - 1, col_num, formula, fmt_center)
-                
+                worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Patrimoniale':
                 cond_L = f"IF(L{row_ex}>=${col_T2}$10,3,IF(L{row_ex}>=${col_T1}$10,2,1))"
                 cond_M = f"IF(M{row_ex}>=${col_T2}$11,3,IF(M{row_ex}>=${col_T1}$11,2,1))"
                 cond_N = f"IF(N{row_ex}<=${col_T1}$12,3,IF(N{row_ex}<=${col_T2}$12,2,1))"
                 formula = f'=IF(({cond_L}+{cond_M}+{cond_N})>=8,"A",IF(({cond_L}+{cond_M}+{cond_N})>=5,"B","C"))'
-                worksheet.write_formula(row_ex - 1, col_num, formula, fmt_center)
-                
+                worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Totale':
                 cond_P = f'IF(P{row_ex}="A",3,IF(P{row_ex}="B",2,1))'
                 cond_Q = f'IF(Q{row_ex}="A",3,IF(Q{row_ex}="B",2,1))'
                 cond_R = f'IF(R{row_ex}="A",3,IF(R{row_ex}="B",2,1))'
                 formula = f'=IF(({cond_P}+{cond_Q}+{cond_R})>=8,"A",IF(({cond_P}+{cond_Q}+{cond_R})>=5,"B","C"))'
-                worksheet.write_formula(row_ex - 1, col_num, formula, fmt_center)
-                
+                worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Rating Combinato':
                 formula = f'=P{row_ex}&Q{row_ex}&R{row_ex}'
-                worksheet.write_formula(row_ex - 1, col_num, formula, fmt_center)
-
+                worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif pd.isna(val):
-                worksheet.write(row_ex - 1, col_num, "n.d.", fmt_data)
-            elif col_name == 'Società ID': 
+                worksheet.write(row_ex - 1, col_num, "n.d.", f_dat)
+            elif col_name == 'Società ID':
                 worksheet.write_number(row_ex - 1, col_num, val, fmt_id)
             elif isinstance(val, (int, float)):
-                worksheet.write_number(row_ex - 1, col_num, val, fmt_num)
+                worksheet.write_number(row_ex - 1, col_num, val, f_nm)
             else:
-                worksheet.write(row_ex - 1, col_num, str(val), fmt_data)
+                worksheet.write(row_ex - 1, col_num, str(val), f_dat)
 
     for col_num, col_name in enumerate(df_out.columns):
         if col_name.strip() == '':
@@ -1432,7 +1885,37 @@ def elabora_capitolo_6(df_filtered):
     worksheet.set_column('U:U', 18) 
     worksheet.set_row(0, 45) 
 
-    worksheet.write(1, start_col_tbl, "SOGLIE CALCOLATE 2024", fmt_header)
+    # Se l'azienda è stata rintracciata, clona le sue metriche fondamentali in un pannello superiore isolato
+    if idx_target_salvata is not None:
+        worksheet.write(1, start_col_tbl, "RATING ISOLATO AZIENDA TARGET", fmt_header)
+        worksheet.write(2, start_col_tbl, "Ragione Sociale", fmt_header_metric)
+        worksheet.write(2, start_col_tbl + 1, "Rating Finale", fmt_header_metric)
+        worksheet.write(2, start_col_tbl + 2, "Combinazione", fmt_header_metric)
+
+        # Formule collegate alla riga reale per garantire coerenza matematica
+        worksheet.write_formula(3, start_col_tbl, f"=A{idx_target_salvata}", fmt_data)
+        worksheet.write_formula(3, start_col_tbl + 1, f"=S{idx_target_salvata}", fmt_center)
+        worksheet.write_formula(3, start_col_tbl + 2, f"=U{idx_target_salvata}", fmt_center)
+
+    # Scrittura standard delle soglie spostata più in basso (riga 6 anziché riga 1) per fare spazio al box sopra
+    worksheet.write(5, start_col_tbl, "SOGLIE CALCOLATE 2024", fmt_header)
+    worksheet.write(6, start_col_tbl, "Metrica", fmt_header)
+    intestazioni_tbl = ["MIN", "Soglia 1° Terzile", "Soglia 2° Terzile", "MAX"]
+    for i, h in enumerate(intestazioni_tbl):
+        worksheet.write(6, start_col_tbl + 1 + i, h, fmt_header)
+
+    num_rows = len(df_out)
+    for i, m in enumerate(metriche):
+        riga = 7 + i  # Scalata di 4 righe in basso
+        worksheet.write(riga, start_col_tbl, m, fmt_header_metric)
+        col_idx = df_out.columns.get_loc(m)
+        col_letter = xlsxwriter.utility.xl_col_to_name(col_idx)
+        data_range = f"{col_letter}2:{col_letter}{num_rows + 1}"
+        worksheet.write_formula(riga, start_col_tbl + 1, f"=MIN({data_range})", fmt_num)
+        worksheet.write_formula(riga, start_col_tbl + 2, f"=PERCENTILE({data_range}, 1/3)", fmt_num)
+        worksheet.write_formula(riga, start_col_tbl + 3, f"=PERCENTILE({data_range}, 2/3)", fmt_num)
+        worksheet.write_formula(riga, start_col_tbl + 4, f"=MAX({data_range})", fmt_num)
+
     worksheet.write(2, start_col_tbl, "Metrica", fmt_header)
     intestazioni_tbl = ["MIN", "Soglia 1° Terzile", "Soglia 2° Terzile", "MAX"]
     for i, h in enumerate(intestazioni_tbl):
@@ -1510,6 +1993,16 @@ def elabora_capitolo_6(df_filtered):
     worksheet_terr.set_column('A:A', 40)
     worksheet_terr.set_column('B:I', 15)
 
+    # 🟢 ESTRATTO TARGET CAP 6: Trova Regione e Macroregione
+    df_az_geo_check = df[df['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    target_reg_cap6 = df_az_geo_check.iloc[0]['Regione'] if not df_az_geo_check.empty else None
+    target_mac_cap6 = df_az_geo_check.iloc[0]['Macro-Regione'] if not df_az_geo_check.empty else None
+
+    # Stili Evidenziazione Gialla per xlsxwriter
+    fmt_hl_data = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
+    fmt_hl_num  = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0', 'align': 'right', 'valign': 'vcenter', 'bold': True})
+    fmt_hl_pct  = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '0.00%', 'align': 'right', 'valign': 'vcenter', 'bold': True})
+
     mapping_df = df[['Macro-Regione', 'Regione']].dropna()
     mapping_df = mapping_df[(mapping_df['Regione'].astype(str).str.strip() != '') & (mapping_df['Regione'].astype(str).str.lower() != 'nan')]
     
@@ -1542,31 +2035,47 @@ def elabora_capitolo_6(df_filtered):
         for macro in sorted_macro:
             regioni_list = mapping[macro]
             start_macro_row = row_t
-
+            
+            # --- CICLO DELLE SINGOLE REGIONI ---
             for reg in sorted(regioni_list):
-                worksheet_terr.write(row_t, 0, str(reg), fmt_data)
-                worksheet_terr.write_formula(row_t, 1, f'=COUNTIF({range_reg}, "{reg}")', fmt_num_int)
-                worksheet_terr.write_formula(row_t, 2, f'=IF({total_cell}>0, B{row_t+1}/{total_cell}, 0)', fmt_pct)
-                worksheet_terr.write_formula(row_t, 3, f'=COUNTIFS({range_reg}, "{reg}", {range_bench}, "A")', fmt_num_int)
-                worksheet_terr.write_formula(row_t, 4, f'=IF({total_cell}>0, D{row_t+1}/{total_cell}, 0)', fmt_pct)
-                worksheet_terr.write_formula(row_t, 5, f'=COUNTIFS({range_reg}, "{reg}", {range_bench}, "B")', fmt_num_int)
-                worksheet_terr.write_formula(row_t, 6, f'=IF({total_cell}>0, F{row_t+1}/{total_cell}, 0)', fmt_pct)
-                worksheet_terr.write_formula(row_t, 7, f'=COUNTIFS({range_reg}, "{reg}", {range_bench}, "C")', fmt_num_int)
-                worksheet_terr.write_formula(row_t, 8, f'=IF({total_cell}>0, H{row_t+1}/{total_cell}, 0)', fmt_pct)
+                # Controlla se questa regione è quella dell'azienda target
+                is_reg_target = (target_reg_cap6 is not None and str(reg).lower().strip() == str(target_reg_cap6).lower().strip())
+                
+                # Seleziona il formato (Giallo se target, altrimenti standard)
+                f_dat = fmt_hl_data if is_reg_target else fmt_data
+                f_num = fmt_hl_num if is_reg_target else fmt_num_int
+                f_pct = fmt_hl_pct if is_reg_target else fmt_pct
+
+                worksheet_terr.write(row_t, 0, str(reg), f_dat)
+                worksheet_terr.write_formula(row_t, 1, f'=COUNTIF({range_reg}, "{reg}")', f_num)
+                worksheet_terr.write_formula(row_t, 2, f'=IF({total_cell}>0, B{row_t+1}/{total_cell}, 0)', f_pct)
+                worksheet_terr.write_formula(row_t, 3, f'=COUNTIFS({range_reg}, "{reg}", {range_bench}, "A")', f_num)
+                worksheet_terr.write_formula(row_t, 4, f'=IF({total_cell}>0, D{row_t+1}/{total_cell}, 0)', f_pct)
+                worksheet_terr.write_formula(row_t, 5, f'=COUNTIFS({range_reg}, "{reg}", {range_bench}, "B")', f_num)
+                worksheet_terr.write_formula(row_t, 6, f'=IF({total_cell}>0, F{row_t+1}/{total_cell}, 0)', f_pct)
+                worksheet_terr.write_formula(row_t, 7, f'=COUNTIFS({range_reg}, "{reg}", {range_bench}, "C")', f_num)
+                worksheet_terr.write_formula(row_t, 8, f'=IF({total_cell}>0, H{row_t+1}/{total_cell}, 0)', f_pct)
                 row_t += 1
+                
+            # --- RIGA TOTALE MACROREGIONE ---
+            is_mac_target = (target_mac_cap6 is not None and str(macro).lower().strip() == str(target_mac_cap6).lower().strip())
+            
+            f_sub_dat = fmt_hl_data if is_mac_target else fmt_subtotal
+            f_sub_num = fmt_hl_num if is_mac_target else fmt_subtotal_num
+            f_sub_pct = fmt_hl_pct if is_mac_target else fmt_subtotal_pct
 
-            worksheet_terr.write(row_t, 0, str(macro), fmt_subtotal)
-            worksheet_terr.write_formula(row_t, 1, f'=SUM(B{start_macro_row+1}:B{row_t})', fmt_subtotal_num)
-            worksheet_terr.write_formula(row_t, 2, f'=IF({total_cell}>0, B{row_t+1}/{total_cell}, 0)', fmt_subtotal_pct)
-            worksheet_terr.write_formula(row_t, 3, f'=SUM(D{start_macro_row+1}:D{row_t})', fmt_subtotal_num)
-            worksheet_terr.write_formula(row_t, 4, f'=IF({total_cell}>0, D{row_t+1}/{total_cell}, 0)', fmt_subtotal_pct)
-            worksheet_terr.write_formula(row_t, 5, f'=SUM(F{start_macro_row+1}:F{row_t})', fmt_subtotal_num)
-            worksheet_terr.write_formula(row_t, 6, f'=IF({total_cell}>0, F{row_t+1}/{total_cell}, 0)', fmt_subtotal_pct)
-            worksheet_terr.write_formula(row_t, 7, f'=SUM(H{start_macro_row+1}:H{row_t})', fmt_subtotal_num)
-            worksheet_terr.write_formula(row_t, 8, f'=IF({total_cell}>0, H{row_t+1}/{total_cell}, 0)', fmt_subtotal_pct)
-
+            worksheet_terr.write(row_t, 0, str(macro), f_sub_dat)
+            worksheet_terr.write_formula(row_t, 1, f'=SUM(B{start_macro_row+1}:B{row_t})', f_sub_num)
+            worksheet_terr.write_formula(row_t, 2, f'=IF({total_cell}>0, B{row_t+1}/{total_cell}, 0)', f_sub_pct)
+            worksheet_terr.write_formula(row_t, 3, f'=SUM(D{start_macro_row+1}:D{row_t})', f_sub_num)
+            worksheet_terr.write_formula(row_t, 4, f'=IF({total_cell}>0, D{row_t+1}/{total_cell}, 0)', f_sub_pct)
+            worksheet_terr.write_formula(row_t, 5, f'=SUM(F{start_macro_row+1}:F{row_t})', f_sub_num)
+            worksheet_terr.write_formula(row_t, 6, f'=IF({total_cell}>0, F{row_t+1}/{total_cell}, 0)', f_sub_pct)
+            worksheet_terr.write_formula(row_t, 7, f'=SUM(H{start_macro_row+1}:H{row_t})', f_sub_num)
+            worksheet_terr.write_formula(row_t, 8, f'=IF({total_cell}>0, H{row_t+1}/{total_cell}, 0)', f_sub_pct)
+            
             grand_total_row_refs.append(row_t + 1)
-            row_t += 2 
+            row_t += 2
 
         row_tot = row_t - 1 
 
@@ -1601,7 +2110,261 @@ def elabora_capitolo_6(df_filtered):
     return output_buffer
 
 
-def elabora_capitolo_7(df_filtered):
+
+# INDICI DI COMPOSIZIONE
+
+def elabora_capitolo_7_5(df_input, azienda_target):
+    import io
+    import pandas as pd
+    import xlsxwriter
+
+    df_base = df_input.copy()
+    all_years = ['2021', '2022', '2023', '2024']
+
+    componenti_nomi = {
+        'Costo del venduto': 'Costo del venduto migl EUR',
+        'Oneri diversi di gestione': 'Oneri diversi di gestione migl EUR',
+        'Proventi/oneri finanziari': 'Proventi/oneri finanziari migl EUR',
+        'Totale imposte': 'Totale imposte migl EUR',
+        'Utile netto': 'Utile/Perdita al netto delle imposte migl EUR'
+    }
+    col_prod_prefisso = 'Totale valore della produzione migl EUR'
+
+    for comp_label, col_prefix in componenti_nomi.items():
+        for anno in all_years:
+            col_name = f"{col_prefix} {anno}"
+            if col_name in df_base.columns:
+                df_base[col_name] = pd.to_numeric(df_base[col_name], errors='coerce').fillna(0)
+    for anno in all_years:
+        col_name = f"{col_prod_prefisso} {anno}"
+        if col_name in df_base.columns:
+            df_base[col_name] = pd.to_numeric(df_base[col_name], errors='coerce').fillna(1)
+
+    df_base['is_target'] = df_base['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)
+    df_base = df_base.sort_values(by='is_target', ascending=False).reset_index(drop=True)
+    df_base = df_base.drop(columns=['is_target'])
+
+    output_buffer = io.BytesIO()
+    writer = pd.ExcelWriter(output_buffer, engine='xlsxwriter')
+    workbook = writer.book
+
+    fmt_header = workbook.add_format({'bold': True, 'font_color': 'white', 'fg_color': '#4F81BD', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
+    fmt_text = workbook.add_format({'border': 1, 'align': 'left'})
+    fmt_data_raw = workbook.add_format({'num_format': '#,##0', 'border': 1})
+    fmt_data_pct = workbook.add_format({'num_format': '0.00%', 'border': 1, 'align': 'right'})
+    fmt_data_tot = workbook.add_format({'num_format': '0.00%', 'border': 1, 'align': 'right', 'bold': True, 'fg_color': '#E2EFDA'})
+
+    target_color = '#FFF2CC'
+    fmt_bold_text = workbook.add_format({'bold': True, 'border': 1, 'fg_color': target_color})
+    fmt_data_raw_tgt = workbook.add_format({'num_format': '#,##0', 'border': 1, 'bold': True, 'fg_color': target_color})
+    fmt_data_pct_tgt = workbook.add_format({'num_format': '0.00%', 'border': 1, 'align': 'right', 'bold': True, 'fg_color': target_color})
+    fmt_data_tot_tgt = workbook.add_format({'num_format': '0.00%', 'border': 1, 'align': 'right', 'bold': True, 'fg_color': '#FFE699'})
+
+    # FOGLIO A: TABELLA DATI
+    ws_dati = workbook.add_worksheet('7a. Dati Indici Composizione')
+    ws_dati.hide_gridlines(2)
+    ws_dati.set_column('A:A', 35)
+    ws_dati.set_column('B:B', 15)
+    ws_dati.set_column('C:ZZ', 14)
+
+    ws_dati.write(0, 0, 'Ragione Sociale', fmt_header)
+    ws_dati.write(0, 1, 'Numero BvD ID', fmt_header)
+
+    col_idx = 2
+    for anno in all_years: ws_dati.write(0, col_idx, f'Val. Prod. {anno}', fmt_header); col_idx += 1
+    for comp in componenti_nomi.keys():
+        for anno in all_years: ws_dati.write(0, col_idx, f'{comp} {anno}', fmt_header); col_idx += 1
+    for comp in componenti_nomi.keys():
+        for anno in all_years: ws_dati.write(0, col_idx, f'% {comp} {anno}', fmt_header); col_idx += 1
+    for anno in all_years: ws_dati.write(0, col_idx, f'% TOTALE {anno}', fmt_header); col_idx += 1
+
+    row_cursor_dati = 1
+    for idx, row in df_base.iterrows():
+        rag_soc = str(row.get('Ragione socialeCaratteri latini', ''))
+        bvd_id = str(row.get('Numero BvD ID', ''))
+
+        is_target = azienda_target.lower().strip() in rag_soc.lower()
+        f_t = fmt_bold_text if is_target else fmt_text
+        f_raw = fmt_data_raw_tgt if is_target else fmt_data_raw
+        f_pct = fmt_data_pct_tgt if is_target else fmt_data_pct
+        f_tot = fmt_data_tot_tgt if is_target else fmt_data_tot
+
+        ws_dati.write(row_cursor_dati, 0, rag_soc, f_t)
+        ws_dati.write(row_cursor_dati, 1, bvd_id, f_t)
+
+        c_idx = 2
+        
+        # Salviamo le coordinate delle colonne per le formule
+        prod_cols_map = {}
+        for anno in all_years:
+            v = row.get(f"{col_prod_prefisso} {anno}", 1)
+            ws_dati.write(row_cursor_dati, c_idx, v, f_raw)
+            prod_cols_map[anno] = xlsxwriter.utility.xl_col_to_name(c_idx)
+            c_idx += 1
+
+        abs_cols_map = {comp: {} for comp in componenti_nomi.keys()}
+        for comp, col_prefix in componenti_nomi.items():
+            for anno in all_years:
+                v = row.get(f"{col_prefix} {anno}", 0)
+                ws_dati.write(row_cursor_dati, c_idx, v, f_raw)
+                abs_cols_map[comp][anno] = xlsxwriter.utility.xl_col_to_name(c_idx)
+                c_idx += 1
+
+        pct_cols_per_year = {anno: [] for anno in all_years}
+
+        # 🟢 NUOVO: Formule Excel native per calcolare le percentuali (=Costo/ValoreProduzione)
+        for comp, col_prefix in componenti_nomi.items():
+            for anno in all_years:
+                num_col = abs_cols_map[comp][anno]
+                den_col = prod_cols_map[anno]
+                r_num = row_cursor_dati + 1
+                
+                # Formula con controllo anti-divisione per zero (es: =IF(C2=0, 0, G2/C2))
+                formula_pct = f"=IF({den_col}{r_num}=0, 0, {num_col}{r_num}/{den_col}{r_num})"
+                ws_dati.write_formula(row_cursor_dati, c_idx, formula_pct, f_pct)
+                
+                pct_cols_per_year[anno].append((comp, xlsxwriter.utility.xl_col_to_name(c_idx)))
+                c_idx += 1
+
+        for anno in all_years:
+            formula_parts = []
+            for comp_name, col_letter in pct_cols_per_year[anno]:
+                cell_ref = f"{col_letter}{row_cursor_dati+1}"
+                if comp_name == 'Proventi/oneri finanziari':
+                    formula_parts.append(f"-{cell_ref}")
+                else:
+                    formula_parts.append(f"+{cell_ref}")
+            
+            formula_somma = "=" + "".join(formula_parts).lstrip("+")
+            ws_dati.write_formula(row_cursor_dati, c_idx, formula_somma, f_tot)
+            c_idx += 1
+
+        row_cursor_dati += 1
+
+    # FOGLIO B: STATISTICHE E GRAFICI
+    ws_stats = workbook.add_worksheet('7b. Stat. Indici Composizione')
+    ws_stats.hide_gridlines(2)
+    ws_stats.write(0, 0, 'Metrica / Componente %', fmt_header)
+    ws_stats.set_column('A:A', 35)
+    
+    for c_idx, anno in enumerate(all_years, start=1):
+        ws_stats.write(0, c_idx, anno, fmt_header)
+
+    row_cursor = 2
+    df_target_only = df_base[df_base['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    posizioni_grafici = {}
+
+    for comp, col_prefix in componenti_nomi.items():
+        ws_stats.write(row_cursor, 0, f"{comp} (Mediane Settore)", workbook.add_format({'bold': True, 'fg_color': '#DCE6F1', 'border': 1}))
+        ws_stats.write(row_cursor + 1, 0, f"{comp} ({azienda_target})", workbook.add_format({'italic': True, 'border': 1}))
+
+        posizioni_grafici[comp] = {'settore_row': row_cursor, 'azienda_row': row_cursor + 1}
+
+        for c_idx, anno in enumerate(all_years, start=1):
+            pct_series = (df_base[f"{col_prefix} {anno}"] / df_base[f"{col_prod_prefisso} {anno}"]).replace([float('inf'), -float('inf')], pd.NA).dropna()
+            mediana_pct = pct_series.median() if not pct_series.empty else 0
+            ws_stats.write(row_cursor, c_idx, mediana_pct, fmt_data_pct)
+
+            tgt_pct = 0
+            if not df_target_only.empty:
+                v_prod_tgt = df_target_only.iloc[0].get(f"{col_prod_prefisso} {anno}", 1)
+                if v_prod_tgt == 0: v_prod_tgt = 1
+                tgt_pct = df_target_only.iloc[0].get(f"{col_prefix} {anno}", 0) / v_prod_tgt
+            ws_stats.write(row_cursor + 1, c_idx, tgt_pct, fmt_data_pct)
+
+        row_cursor += 3
+
+    chart_offset_y = row_cursor + 4
+    font_assi = {'size': 9}
+
+    chart_settore = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
+    chart_settore.set_title({'name': 'Composizione Storica - MEDIANE SETTORE'})
+    chart_settore.set_table({'show_keys': True})
+    chart_settore.set_legend({'none': True}) 
+    chart_settore.set_y_axis({'max': 1, 'major_gridlines': {'visible': False}})
+    chart_settore.set_size({'width': 550, 'height': 420}) 
+
+    chart_azienda = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
+    chart_azienda.set_title({'name': f'Composizione Storica - {azienda_target}'})
+    chart_azienda.set_table({'show_keys': True})
+    chart_azienda.set_legend({'none': True})
+    chart_azienda.set_y_axis({'max': 1, 'major_gridlines': {'visible': False}})
+    chart_azienda.set_size({'width': 550, 'height': 420})
+
+    for idx, comp in enumerate(componenti_nomi.keys()):
+        pos = posizioni_grafici[comp]
+        chart_settore.add_series({
+            'name': ['7b. Stat. Indici Composizione', pos['settore_row'], 0],
+            'categories': ['7b. Stat. Indici Composizione', 0, 1, 0, len(all_years)],
+            'values': ['7b. Stat. Indici Composizione', pos['settore_row'], 1, pos['settore_row'], len(all_years)],
+        })
+        chart_azienda.add_series({
+            'name': ['7b. Stat. Indici Composizione', pos['azienda_row'], 0],
+            'categories': ['7b. Stat. Indici Composizione', 0, 1, 0, len(all_years)],
+            'values': ['7b. Stat. Indici Composizione', pos['azienda_row'], 1, pos['azienda_row'], len(all_years)],
+        })
+
+    ws_stats.insert_chart(chart_offset_y, 1, chart_settore)
+    ws_stats.insert_chart(chart_offset_y, 13, chart_azienda)
+
+    row_pie_tables = chart_offset_y + 26
+    
+    fmt_tbl_hdr = workbook.add_format({'bold': True, 'font_color': 'white', 'fg_color': '#4F81BD', 'border': 1, 'align': 'center'})
+    fmt_tbl_cell = workbook.add_format({'num_format': '0.00%', 'border': 1, 'align': 'right'})
+    fmt_tbl_lbl = workbook.add_format({'border': 1, 'align': 'left', 'size': 9})
+
+    col_tbl_set = 9   
+    col_tbl_az = 21   
+
+    # 🟢 ALLARGA LE COLONNE TESTUALI DELLE TABELLE AFFIANCATE (Ora si legge tutto!)
+    ws_stats.set_column(col_tbl_set, col_tbl_set, 28)
+    ws_stats.set_column(col_tbl_az, col_tbl_az, 28)
+
+    ws_stats.write(row_pie_tables, col_tbl_set, "Componente (Settore)", fmt_tbl_hdr)
+    ws_stats.write(row_pie_tables, col_tbl_set + 1, "Quota 2024", fmt_tbl_hdr)
+    ws_stats.write(row_pie_tables, col_tbl_az, "Componente (Azienda)", fmt_tbl_hdr)
+    ws_stats.write(row_pie_tables, col_tbl_az + 1, "Quota 2024", fmt_tbl_hdr)
+
+    for i, comp in enumerate(componenti_nomi.keys()):
+        pos = posizioni_grafici[comp]
+        ws_stats.write(row_pie_tables + 1 + i, col_tbl_set, comp, fmt_tbl_lbl)
+        ws_stats.write_formula(row_pie_tables + 1 + i, col_tbl_set + 1, f"='7b. Stat. Indici Composizione'!{xlsxwriter.utility.xl_rowcol_to_cell(pos['settore_row'], len(all_years))}", fmt_tbl_cell)
+        
+        ws_stats.write(row_pie_tables + 1 + i, col_tbl_az, comp, fmt_tbl_lbl)
+        ws_stats.write_formula(row_pie_tables + 1 + i, col_tbl_az + 1, f"='7b. Stat. Indici Composizione'!{xlsxwriter.utility.xl_rowcol_to_cell(pos['azienda_row'], len(all_years))}", fmt_tbl_cell)
+
+    chart_pie_settore = workbook.add_chart({'type': 'pie'})
+    chart_pie_settore.set_title({'name': 'Composizione 2024 - MEDIANE SETTORE'})
+    chart_pie_settore.set_size({'width': 420, 'height': 340})
+    chart_pie_settore.set_legend({'position': 'bottom', 'font': font_assi})
+
+    chart_pie_target = workbook.add_chart({'type': 'pie'})
+    chart_pie_target.set_title({'name': f'Composizione 2024 - {azienda_target}'})
+    chart_pie_target.set_size({'width': 420, 'height': 340})
+    chart_pie_target.set_legend({'position': 'bottom', 'font': font_assi})
+
+    chart_pie_settore.add_series({
+        'categories': ['7b. Stat. Indici Composizione', row_pie_tables + 1, col_tbl_set, row_pie_tables + len(componenti_nomi), col_tbl_set],
+        'values': ['7b. Stat. Indici Composizione', row_pie_tables + 1, col_tbl_set + 1, row_pie_tables + len(componenti_nomi), col_tbl_set + 1]
+    })
+
+    chart_pie_target.add_series({
+        'categories': ['7b. Stat. Indici Composizione', row_pie_tables + 1, col_tbl_az, row_pie_tables + len(componenti_nomi), col_tbl_az],
+        'values': ['7b. Stat. Indici Composizione', row_pie_tables + 1, col_tbl_az + 1, row_pie_tables + len(componenti_nomi), col_tbl_az + 1]
+    })
+
+    ws_stats.insert_chart(row_pie_tables, 1, chart_pie_settore)
+    ws_stats.insert_chart(row_pie_tables, 13, chart_pie_target)
+
+    ws_stats.ignore_errors({'formula_differs': 'A1:Z500', 'number_stored_as_text': 'A1:Z500'})
+    
+    writer.close()
+    output_buffer.seek(0)
+    return output_buffer
+
+
+
+def elabora_capitolo_7(df_filtered, azienda_target):
     import io
     import pandas as pd
     import numpy as np
@@ -1795,6 +2558,17 @@ def elabora_capitolo_7(df_filtered):
                     cell.alignment = center_align
                     cell.border = thin_border
 
+                # --- AUTOMATISMO: EVIDENZIAZIONE AZIENDA TARGET NEL RANKING ---
+                fill_target_yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+                font_target_bold = Font(bold=True)
+
+                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+                    # La prima colonna (A) contiene sempre la Ragione Sociale dell'azienda
+                    if row[0].value and azienda_target.lower().strip() in str(row[0].value).lower().strip():
+                        for cell in row:
+                            cell.fill = fill_target_yellow
+                            cell.font = font_target_bold
+
                 for col in ws.columns:
                     max_length = 0
                     column = col[0].column_letter
@@ -1818,7 +2592,6 @@ def elabora_capitolo_7(df_filtered):
 
     zip_buffer.seek(0)
     return zip_buffer
-
 
 # ==========================================
 # 2. INTERFACCIA WEB (Il "Capitolo 0" + Filtri)
@@ -1848,11 +2621,47 @@ if uploaded_file is not None:
             st.error("❌ ERRORE: Foglio 'Risultati' o 'Results' non trovato. ESPORTARE DA ORBIS CON I FILTRI E LA LISTA UNIVERSAL.")
             st.stop()
 
-        # Lettura del foglio corretto
+        # ==========================================
+        # 🟢 NUOVO AUTOMATISMO: ESTRAZIONE SETTORE E FIX ACCENTI
+        # ==========================================
+        nomi_foglio_strategia = ['search strategy', 'search dataset', 'sommario ricerca', 'sommario', 'strategia ricerca']
+        foglio_strategia_trovato = [s for s in fogli_disponibili if s.lower().strip() in nomi_foglio_strategia or any(k in s.lower() for k in ['strategy', 'sommario'])]
+        
+        settore_estratto = "Settore Non Rilevato"
+        
+        if foglio_strategia_trovato:
+            try:
+                # Leggiamo il foglio riepilogativo per estrarre la riga NACE
+                df_strat = pd.read_excel(xls, sheet_name=foglio_strategia_trovato[0], header=None)
+                for idx, row in df_strat.iterrows():
+                    riga_testo_unita = " ".join(row.dropna().astype(str)).lower()
+                    if 'nace' in riga_testo_unita or 'codici primari' in riga_testo_unita or 'ateco' in riga_testo_unita:
+                        celle_pulite = [str(c).strip() for c in row.dropna() if '-' in str(c) and len(str(c)) > 10]
+                        if celle_pulite:
+                            settore_estratto = celle_pulite[0]
+                            break
+                        else:
+                            celle_lunghe = [str(c).strip() for c in row.dropna() if len(str(c)) > 15]
+                            if len(celle_lunghe) >= 2:
+                                settore_estratto = celle_lunghe[1]
+                                break
+            except Exception:
+                settore_estratto = "Errore durante la lettura del sommario"
+        
+        # Correzione accenti (es. Forlì, Società) sul testo appena estratto
+        fix_accenti = {'Ã¬': 'ì', 'Ã¨': 'è', 'Ã©': 'é', 'Ã²': 'ò', 'Ã¹': 'ù', 'Ã ': 'à', 'Ã': 'à'}
+        for rotto, giusto in fix_accenti.items():
+            settore_estratto = settore_estratto.replace(rotto, giusto)
+            
+        st.session_state['settore_estratto'] = settore_estratto
+
+        # Lettura del foglio corretto (i risultati veri e propri)
         df_orbis = pd.read_excel(xls, sheet_name=target_sheet)
 
         # --- 2. VERIFICA STRUTTURA DELLE COLONNE ---
         # La tua "Lista Universal" rigorosa
+        # --- 2. VERIFICA STRUTTURA DELLE COLONNE ---
+        # La tua "Lista Universal" rigorosa AGGIORNATA
         colonne_attese = [
             'Ragione socialeCaratteri latini', 'Numero BvD ID', 'Forma giuridica nazionale', 
             'NUTS1', 'NUTS2', 'NUTS3', 'Numero dipendenti 2024', 
@@ -1866,7 +2675,14 @@ if uploaded_file is not None:
             'Gearing (*) % 2024', 'Gearing (*) % 2023', 'Gearing (*) % 2022', 'Gearing (*) % 2021', 
             'Current Ratio (*) 2024', 'Current Ratio (*) 2023', 'Current Ratio (*) 2022', 'Current Ratio (*) 2021', 
             'Quick Ratio (*) 2024', 'Quick Ratio (*) 2023', 'Quick Ratio (*) 2022', 'Quick Ratio (*) 2021', 
-            'Indice di Rotazione del Capitale Investito (*) 2024', 'Indice di Rotazione del Capitale Investito (*) 2023', 'Indice di Rotazione del Capitale Investito (*) 2022', 'Indice di Rotazione del Capitale Investito (*) 2021'
+            'Indice di Rotazione del Capitale Investito (*) 2024', 'Indice di Rotazione del Capitale Investito (*) 2023', 'Indice di Rotazione del Capitale Investito (*) 2022', 'Indice di Rotazione del Capitale Investito (*) 2021',
+            # 🟢 NUOVE COLONNE AGGIUNTE INTEGRATE NELLA VALIDAZIONE
+            'Costo del venduto migl EUR 2024', 'Costo del venduto migl EUR 2023', 'Costo del venduto migl EUR 2022', 'Costo del venduto migl EUR 2021',
+            'Oneri diversi di gestione migl EUR 2024', 'Oneri diversi di gestione migl EUR 2023', 'Oneri diversi di gestione migl EUR 2022', 'Oneri diversi di gestione migl EUR 2021',
+            'Proventi/oneri finanziari migl EUR 2024', 'Proventi/oneri finanziari migl EUR 2023', 'Proventi/oneri finanziari migl EUR 2022', 'Proventi/oneri finanziari migl EUR 2021',
+            'Totale imposte migl EUR 2024', 'Totale imposte migl EUR 2023', 'Totale imposte migl EUR 2022', 'Totale imposte migl EUR 2021',
+            'Utile/Perdita al netto delle imposte migl EUR 2024', 'Utile/Perdita al netto delle imposte migl EUR 2023', 'Utile/Perdita al netto delle imposte migl EUR 2022', 'Utile/Perdita al netto delle imposte migl EUR 2021',
+            'Codice fiscale/Partita IVA', 'Indirizzo sito web', 'Indirizzo e-mail'
         ]
             
         # Pulisce gli spazi laterali dalle colonne per un controllo accurato
@@ -1882,7 +2698,6 @@ if uploaded_file is not None:
 
         # --- 3. PULIZIA DATI E FILTRAGGIO VALORI (n.d. e Rotazione) ---
         righe_iniziali = len(df_orbis)
-
         col_att_24 = 'Totale Attivo migl EUR 2024'
         col_ric_24 = 'Totale valore della produzione migl EUR 2024'
         col_rot_24 = 'Indice di Rotazione del Capitale Investito (*) 2024'
@@ -1893,9 +2708,47 @@ if uploaded_file is not None:
 
         # Elimina le righe che non hanno dati al 2024 su Ricavi, Attivo o Rotazione
         df_orbis = df_orbis.dropna(subset=[col_att_24, col_ric_24, col_rot_24])
-            
+
         # Mantieni solo aziende con Rotazione strettamente maggiore di 0
         df_orbis = df_orbis[df_orbis[col_rot_24] > 0]
+
+        # --- NUOVO AUTOMATISMO: TRADUZIONE GEOGRAFICA ENG -> ITA E FIX ACCENTI ---
+        def traduci_valori_territoriali(valore):
+            if pd.isna(valore): return valore
+            v_str = str(valore)
+            
+            # 🟢 FIX MOJIBAKE: Corregge i caratteri accentati rotti dagli export
+            fix_accenti = {
+                'Ã¬': 'ì',   # Forlì
+                'Ã¨': 'è',   # (generico)
+                'Ã©': 'é',   # (generico)
+                'Ã²': 'ò',   # (generico)
+                'Ã¹': 'ù',   # Cantù
+                'Ã ': 'à',   # (generico)
+                'Ã': 'à'     # Fallback se lo spazio è saltato
+            }
+            for rotto, giusto in fix_accenti.items():
+                v_str = v_str.replace(rotto, giusto)
+
+            # Dizionario delle corrispondenze Inglese -> Italiano usate da ORBIS
+            dizionario_geo = {
+                'North-East': 'Nord Est', 'Northeast': 'Nord Est', 'North East': 'Nord Est',
+                'North-West': 'Nord Ovest', 'Northwest': 'Nord Ovest', 'North West': 'Nord Ovest',
+                'Center': 'Centro', 'Centre': 'Centro', 'Central': 'Centro',
+                'South': 'Sud', 'Islands': 'Isole', 'Insular Italy': 'Isole', 'Insular': 'Isole',
+                'South and Islands': 'Sud e Isole', 'South and Insular Italy': 'Sud e Isole',
+                'Lombardy': 'Lombardia', 'Sicily': 'Sicilia', 'Sardinia': 'Sardegna',
+                'Apulia': 'Puglia', 'Tuscany': 'Toscana', 'Piedmont': 'Piemonte'
+            }
+            for eng, ita in dizionario_geo.items():
+                v_str = re.sub(re.escape(eng), ita, v_str, flags=re.IGNORECASE)
+                
+            return v_str
+        
+        # Applica la traduzione solo alle colonne che contengono dati geografici
+        for colonna in df_orbis.columns:
+            if any(k in str(colonna).lower() for k in ['nuts', 'regione', 'provincia', 'territor']):
+                df_orbis[colonna] = df_orbis[colonna].apply(traduci_valori_territoriali)
             
         # --- 4. RENUMERAZIONE PROGRESSIVA DELLA PRIMA COLONNA ---
         # Resetta l'indice del dataframe eliminando i "buchi"
@@ -1910,10 +2763,63 @@ if uploaded_file is not None:
         righe_finali = len(df_orbis)
         righe_scartate = righe_iniziali - righe_finali
 
+
+
+    # --- SELEZIONE AUTOMATICA E INTELLIGENTE DELL'AZIENDA TARGET ---
+        col_ragione_sociale = [c for c in df_orbis.columns if 'ragione' in str(c).lower()][0]
+        
+        # 1. Pesca TUTTI gli indicatori, i margini e i ratio del 2024 presenti nel file (ignora i valori assoluti come il fatturato)
+        colonne_kpi_2024 = [c for c in df_orbis.columns if '2024' in str(c) and any(x in str(c).lower() for x in ['margine', 'indice', 'ratio', 'gearing'])]
+        
+        # Tieni solo chi ha i dati completi (se il file è vuoto fa un fallback)
+        df_candidati = df_orbis.dropna(subset=colonne_kpi_2024).copy()
+        if df_candidati.empty: 
+            df_candidati = df_orbis.copy()
+            
+        df_candidati['Score_Anomalia_Totale'] = 0
+        df_candidati['Picco_Anomalia_Singola'] = 0 
+        
+        # 2. Calcola lo scostamento (Z-Score) per ogni singola metrica
+        for col in colonne_kpi_2024:
+            df_candidati[col] = pd.to_numeric(df_candidati[col], errors='coerce')
+            mediana_settore = df_candidati[col].median()
+            deviazione_std = df_candidati[col].std()
+            
+            if pd.notna(deviazione_std) and deviazione_std > 0:
+                # Quanto si allontana dalla mediana su questo specifico indicatore?
+                scostamento = abs(df_candidati[col] - mediana_settore) / deviazione_std
+                
+                df_candidati['Score_Anomalia_Totale'] += scostamento
+                # Registra il "peggior difetto" di questa azienda aggiornando il valore massimo
+                df_candidati['Picco_Anomalia_Singola'] = df_candidati[['Picco_Anomalia_Singola']].assign(new=scostamento).max(axis=1)
+
+        # 3. FILTRO 1 (No Outlier): Elimina le aziende che hanno anche solo UN indicatore fuori di testa (> 1.5 Deviazioni Std)
+        df_puliti = df_candidati[df_candidati['Picco_Anomalia_Singola'] <= 1.5].copy()
+        
+        # (Fallback di sicurezza nel caso il settore sia tutto sballato)
+        if df_puliti.empty: 
+            df_puliti = df_candidati.copy()
+
+        # 4. FILTRO 2 (No Perfetti): Ordiniamo dal più "mediano" al più "strano". 
+        df_puliti = df_puliti.sort_values('Score_Anomalia_Totale', ascending=True).reset_index(drop=True)
+        
+        # Invece di prendere l'indice 0 (identico alla mediana), prendiamo un'azienda al 15° percentile.
+        # È "normale", ma con la giusta dose di realtà aziendale imperfetta.
+        indice_genuino = max(1, len(df_puliti) // 7) 
+        
+        azienda_target = df_puliti.iloc[indice_genuino][col_ragione_sociale]
+        
+        # Messaggio a schermo opzionale per farti vedere chi ha scelto
+        st.info(f"🎯 **Azienda Target Auto-Selezionata:** {azienda_target} (Rappresentativa del settore)")
+
     # ==========================================
     # DASHBOARD DATI CARICATI
     # ==========================================
     st.markdown("### 📊 Analisi Qualità del Dato")
+    
+    # 🟢 VISUALIZZAZIONE INFO SETTORE (Recuperata dallo step precedente)
+    settore_visualizzato = st.session_state.get('settore_estratto', 'Settore Non Rilevato')
+    st.info(f"📋 **Filtro Settore Rilevato da Orbis:** {settore_visualizzato}")
     
     # Creiamo 3 colonne visive
     col1, col2, col3 = st.columns(3)
@@ -1936,14 +2842,15 @@ if uploaded_file is not None:
     # ==========================================
     
     # Crea le schede per i vari capitoli + Tab per il mega download
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab7_5, tab8 = st.tabs([
         "Cap 1: Forma Giur.", 
         "Cap 2: Territorio", 
         "Cap 3: Economico", 
         "Cap 4: Patrimoniale", 
         "Cap 5: Finanziario", 
         "Cap 6: Benchmark", 
-        "Cap 7: Ranking", 
+        "Cap 7: Ranking",
+        "Cap 7.5: Composizione", 
         "⭐ Scarica Tutto"
     ])
 
@@ -1953,7 +2860,7 @@ if uploaded_file is not None:
         st.write("Genera l'analisi aggregata per S.p.A. e S.r.l.")
         if st.button("Genera Capitolo 1", type="primary", key="btn_cap1"):
             with st.spinner("Creazione tabelle in corso..."):
-                excel_cap1 = elabora_capitolo_1(df_orbis)
+                excel_cap1 = elabora_capitolo_1(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '1. Forma Giuridica'",
                     data=excel_cap1,
@@ -1967,7 +2874,7 @@ if uploaded_file is not None:
         st.write("Genera il report aggregato per NUTS2 (Regioni e Macroregioni) con grafici a torta e istogrammi.")
         if st.button("Genera Capitolo 2", type="primary", key="btn_cap2"):
             with st.spinner("Creazione tabelle e grafici territoriali..."):
-                excel_cap2 = elabora_capitolo_2(df_orbis)
+                excel_cap2 = elabora_capitolo_2(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '2. Ripartizione Territoriale'",
                     data=excel_cap2,
@@ -1981,7 +2888,7 @@ if uploaded_file is not None:
         st.write("Genera analisi approfondite su Margini (Profitto, EBITDA, EBIT) e Ricavi.")
         if st.button("Genera Capitolo 3", type="primary", key="btn_cap3"):
             with st.spinner("Calcolo indici economici..."):
-                excel_cap3 = elabora_capitolo_3(df_orbis)
+                excel_cap3 = elabora_capitolo_3(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '3. Equilibrio Economico'",
                     data=excel_cap3,
@@ -1995,7 +2902,7 @@ if uploaded_file is not None:
         st.write("Genera analisi sugli indici di Struttura e Gearing.")
         if st.button("Genera Capitolo 4", type="primary", key="btn_cap4"):
             with st.spinner("Calcolo metriche patrimoniali..."):
-                excel_cap4 = elabora_capitolo_4(df_orbis)
+                excel_cap4 = elabora_capitolo_4(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '4. Equilibrio Patrimoniale'",
                     data=excel_cap4,
@@ -2009,7 +2916,7 @@ if uploaded_file is not None:
         st.write("Genera analisi sugli indici di liquidità (Current, Quick) e rotazione.")
         if st.button("Genera Capitolo 5", type="primary", key="btn_cap5"):
             with st.spinner("Calcolo metriche finanziarie..."):
-                excel_cap5 = elabora_capitolo_5(df_orbis)
+                excel_cap5 = elabora_capitolo_5(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '5. Equilibrio Finanziario'",
                     data=excel_cap5,
@@ -2023,7 +2930,7 @@ if uploaded_file is not None:
         st.write("Genera il cruscotto finale con calcolo terzili, assegnazione rating A-B-C e pivot territoriali.")
         if st.button("Genera Capitolo 6", type="primary", key="btn_cap6"):
             with st.spinner("Calcolo benchmark e assegnazione rating..."):
-                excel_cap6 = elabora_capitolo_6(df_orbis)
+                excel_cap6 = elabora_capitolo_6(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '6. Benchmark'",
                     data=excel_cap6,
@@ -2037,14 +2944,30 @@ if uploaded_file is not None:
         st.write("Elabora le classifiche nazionali e regionali. Scaricherai un archivio ZIP contenente 3 file Excel.")
         if st.button("Genera Capitolo 7 (Pack ZIP)", type="primary", key="btn_cap7"):
             with st.spinner("Creazione ranking e compressione file..."):
-                zip_cap7 = elabora_capitolo_7(df_orbis)
+                zip_cap7 = elabora_capitolo_7(df_orbis, azienda_target)
                 st.download_button(
                     label="📥 Scarica '7. Pacchetto Ranking' (ZIP)",
                     data=zip_cap7,
                     file_name="7_Ranking_Aziendale_Pack.zip",
                     mime="application/zip"
                 )
-
+    
+    # ==========================================
+    # 🟢 NUOVO TAB 7: DASHBOARD INDICI DI COMPOSIZIONE
+    # ==========================================
+    with tab7_5:
+        st.subheader("7.5 Indici di Composizione")
+        st.write("Analisi della composizione percentuale delle singole voci di costo e di utile sul fatturato complessivo.")
+        if st.button("Genera Capitolo 7.5", type="primary", key="btn_cap7_5"):
+            with st.spinner("Calcolo indici e generazione torte di composizione..."):
+                excel_cap7_5 = elabora_capitolo_7_5(df_orbis, azienda_target)
+                st.download_button(
+                    label="📥 Scarica '7.5 Indici di Composizione'",
+                    data=excel_cap7_5,
+                    file_name="7.5_Indici_Composizione.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+    
     # --- SCHEDA SCARICA TUTTO ---
     with tab8:
         st.subheader("⭐ Master Export: Tutti i Capitoli")
@@ -2057,20 +2980,25 @@ if uploaded_file is not None:
                 import zipfile # Assicurati sia importato
                 
                 with zipfile.ZipFile(master_zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as master_zip:
-                    # Eseguiamo e salviamo i primi 6 capitoli
-                    master_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis).read())
-                    master_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis).read())
-                    master_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis).read())
-                    master_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis).read())
-                    master_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis).read())
-                    master_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis).read())
+                    # 🟢 GENERAZIONE DEL FILE TXT CON IL NOME DEL SETTORE ESTRAZIONALE
+                    testo_settore = st.session_state.get('settore_estratto', 'Settore Non Rilevato dall\'export Orbis')
+                    contenuto_txt = f"PROGETTO FINHACK - REPORT GENERATO\n\nTarget Settore Industriale (Filtro NACE Orbis):\n{testo_settore}\n"
                     
-                    # Il Capitolo 7 è già uno ZIP. Lo estraiamo e mettiamo i 3 file nel Mega ZIP
-                    cap7_zip_buffer = elabora_capitolo_7(df_orbis)
+                    # Scrive il file direttamente in memoria nell'archivio ZIP
+                    master_zip.writestr("Info_Settore_Ricerca.txt", contenuto_txt)
+
+                    # Eseguiamo e salviamo i primi 6 capitoli (il codice rimane invariato sotto)
+                    master_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis, azienda_target).read())
+                    master_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis, azienda_target).read())
+                    master_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis, azienda_target).read())
+                    master_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis, azienda_target).read())
+                    master_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis, azienda_target).read())
+                    master_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis, azienda_target).read())
+                    master_zip.writestr("7.5_Indici_Composizione.xlsx", elabora_capitolo_7_5(df_orbis, azienda_target).read())
+                    cap7_zip_buffer = elabora_capitolo_7(df_orbis, azienda_target)
                     with zipfile.ZipFile(cap7_zip_buffer, "r") as cap7_zip:
                         for nome_file in cap7_zip.namelist():
                             master_zip.writestr(nome_file, cap7_zip.read(nome_file))
-
                 master_zip_buffer.seek(0)
                 
                 st.success("Tutti i capitoli elaborati con successo!")
