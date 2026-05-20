@@ -7,10 +7,10 @@ import xlsxwriter.utility as xl_util
 st.set_page_config(page_title="FinHack - Beta Totale", page_icon="📈", layout="wide")
 
 st.title("📈 FinHack: Calcolo Beta Totale")
-st.markdown("Carica il file di estrazione di ORBIS e l'output della regressione per generare il modello completo.")
+st.markdown("Carica il file di estrazione e l'output della regressione per generare il modello completo.")
 st.divider()
 
-st.info("💡 **ISTRUZIONI:** Carica l'output regressione **BTOT-SW** e un export di **ORBIS** in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA BETA TOTALE**.")
+st.info("💡 **ISTRUZIONI:** Carica l'output regressione **BTOT-SW** e un export in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA BETA TOTALE**.")
 
 # --- INIZIALIZZAZIONE SESSION STATE SICURA ---
 if "file_generated" not in st.session_state:

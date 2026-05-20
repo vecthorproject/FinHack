@@ -98,10 +98,10 @@ st.markdown("""
 
 # Titoli visivi (Uso <div> al posto di <p> per evitare i margini imposti da Streamlit)
 st.markdown('<p class="main-title">📊 FinHack ☠️</p>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Generazione avanzata e automatizzata dei Report Finanziari da ORBIS</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Generazione avanzata e automatizzata dei Report Economico-Finanziari</div>', unsafe_allow_html=True)
 st.divider()
 
-st.info("💡 **ISTRUZIONI:** Carica un export di **ORBIS** in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA UNIVERSAL**.")
+st.info("💡 **ISTRUZIONI:** Carica un export in formato `.xlsx`. Assicurati di aver usato i filtri corretti e il formato **LISTA UNIVERSAL**.")
 
 # ==========================================
 # 1. FUNZIONI DEI CAPITOLI (Moduli)
@@ -2819,7 +2819,7 @@ if uploaded_file is not None:
     
     # 🟢 VISUALIZZAZIONE INFO SETTORE (Recuperata dallo step precedente)
     settore_visualizzato = st.session_state.get('settore_estratto', 'Settore Non Rilevato')
-    st.info(f"📋 **Filtro Settore Rilevato da Orbis:** {settore_visualizzato}")
+    st.info(f"📋 **Filtro Settore Rilevato:** {settore_visualizzato}")
     
     # Creiamo 3 colonne visive
     col1, col2, col3 = st.columns(3)
@@ -2981,8 +2981,8 @@ if uploaded_file is not None:
                 
                 with zipfile.ZipFile(master_zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as master_zip:
                     # 🟢 GENERAZIONE DEL FILE TXT CON IL NOME DEL SETTORE ESTRAZIONALE
-                    testo_settore = st.session_state.get('settore_estratto', 'Settore Non Rilevato dall\'export Orbis')
-                    contenuto_txt = f"PROGETTO FINHACK - REPORT GENERATO\n\nTarget Settore Industriale (Filtro NACE Orbis):\n{testo_settore}\n"
+                    testo_settore = st.session_state.get('settore_estratto', 'Settore Non Rilevato dall\'export')
+                    contenuto_txt = f"PROGETTO FINHACK - REPORT GENERATO\n\nTarget Settore Industriale (Filtro NACE):\n{testo_settore}\n"
                     
                     # Scrive il file direttamente in memoria nell'archivio ZIP
                     master_zip.writestr("Info_Settore_Ricerca.txt", contenuto_txt)
