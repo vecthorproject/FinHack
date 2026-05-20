@@ -2597,7 +2597,7 @@ def elabora_capitolo_7(df_filtered, azienda_target):
 # 2. INTERFACCIA WEB (Il "Capitolo 0" + Filtri)
 # ==========================================
 
-uploaded_file = st.file_uploader("Trascina qui l'export grezzo di ORBIS (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Trascina qui l'export grezzo (.xlsx)", type=["xlsx"])
 
 if uploaded_file is not None:
     with st.spinner("Verifica formato, lettura e pulizia dati in corso..."):

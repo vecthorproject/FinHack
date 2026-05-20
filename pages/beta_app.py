@@ -25,7 +25,7 @@ if "last_reg" not in st.session_state:
 # --- 1. UPLOAD DEI FILE ---
 col1, col2 = st.columns(2)
 with col1:
-    orbis_file = st.file_uploader("Carica l'export di Orbis (Excel)", type=["xlsx"])
+    orbis_file = st.file_uploader("Carica l'export (Excel)", type=["xlsx"])
 with col2:
     reg_file = st.file_uploader("Carica il file Regressioni Beta (Excel o CSV)", type=["xlsx", "csv"])
 
