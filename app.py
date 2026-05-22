@@ -641,15 +641,21 @@ def elabora_capitolo_2(df_filtered, azienda_target):
             ('Totale Attivo 2024 (€)', riga_g['Totale Attivo migl EUR 2024'], f_dec),
             ('Numero Dipendenti 2024', riga_g['Numero dipendenti 2024'], f_int)
         ]
+        
         for idx, (voce, valore, formato_cella) in enumerate(voci_geo, 1):
             ws_target_geo.write(idx, 0, voce, format_macro_bold)
-            ws_target_geo.write(idx, 1, valore, formato_cella)
+            
+            # --- FIX ANTI-CRASH PER I DATI MANCANTI ---
+            if pd.isna(valore) or str(valore).strip() == "":
+                ws_target_geo.write(idx, 1, "n.d.", formato_cella)
+            else:
+                ws_target_geo.write(idx, 1, valore, formato_cella)
+            
     else:
         ws_target_geo.write(1, 0, 'Azienda Target non trovata', format_regione)
 
     writer.close()
     output_buffer.seek(0)
-    
     return output_buffer
 
 
@@ -2799,6 +2805,14 @@ if uploaded_file is not None:
         # (Fallback di sicurezza nel caso il settore sia tutto sballato)
         if df_puliti.empty: 
             df_puliti = df_candidati.copy()
+
+        # ----------------------------------------------------------------------
+        # MINIMO INTERVENTO: Preferenza per chi ha dichiarato i dipendenti
+        if 'Numero dipendenti 2024' in df_puliti.columns:
+            df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti['Numero dipendenti 2024'], errors='coerce').notna()]
+            if not df_con_dipendenti.empty:
+                df_puliti = df_con_dipendenti.copy()
+        # ------------------------------------------------
 
         # 4. FILTRO 2 (No Perfetti): Ordiniamo dal più "mediano" al più "strano". 
         df_puliti = df_puliti.sort_values('Score_Anomalia_Totale', ascending=True).reset_index(drop=True)
