@@ -2770,61 +2770,75 @@ if uploaded_file is not None:
         righe_scartate = righe_iniziali - righe_finali
 
 
-
     # --- SELEZIONE AUTOMATICA E INTELLIGENTE DELL'AZIENDA TARGET ---
         col_ragione_sociale = [c for c in df_orbis.columns if 'ragione' in str(c).lower()][0]
-        
-        # 1. Pesca TUTTI gli indicatori, i margini e i ratio del 2024 presenti nel file (ignora i valori assoluti come il fatturato)
-        colonne_kpi_2024 = [c for c in df_orbis.columns if '2024' in str(c) and any(x in str(c).lower() for x in ['margine', 'indice', 'ratio', 'gearing'])]
-        
-        # Tieni solo chi ha i dati completi (se il file è vuoto fa un fallback)
-        df_candidati = df_orbis.dropna(subset=colonne_kpi_2024).copy()
-        if df_candidati.empty: 
-            df_candidati = df_orbis.copy()
+
+        st.markdown("### 🎯 Impostazione Azienda Target")
+        ricerca_manuale = st.text_input(
+            "Vuoi analizzare un'azienda specifica? (Opzionale)", 
+            placeholder="Es: scrivi la Ragione Sociale... Lascia vuoto per l'auto-selezione intelligente."
+        )
+
+        azienda_target = None
+
+        # --- 1. TENTATIVO DI RICERCA MANUALE ---
+        if ricerca_manuale.strip():
+            df_match = df_orbis[df_orbis[col_ragione_sociale].astype(str).str.lower().str.contains(ricerca_manuale.lower().strip(), na=False)]
             
-        df_candidati['Score_Anomalia_Totale'] = 0
-        df_candidati['Picco_Anomalia_Singola'] = 0 
-        
-        # 2. Calcola lo scostamento (Z-Score) per ogni singola metrica
-        for col in colonne_kpi_2024:
-            df_candidati[col] = pd.to_numeric(df_candidati[col], errors='coerce')
-            mediana_settore = df_candidati[col].median()
-            deviazione_std = df_candidati[col].std()
+            if not df_match.empty:
+                azienda_target = df_match.iloc[0][col_ragione_sociale]
+                st.success(f"✅ **Azienda Target forzata manualmente:** {azienda_target}")
+            else:
+                st.warning(f"⚠️ Nessuna azienda trovata contenente '{ricerca_manuale}'. Procedo con la selezione automatica.")
+
+        # --- 2. SELEZIONE AUTOMATICA (Se l'utente non ha scritto nulla o non l'ha trovata) ---
+        if azienda_target is None:
             
-            if pd.notna(deviazione_std) and deviazione_std > 0:
-                # Quanto si allontana dalla mediana su questo specifico indicatore?
-                scostamento = abs(df_candidati[col] - mediana_settore) / deviazione_std
+            # ⚠️ DA QUI IN POI TUTTO IL TUO CODICE HA 4 SPAZI (1 TAB) DI INDENTAZIONE ⚠️
+
+            # 1. Pesca TUTTI gli indicatori, i margini e i ratio del 2024 presenti nel file
+            colonne_kpi_2024 = [c for c in df_orbis.columns if '2024' in str(c) and any(x in str(c).lower() for x in ['margine', 'indice', 'ratio', 'gearing'])]
+            
+            # Tieni solo chi ha i dati completi (se il file è vuoto fa un fallback)
+            df_candidati = df_orbis.dropna(subset=colonne_kpi_2024).copy()
+            if df_candidati.empty: 
+                df_candidati = df_orbis.copy()
                 
-                df_candidati['Score_Anomalia_Totale'] += scostamento
-                # Registra il "peggior difetto" di questa azienda aggiornando il valore massimo
-                df_candidati['Picco_Anomalia_Singola'] = df_candidati[['Picco_Anomalia_Singola']].assign(new=scostamento).max(axis=1)
+            df_candidati['Score_Anomalia_Totale'] = 0
+            df_candidati['Picco_Anomalia_Singola'] = 0 
+            
+            # 2. Calcola lo scostamento (Z-Score) per ogni singola metrica
+            for col in colonne_kpi_2024:
+                df_candidati[col] = pd.to_numeric(df_candidati[col], errors='coerce')
+                mediana_settore = df_candidati[col].median()
+                deviazione_std = df_candidati[col].std()
+                
+                if pd.notna(deviazione_std) and deviazione_std > 0:
+                    scostamento = abs(df_candidati[col] - mediana_settore) / deviazione_std
+                    df_candidati['Score_Anomalia_Totale'] += scostamento
+                    df_candidati['Picco_Anomalia_Singola'] = df_candidati[['Picco_Anomalia_Singola']].assign(new=scostamento).max(axis=1)
 
-        # 3. FILTRO 1 (No Outlier): Elimina le aziende che hanno anche solo UN indicatore fuori di testa (> 1.5 Deviazioni Std)
-        df_puliti = df_candidati[df_candidati['Picco_Anomalia_Singola'] <= 1.5].copy()
-        
-        # (Fallback di sicurezza nel caso il settore sia tutto sballato)
-        if df_puliti.empty: 
-            df_puliti = df_candidati.copy()
+            # 3. FILTRO 1 (No Outlier): Elimina le aziende che hanno anche solo UN indicatore fuori di testa
+            df_puliti = df_candidati[df_candidati['Picco_Anomalia_Singola'] <= 1.5].copy()
+            
+            if df_puliti.empty: 
+                df_puliti = df_candidati.copy()
 
-        # ----------------------------------------------------------------------
-        # MINIMO INTERVENTO: Preferenza per chi ha dichiarato i dipendenti
-        if 'Numero dipendenti 2024' in df_puliti.columns:
-            df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti['Numero dipendenti 2024'], errors='coerce').notna()]
-            if not df_con_dipendenti.empty:
-                df_puliti = df_con_dipendenti.copy()
-        # ------------------------------------------------
+            # MINIMO INTERVENTO: Preferenza per chi ha dichiarato i dipendenti
+            if 'Numero dipendenti 2024' in df_puliti.columns:
+                df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti['Numero dipendenti 2024'], errors='coerce').notna()]
+                if not df_con_dipendenti.empty:
+                    df_puliti = df_con_dipendenti.copy()
 
-        # 4. FILTRO 2 (No Perfetti): Ordiniamo dal più "mediano" al più "strano". 
-        df_puliti = df_puliti.sort_values('Score_Anomalia_Totale', ascending=True).reset_index(drop=True)
-        
-        # Invece di prendere l'indice 0 (identico alla mediana), prendiamo un'azienda al 15° percentile.
-        # È "normale", ma con la giusta dose di realtà aziendale imperfetta.
-        indice_genuino = max(1, len(df_puliti) // 7) 
-        
-        azienda_target = df_puliti.iloc[indice_genuino][col_ragione_sociale]
-        
-        # Messaggio a schermo opzionale per farti vedere chi ha scelto
-        st.info(f"🎯 **Azienda Target Auto-Selezionata:** {azienda_target} (Rappresentativa del settore)")
+            # 4. FILTRO 2 (No Perfetti): Ordiniamo dal più "mediano" al più "strano". 
+            df_puliti = df_puliti.sort_values('Score_Anomalia_Totale', ascending=True).reset_index(drop=True)
+            
+            indice_genuino = max(1, len(df_puliti) // 7) 
+            
+            azienda_target = df_puliti.iloc[indice_genuino][col_ragione_sociale]
+            
+            # Messaggio a schermo opzionale per farti vedere chi ha scelto
+            st.info(f"🤖 **Azienda Target Auto-Selezionata:** {azienda_target} (Rappresentativa del settore)")
 
     # ==========================================
     # DASHBOARD DATI CARICATI
