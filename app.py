@@ -80,18 +80,21 @@ st.markdown("""
         color: #F8FAFC !important;
     }
     
-    /* NUMERI DASHBOARD (Grandi e Azzurri) */
+    /* NUMERI DASHBOARD (Ridotti per farci stare le descrizioni) */
     [data-testid="stMetricValue"] {
-        font-size: 3.5rem !important;
+        font-size: 2.5rem !important; 
         font-weight: 800 !important;
-        color: #38BDF8 !important; 
+        color: #38BDF8 !important;
     }
-    
     /* ETICHETTE DASHBOARD */
     [data-testid="stMetricLabel"] p {
-        font-size: 1.2rem !important;
+        font-size: 1.1rem !important;
         font-weight: 600 !important;
-        color: #CBD5E1 !important; 
+        color: #CBD5E1 !important;
+    }
+    /* DETTAGLIO DELTA (I piccoli numerini sotto) */
+    [data-testid="stMetricDelta"] {
+        font-size: 0.9rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -2702,21 +2705,44 @@ if uploaded_file is not None:
                 st.write(colonne_mancanti)
             st.stop()  # IL PROGRAMMA SI FERMA QUI, I PULSANTI NON VERRANNO GENERATI
 
-        # --- 3. PULIZIA DATI E FILTRAGGIO VALORI (n.d. e Rotazione) ---
+        # --- 3. PULIZIA DATI E FILTRAGGIO VALORI (n.d., Rotazione e Gearing) ---
         righe_iniziali = len(df_orbis)
         col_att_24 = 'Totale Attivo migl EUR 2024'
         col_ric_24 = 'Totale valore della produzione migl EUR 2024'
         col_rot_24 = 'Indice di Rotazione del Capitale Investito (*) 2024'
+        
+        col_g24 = 'Gearing (*) % 2024'
+        col_g23 = 'Gearing (*) % 2023'
+        col_g22 = 'Gearing (*) % 2022'
+        col_g21 = 'Gearing (*) % 2021'
 
-        # Forza la conversione a numero: tutto ciò che è testo (come "n.d.") diventa vuoto (NaN)
-        for col in [col_att_24, col_ric_24, col_rot_24]:
-            df_orbis[col] = pd.to_numeric(df_orbis[col], errors='coerce')
+        # Forza la conversione a numero per tutte le metriche chiave
+        for col in [col_att_24, col_ric_24, col_rot_24, col_g24, col_g23, col_g22, col_g21]:
+            if col in df_orbis.columns:
+                df_orbis[col] = pd.to_numeric(df_orbis[col], errors='coerce')
 
-        # Elimina le righe che non hanno dati al 2024 su Ricavi, Attivo o Rotazione
+        # --- FILTRO 1: ROTAZIONE E DATI BASE ---
         df_orbis = df_orbis.dropna(subset=[col_att_24, col_ric_24, col_rot_24])
-
-        # Mantieni solo aziende con Rotazione strettamente maggiore di 0
         df_orbis = df_orbis[df_orbis[col_rot_24] > 0]
+        
+        righe_post_rotazione = len(df_orbis)
+        scartate_rotazione = righe_iniziali - righe_post_rotazione
+        
+        # --- FILTRO 2: GEARING ---
+        if col_g24 in df_orbis.columns:
+            # Elimina chi ha Gearing nullo o negativo nel 2024
+            df_orbis = df_orbis[(df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)]
+            
+            # Nasconde gli zeri degli anni passati trasformandoli in 'n.d.'
+            for col_g in [col_g23, col_g22, col_g21]:
+                if col_g in df_orbis.columns:
+                    df_orbis[col_g] = df_orbis[col_g].replace(0, np.nan)
+        
+        righe_finali = len(df_orbis)
+        scartate_gearing = righe_post_rotazione - righe_finali
+        
+        # Calcolo dei totali per la dashboard
+        righe_scartate = righe_iniziali - righe_finali
 
         # --- NUOVO AUTOMATISMO: TRADUZIONE GEOGRAFICA ENG -> ITA E FIX ACCENTI ---
         def traduci_valori_territoriali(valore):
@@ -2851,19 +2877,28 @@ if uploaded_file is not None:
     
     # Creiamo 3 colonne visive
     col1, col2, col3 = st.columns(3)
-    
+        
     with col1:
-        st.metric(label="📄 Aziende Totali nel File", value=righe_iniziali)
-        
+        st.metric(label="📄 Aziende Iniziali", value=righe_iniziali)
+            
     with col2:
-        # Mostra in rosso i dati scartati
-        st.metric(label="🗑️ Aziende Scartate (Rotazione ≤0 o n.d.)", value=righe_scartate, delta=f"-{righe_scartate} escluse", delta_color="inverse")
-        
+    # Mostra in rosso i dati scartati, con il dettaglio sotto!
+        st.metric(
+            label="🗑️ Aziende Scartate", 
+            value=righe_scartate, 
+            delta=f"-{scartate_rotazione} Rotazione | -{scartate_gearing} Gearing", 
+            delta_color="inverse"
+        )
+            
     with col3:
-        # Mostra in verde i dati pronti
-        st.metric(label="✅ Aziende Valide", value=righe_finali, delta="Pronte per l'analisi", delta_color="normal")
-
-    st.divider() # Un'altra bella linea prima delle Tabs
+    # Mostra in verde i dati pronti per l'analisi
+        st.metric(
+            label="✅ Aziende Valide", 
+            value=righe_finali, 
+            delta="Pronte per l'analisi", 
+            delta_color="normal"
+        )
+    st.divider()
 
     # ==========================================
     # 3. GESTIONE DELLE TABS (I Pulsanti)
