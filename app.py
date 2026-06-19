@@ -9,6 +9,8 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
+from report_corp import genera_report_word
+from report_breve_corp import genera_presentazione_ppt
 
 # ==========================================
 # IMPOSTAZIONI PAGINA WEB E GRAFICA (CSS)
@@ -417,10 +419,10 @@ def elabora_capitolo_2(df_filtered, azienda_target):
 
     # Intestazioni unite
     worksheet.write(0, 0, 'Regioni', format_header_blue)
-    worksheet.merge_range(0, 1, 0, 2, 'Imprese', format_header_blue)
-    worksheet.merge_range(0, 3, 0, 4, 'Ricavi', format_header_blue)
-    worksheet.merge_range(0, 5, 0, 6, 'Totale Attivo', format_header_blue)
-    worksheet.merge_range(0, 7, 0, 8, 'Dipendenti', format_header_blue)
+    worksheet.merge_range(0, 1, 0, 2, 'Numero Imprese', format_header_blue)
+    worksheet.merge_range(0, 3, 0, 4, 'Somma di Ricavi - migl EUR', format_header_blue)
+    worksheet.merge_range(0, 5, 0, 6, 'Somma di Totale Attivo - migl EUR', format_header_blue)
+    worksheet.merge_range(0, 7, 0, 8, 'Numero Dipendenti', format_header_blue)
     
     subheaders = ['', 'V.A.', '%', 'V.A.', '%', 'V.A.', '%', 'V.A.', '%']
     for col_num, sh in enumerate(subheaders):
@@ -428,7 +430,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
         else: worksheet.write(1, col_num, sh)
 
     worksheet.set_column('A:A', 30)
-    worksheet.set_column('B:I', 15)
+    worksheet.set_column('B:I', 18)
 
     macros_order = ['Nord Ovest', 'Nord Est', 'Centro', 'Sud e Isole']
     macros_present = [m for m in macros_order if m in pivot_reg.index.get_level_values(0)]
@@ -512,10 +514,10 @@ def elabora_capitolo_2(df_filtered, azienda_target):
 
     col_reg_start = 17 
     worksheet.write(1, col_reg_start, 'Regione', format_header_blue)
-    worksheet.write(1, col_reg_start+1, 'Imprese', format_header_blue)
-    worksheet.write(1, col_reg_start+2, 'Ricavi', format_header_blue)
-    worksheet.write(1, col_reg_start+3, 'Attivo', format_header_blue)
-    worksheet.write(1, col_reg_start+4, 'Dipendenti', format_header_blue)
+    worksheet.write(1, col_reg_start+1, 'Numero Imprese', format_header_blue)
+    worksheet.write(1, col_reg_start+2, 'Tot. Ricavi - migl EUR', format_header_blue)
+    worksheet.write(1, col_reg_start+3, 'Tot. Attivo - migl EUR', format_header_blue)
+    worksheet.write(1, col_reg_start+4, 'Numero Dipendenti', format_header_blue)
 
     reg_idx = 2
     for r in range(2, riga_italia_idx):
@@ -527,7 +529,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
             worksheet.write_formula(reg_idx, col_reg_start+4, f"=H{r+1}", f_int)
             reg_idx += 1
 
-    worksheet.set_column('L:V', 14)
+    worksheet.set_column('L:V', 18)
 
     def crea_torta(titolo, colonna_valori, pos_cella):
         chart = workbook.add_chart({'type': 'pie'})
@@ -556,14 +558,14 @@ def elabora_capitolo_2(df_filtered, azienda_target):
         worksheet.insert_chart(pos_cella, chart) 
 
     crea_torta('Ripartizione Imprese (%)', col_macro_start+1, 'L9')
-    crea_torta('Ripartizione Ricavi (%)', col_macro_start+2, 'L24')
-    crea_torta('Ripartizione Attivo (%)', col_macro_start+3, 'L39')
+    crea_torta('Ripartizione Tot. Ricavi (%)', col_macro_start+2, 'L24')
+    crea_torta('Ripartizione Tot. Attivo (%)', col_macro_start+3, 'L39')
     crea_torta('Ripartizione Dipendenti (%)', col_macro_start+4, 'L54')
 
     col_chart_istogrammi = 'X'
     crea_istogramma('Imprese per Regione', col_reg_start+1, f'{col_chart_istogrammi}2')
-    crea_istogramma('Ricavi per Regione (migl EUR)', col_reg_start+2, f'{col_chart_istogrammi}17')
-    crea_istogramma('Attivo per Regione (migl EUR)', col_reg_start+3, f'{col_chart_istogrammi}32')
+    crea_istogramma('Tot. Ricavi per Regione (migl EUR)', col_reg_start+2, f'{col_chart_istogrammi}17')
+    crea_istogramma('Tot. Attivo per Regione (migl EUR)', col_reg_start+3, f'{col_chart_istogrammi}32')
     crea_istogramma('Dipendenti per Regione', col_reg_start+4, f'{col_chart_istogrammi}47')
 
     ws_quartili = workbook.add_worksheet('Quartili')
@@ -578,22 +580,22 @@ def elabora_capitolo_2(df_filtered, azienda_target):
         ws_quartili.write(r_idx, 0, row['Totale Attivo migl EUR 2024'], f_dec)
         ws_quartili.write(r_idx, 1, row['Totale Ricavi migl EUR 2024'], f_dec)
 
-    ws_quartili.set_column('A:B', 30)
+    ws_quartili.set_column('A:B', 35)
     ultima_riga_dati = len(df_raw) + 1
 
     ws_quartili.write(0, 3, 'Variabile', format_header_blue)
     ws_quartili.write(0, 4, 'V.A.', format_header_blue)
-    ws_quartili.write(1, 3, 'Totale Ricavi')
+    ws_quartili.write(1, 3, 'Totale Ricavi - migl EUR')
     ws_quartili.write_formula(1, 4, f"=SUM(B2:B{ultima_riga_dati})", f_dec)
-    ws_quartili.write(2, 3, 'Totale Attivo')
+    ws_quartili.write(2, 3, 'Totale Attivo - migl EUR')
     ws_quartili.write_formula(2, 4, f"=SUM(A2:A{ultima_riga_dati})", f_dec)
 
-    ws_quartili.set_column('D:D', 15)
+    ws_quartili.set_column('D:D', 22)
     ws_quartili.set_column('E:E', 20)
 
     ws_quartili.write(0, 6, 'Quartile', format_header_blue)
-    ws_quartili.write(0, 7, 'Totale Attivo', format_header_blue)
-    ws_quartili.write(0, 8, 'Totale Ricavi', format_header_blue)
+    ws_quartili.write(0, 7, 'Totale Attivo - migl EUR', format_header_blue)
+    ws_quartili.write(0, 8, 'Totale Ricavi - migl EUR', format_header_blue)
 
     nomi_quartili = ['Minimo', '1°', '2°', '3°', '4°']
     for i, nome in enumerate(nomi_quartili):
@@ -604,8 +606,8 @@ def elabora_capitolo_2(df_filtered, azienda_target):
 
     start_r = 8
     ws_quartili.write(start_r, 6, 'Quartile', format_header_blue)
-    ws_quartili.write(start_r, 7, 'Totale Attivo', format_header_blue)
-    ws_quartili.write(start_r, 8, 'Totale Ricavi', format_header_blue)
+    ws_quartili.write(start_r, 7, 'Totale Attivo - migl EUR', format_header_blue)
+    ws_quartili.write(start_r, 8, 'Totale Ricavi - migl EUR', format_header_blue)
 
     intervalli_nomi = ['1°', '2°', '3°', '4°']
     for i in range(4):
@@ -619,7 +621,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
         ws_quartili.write_formula(start_r + 1 + i, 7, formula_attivo)
         ws_quartili.write_formula(start_r + 1 + i, 8, formula_ricavi)
 
-    ws_quartili.set_column('G:I', 35)
+    ws_quartili.set_column('G:I', 40)
 
     # ==========================================
     # GANCI FINALI
@@ -628,7 +630,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
     df_az_geo = df_base[df_base['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
     ws_target_geo = workbook.add_worksheet('Target_Posizionamento_Geo')
 
-    ws_target_geo.set_column('A:A', 30)
+    ws_target_geo.set_column('A:A', 40)
     ws_target_geo.set_column('B:B', 35)
 
     ws_target_geo.write(0, 0, 'Anagrafica / Geometria Territorial', format_header_blue)
@@ -640,8 +642,8 @@ def elabora_capitolo_2(df_filtered, azienda_target):
             ('Ragione Sociale', riga_g['Ragione Sociale'], format_regione),
             ('Macroregione Appartenenza', riga_g['Macroregione'], format_regione),
             ('Regione Specifica (NUTS2)', riga_g['Nome Regione'], format_regione),
-            ('Totale Ricavi 2024 (€)', riga_g['Totale Ricavi migl EUR 2024'], f_dec),
-            ('Totale Attivo 2024 (€)', riga_g['Totale Attivo migl EUR 2024'], f_dec),
+            ('Totale Ricavi - migl EUR 2024', riga_g['Totale Ricavi migl EUR 2024'], f_dec),
+            ('Totale Attivo - migl EUR 2024', riga_g['Totale Attivo migl EUR 2024'], f_dec),
             ('Numero Dipendenti 2024', riga_g['Numero dipendenti 2024'], f_int)
         ]
         
@@ -1845,21 +1847,24 @@ def elabora_capitolo_6(df_filtered, azienda_target):
             if col_name.strip() == '':
                 worksheet.write(row_ex - 1, col_num, "", fmt_space)
             elif col_name == 'Benchmark Economico':
-                cond_D = f"IF(D{row_ex}>=${col_T2}$4,3,IF(D{row_ex}>=${col_T1}$4,2,1))"
-                cond_E = f"IF(E{row_ex}>=${col_T2}$5,3,IF(E{row_ex}>=${col_T1}$5,2,1))"
-                cond_F = f"IF(F{row_ex}>=${col_T2}$6,3,IF(F{row_ex}>=${col_T1}$6,2,1))"
+                # Riferimenti corretti: Profitto riga 8, EBITDA riga 9, EBIT riga 10
+                cond_D = f"IF(D{row_ex}>=${col_T2}$8,3,IF(D{row_ex}>=${col_T1}$8,2,1))"
+                cond_E = f"IF(E{row_ex}>=${col_T2}$9,3,IF(E{row_ex}>=${col_T1}$9,2,1))"
+                cond_F = f"IF(F{row_ex}>=${col_T2}$10,3,IF(F{row_ex}>=${col_T1}$10,2,1))"
                 formula = f'=IF(({cond_D}+{cond_E}+{cond_F})>=8,"A",IF(({cond_D}+{cond_E}+{cond_F})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Finanziario':
-                cond_H = f"IF(H{row_ex}<=${col_T1}$7,3,IF(H{row_ex}<=${col_T2}$7,2,1))"
-                cond_I = f"IF(I{row_ex}>=${col_T2}$8,3,IF(I{row_ex}>=${col_T1}$8,2,1))"
-                cond_J = f"IF(J{row_ex}>=${col_T2}$9,3,IF(J{row_ex}>=${col_T1}$9,2,1))"
+                # Riferimenti corretti: Rotazione riga 11, Quick riga 12, Current riga 13
+                cond_H = f"IF(H{row_ex}>=${col_T2}$11,3,IF(H{row_ex}>=${col_T1}$11,2,1))"
+                cond_I = f"IF(I{row_ex}>=${col_T2}$12,3,IF(I{row_ex}>=${col_T1}$12,2,1))"
+                cond_J = f"IF(J{row_ex}>=${col_T2}$13,3,IF(J{row_ex}>=${col_T1}$13,2,1))"
                 formula = f'=IF(({cond_H}+{cond_I}+{cond_J})>=8,"A",IF(({cond_H}+{cond_I}+{cond_J})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Patrimoniale':
-                cond_L = f"IF(L{row_ex}>=${col_T2}$10,3,IF(L{row_ex}>=${col_T1}$10,2,1))"
-                cond_M = f"IF(M{row_ex}>=${col_T2}$11,3,IF(M{row_ex}>=${col_T1}$11,2,1))"
-                cond_N = f"IF(N{row_ex}<=${col_T1}$12,3,IF(N{row_ex}<=${col_T2}$12,2,1))"
+                # Riferimenti corretti: Struttura 1° riga 14, Struttura 2° riga 15, Gearing riga 16
+                cond_L = f"IF(L{row_ex}>=${col_T2}$14,3,IF(L{row_ex}>=${col_T1}$14,2,1))"
+                cond_M = f"IF(M{row_ex}>=${col_T2}$15,3,IF(M{row_ex}>=${col_T1}$15,2,1))"
+                cond_N = f"IF(N{row_ex}<=${col_T1}$16,3,IF(N{row_ex}<=${col_T2}$16,2,1))"
                 formula = f'=IF(({cond_L}+{cond_M}+{cond_N})>=8,"A",IF(({cond_L}+{cond_M}+{cond_N})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Totale':
@@ -1869,7 +1874,8 @@ def elabora_capitolo_6(df_filtered, azienda_target):
                 formula = f'=IF(({cond_P}+{cond_Q}+{cond_R})>=8,"A",IF(({cond_P}+{cond_Q}+{cond_R})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Rating Combinato':
-                formula = f'=P{row_ex}&Q{row_ex}&R{row_ex}'
+                # 🟢 FIX: Ordine istituzionale (Economico + Patrimoniale + Finanziario)
+                formula = f'=P{row_ex}&R{row_ex}&Q{row_ex}'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif pd.isna(val):
                 worksheet.write(row_ex - 1, col_num, "n.d.", f_dat)
@@ -1916,23 +1922,6 @@ def elabora_capitolo_6(df_filtered, azienda_target):
     num_rows = len(df_out)
     for i, m in enumerate(metriche):
         riga = 7 + i  # Scalata di 4 righe in basso
-        worksheet.write(riga, start_col_tbl, m, fmt_header_metric)
-        col_idx = df_out.columns.get_loc(m)
-        col_letter = xlsxwriter.utility.xl_col_to_name(col_idx)
-        data_range = f"{col_letter}2:{col_letter}{num_rows + 1}"
-        worksheet.write_formula(riga, start_col_tbl + 1, f"=MIN({data_range})", fmt_num)
-        worksheet.write_formula(riga, start_col_tbl + 2, f"=PERCENTILE({data_range}, 1/3)", fmt_num)
-        worksheet.write_formula(riga, start_col_tbl + 3, f"=PERCENTILE({data_range}, 2/3)", fmt_num)
-        worksheet.write_formula(riga, start_col_tbl + 4, f"=MAX({data_range})", fmt_num)
-
-    worksheet.write(2, start_col_tbl, "Metrica", fmt_header)
-    intestazioni_tbl = ["MIN", "Soglia 1° Terzile", "Soglia 2° Terzile", "MAX"]
-    for i, h in enumerate(intestazioni_tbl):
-        worksheet.write(2, start_col_tbl + 1 + i, h, fmt_header)
-
-    num_rows = len(df_out)
-    for i, m in enumerate(metriche):
-        riga = 3 + i
         worksheet.write(riga, start_col_tbl, m, fmt_header_metric)
         col_idx = df_out.columns.get_loc(m)
         col_letter = xlsxwriter.utility.xl_col_to_name(col_idx)
@@ -2459,7 +2448,7 @@ def elabora_capitolo_7(df_filtered, azienda_target):
             'EBIT_Mg': ('M. EBIT 2024', False)
         },
         'Equilibrio_Finanziario': {
-            'Rotazione_Cap': ('Rotazione C.Inv. 2024', True),
+            'Rotazione_Cap': ('Rotazione C.Inv. 2024', False),
             'Quick_Rat': ('Quick Ratio 2024', False),
             'Current_Rat': ('Current Ratio 2024', False)
         },
@@ -2474,7 +2463,7 @@ def elabora_capitolo_7(df_filtered, azienda_target):
     for kpi_dict in categorie_kpi.values():
         tutti_kpi_cols.extend([v[0] for v in kpi_dict.values()])
 
-    metriche_inverse = ['Rotazione C.Inv. 2024', 'Gearing 2024']
+    metriche_inverse = ['Gearing 2024']
 
     for m in tutti_kpi_cols:
         if m in df.columns:
@@ -2505,7 +2494,8 @@ def elabora_capitolo_7(df_filtered, azienda_target):
                         df['Benchmark Patrimoniale'].apply(punti_da_lettera)
 
     df['Benchmark Totale'] = df['Sum_Lettere'].apply(lambda x: assegna_lettera(x, 8, 5))
-    df['Rating Combinato'] = df['Benchmark Economico'] + df['Benchmark Finanziario'] + df['Benchmark Patrimoniale']
+    # 🟢 FIX: Ordine istituzionale delle stringhe (Eco + Patr + Fin)
+    df['Rating Combinato'] = df['Benchmark Economico'] + df['Benchmark Patrimoniale'] + df['Benchmark Finanziario']
 
     df_master = df.dropna(subset=[col_ragione_sociale]).copy()
     colonne_da_tenere = [col_ragione_sociale, col_societa, col_regione] + [c for c in col_lettere if c in df.columns] + tutti_kpi_cols
@@ -2645,9 +2635,11 @@ if uploaded_file is not None:
                 for idx, row in df_strat.iterrows():
                     riga_testo_unita = " ".join(row.dropna().astype(str)).lower()
                     if 'nace' in riga_testo_unita or 'codici primari' in riga_testo_unita or 'ateco' in riga_testo_unita:
-                        celle_pulite = [str(c).strip() for c in row.dropna() if '-' in str(c) and len(str(c)) > 10]
+                        valori_riga = row.dropna().astype(str).tolist() # <--- RIGA MODIFICATA
+                        celle_pulite = [str(c).strip() for c in valori_riga if '-' in str(c) and len(str(c)) > 10] # <--- RIGA MODIFICATA
                         if celle_pulite:
                             settore_estratto = celle_pulite[0]
+                            st.session_state['universo_orbis'] = valori_riga[-1].strip() # <--- RIGA AGGIUNTA
                             break
                         else:
                             celle_lunghe = [str(c).strip() for c in row.dropna() if len(str(c)) > 15]
@@ -2667,8 +2659,7 @@ if uploaded_file is not None:
         # Lettura del foglio corretto (i risultati veri e propri)
         df_orbis = pd.read_excel(xls, sheet_name=target_sheet)
 
-        # --- 2. VERIFICA STRUTTURA DELLE COLONNE ---
-        # La tua "Lista Universal" rigorosa
+
         # --- 2. VERIFICA STRUTTURA DELLE COLONNE ---
         # La tua "Lista Universal" rigorosa AGGIORNATA
         colonne_attese = [
@@ -2905,7 +2896,7 @@ if uploaded_file is not None:
     # ==========================================
     
     # Crea le schede per i vari capitoli + Tab per il mega download
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab7_5, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab7_5, tab8, tab9 = st.tabs([
         "Cap 1: Forma Giur.", 
         "Cap 2: Territorio", 
         "Cap 3: Economico", 
@@ -2914,7 +2905,8 @@ if uploaded_file is not None:
         "Cap 6: Benchmark", 
         "Cap 7: Ranking",
         "Cap 7.5: Composizione", 
-        "⭐ Scarica Tutto"
+        "⭐ Scarica Tutto",
+        "📄 Genera Report + PPT",
     ])
 
     # --- SCHEDA CAPITOLO 1 ---
@@ -3034,7 +3026,7 @@ if uploaded_file is not None:
     # --- SCHEDA SCARICA TUTTO ---
     with tab8:
         st.subheader("⭐ Master Export: Tutti i Capitoli")
-        st.write("Con un solo clic, Python elaborerà tutti e 7 i capitoli e ti restituirà un unico archivio ZIP contenente l'intero progetto.")
+        st.write("Con un solo clic, Python elaborerà tutti i capitoli e ti restituirà un unico archivio ZIP contenente l'intero progetto.")
         if st.button("🚀 GENERA INTERO PROGETTO", type="primary", use_container_width=True, key="btn_all"):
             with st.spinner("Elaborazione massiva in corso... Mettiti comodo, potrebbe volerci qualche secondo!"):
                 
@@ -3063,12 +3055,163 @@ if uploaded_file is not None:
                         for nome_file in cap7_zip.namelist():
                             master_zip.writestr(nome_file, cap7_zip.read(nome_file))
                 master_zip_buffer.seek(0)
+
+                # =========================================================
+                # ✂️ PULIZIA NOME FILE (Estrae solo i codici NACE numerici)
+                # =========================================================
+                # Cerca tutti i blocchi di 3 o 4 numeri seguiti da un trattino
+                codici_file = re.findall(r'(\d{3,4})\s*-', str(testo_settore))
+                
+                if codici_file:
+                    # Se trova codici, li unisce con un underscore (es. "6820_4511")
+                    settore_pulito = "_".join(codici_file)
+                else:
+                    # Se non ne trova o il settore è "N.D.", pulisce i caratteri strani
+                    settore_pulito = re.sub(r'[^a-zA-Z0-9]', '_', str(testo_settore)[:15]).strip('_')
                 
                 st.success("Tutti i capitoli elaborati con successo!")
                 st.download_button(
                     label="📥 SCARICA PROGETTO COMPLETO (.zip)",
                     data=master_zip_buffer,
-                    file_name="FinHack_Report_Completo.zip",
+                    file_name=f"{settore_pulito}_FH_Analisi_Completa.zip",
                     mime="application/zip",
                     use_container_width=True
                 )
+
+    # --- SCHEDA GENERATORI DOCUMENTI (WORD E PPTX AFFIANCATI) ---
+    with tab9:
+        st.subheader("📄 Generazione Documenti Finali")
+        st.markdown("Esporta i risultati in un report descrittivo completo o in una presentazione di sintesi.")
+        
+        # Crea due colonne di uguale larghezza
+        col_word, col_ppt = st.columns(2)
+        
+        # ==========================================
+        # 📝 COLONNA SINISTRA: REPORT WORD
+        # ==========================================
+        with col_word:
+            st.info("Report testuale approfondito con tutte le analisi e le narrative.")
+
+            attiva_watermark = st.toggle("🔒 Applica Watermark", value=False, help="Copre i dati sensibili del 2024 con logo F&V")
+
+            if st.button("✨ GENERA REPORT WORD", type="primary", use_container_width=True, key="btn_word"):
+                import os
+                import io
+                import zipfile
+                import docx
+                import jinja2
+                import re
+                
+                percorso_template = "template_corp_doc_master.docx"
+                if not os.path.exists(percorso_template):
+                    st.error(f"❌ Impossibile trovare il file '{percorso_template}'.")
+                else:
+                    with st.spinner("Generazione Word in corso..."):
+                        try:
+                            virtual_zip_buffer = io.BytesIO()
+                            with zipfile.ZipFile(virtual_zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as virtual_zip:
+                                virtual_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis, azienda_target).read())
+                                virtual_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis, azienda_target).read())
+                                virtual_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis, azienda_target).read())
+                                virtual_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis, azienda_target).read())
+                                virtual_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis, azienda_target).read())
+                                virtual_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis, azienda_target).read())
+                            virtual_zip_buffer.seek(0)
+                            
+                            from report_corp import genera_report_word
+                            settore = st.session_state.get('settore_estratto', 'N.D.')
+                            universo = st.session_state.get('universo_orbis', 'N/D')
+                            
+                            word_finito = genera_report_word(virtual_zip_buffer, percorso_template, azienda_target, df_orbis, settore, universo, modalita_teaser=attiva_watermark)
+                            
+                            # PULIZIA NOME FILE
+                            codici_file = re.findall(r'(\d{3,4})\s*-', str(settore))
+                            if codici_file:
+                                settore_pulito = "_".join(codici_file)
+                            else:
+                                settore_pulito = re.sub(r'[^a-zA-Z0-9]', '_', str(settore)[:15]).strip('_')
+                            
+                            suffisso_watermark = "_Watermark" if attiva_watermark else ""
+
+                            st.success("Report generato con successo! 🎉")
+                            st.download_button(
+                                label="📥 SCARICA REPORT FINALE (.docx)",
+                                data=word_finito,
+                                # Inserito il suffisso dinamico prima dell'estensione
+                                file_name=f"{settore_pulito}_Report_Base_{azienda_target}{suffisso_watermark}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                use_container_width=True,
+                                key="dw_word"
+                            )
+                            
+                        # --- L'ESTRATTORE DI CRASH ---
+                        except jinja2.exceptions.TemplateSyntaxError as e:
+                            st.error("❌ BASTA ANDARE ALLA CIECA. ABBIAMO TROVATO IL PUNTO ESATTO!")
+                            try:
+                                if hasattr(e, 'source') and e.source:
+                                    linee = e.source.splitlines()
+                                    riga = e.lineno - 1
+                                    inizio = max(0, riga - 2)
+                                    fine = min(len(linee), riga + 3)
+                                    blocco_xml = " ".join(linee[inizio:fine])
+                                    testo_puro = re.sub(r'<[^>]+>', ' ', blocco_xml)
+                                    testo_puro = re.sub(r'\s+', ' ', testo_puro).strip()
+                                    
+                                    st.warning(f"📍 **L'ERRORE SI TROVA ESATTAMENTE IN MEZZO A QUESTE PAROLE:**")
+                                    st.info(f"👉 ... {testo_puro} ...")
+                                    st.markdown(f"**Dettaglio del motore:** `{e.message}`")
+                                    st.markdown("💡 **SOLUZIONE DEFINITIVA:** Copia due o tre parole dal riquadro azzurro qui sopra. Vai nel tuo Word originale, fai `Ctrl+F` e cercale. Quello è il punto esatto in cui c'è una parentesi di troppo.")
+                                else:
+                                    st.error(f"Dettaglio Tecnico: {e.message}")
+                            except Exception as fallback:
+                                st.error(f"Errore tecnico: {e.message}")
+                        except jinja2.exceptions.UndefinedError as e:
+                            st.error("❌ VARIABILE SCONOSCIUTA!")
+                            st.warning(f"Hai usato un tag che non esiste: **{e.message}**")
+                        except Exception as e:
+                            st.error(f"⚠️ Errore generico in fase di impaginazione: {str(e)}")
+
+        # ==========================================
+        # 📊 COLONNA DESTRA: PRESENTAZIONE PPTX
+        # ==========================================
+        with col_ppt:
+            st.info("Slide di sintesi con grafici pronte per la presentazione al cliente.")
+            # 👇 RIGA INVISIBILE PER PAREGGIARE L'ALTEZZA DEL TOGGLE A SINISTRA
+            st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
+            if st.button("✨ GENERA PRESENTAZIONE PPTX", type="primary", use_container_width=True, key="btn_ppt"):
+                import os
+                import re
+                
+                percorso_template_ppt = "template_corp_ppt_master.pptx"
+                if not os.path.exists(percorso_template_ppt):
+                    st.error(f"❌ Impossibile trovare il file '{percorso_template_ppt}'.")
+                else:
+                    with st.spinner("Generazione slide in corso..."):
+                        try:
+                            # IMPORT MANCANTE INSERITO QUI:
+                            from report_breve_corp import genera_presentazione_ppt
+                            
+                            settore = st.session_state.get('settore_estratto', 'N.D.')
+                            universo = st.session_state.get('universo_orbis', 'N/D')
+                            
+                            # Calcolo del nome pulito per il file in download
+                            codici_file = re.findall(r'(\d{3,4})\s*-', str(settore))
+                            if codici_file:
+                                settore_pulito = "_".join(codici_file)
+                            else:
+                                settore_pulito = re.sub(r'[^a-zA-Z0-9]', '_', str(settore)[:15]).strip('_')
+                            
+                            # Esecuzione script PowerPoint
+                            ppt_finito = genera_presentazione_ppt(percorso_template_ppt, azienda_target, df_orbis, settore, universo)
+                            
+                            st.success("Presentazione generata con successo! 🎉")
+                            st.download_button(
+                                label="📥 SCARICA PRESENTAZIONE (.pptx)",
+                                data=ppt_finito,
+                                file_name=f"{settore_pulito}_Presentazione_{azienda_target}.pptx",
+                                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                use_container_width=True,
+                                key="dw_ppt"
+                            )
+                        except Exception as e:
+                            st.error(f"⚠️ Errore durante la generazione del PPTX: {str(e)}")

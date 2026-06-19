@@ -3,4 +3,9 @@ pandas
 numpy
 openpyxl
 xlsxwriter
-python-calamine
+python-docx
+python-pptx
+docxtpl
+matplotlib
+geopandas
+jinja2
