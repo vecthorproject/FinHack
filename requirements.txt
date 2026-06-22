@@ -10,3 +10,4 @@ docxtpl
 matplotlib
 geopandas
 jinja2
+docxcompose
