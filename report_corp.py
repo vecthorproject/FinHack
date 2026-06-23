@@ -206,11 +206,28 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     tot_ricavi_settore = df_orbis['Totale valore della produzione migl EUR 2024'].sum()
     tot_attivo_settore = df_orbis['Totale Attivo migl EUR 2024'].sum()
     tot_dipendenti_settore = df_orbis['Numero dipendenti 2024'].sum()
-    
+
+    # 🟢 LOGICA DETTAGLIATA FORME GIURIDICHE (Top 1, Top 2 e Altre)
     fg_counts = df_orbis['Forma Giuridica Pulita'].value_counts()
-    fg_maggioranza = fg_counts.index[0] if not fg_counts.empty else "n.d."
-    num_fg_maggioranza = fg_counts.iloc[0] if not fg_counts.empty else 0
-    perc_fg_maggioranza = (num_fg_maggioranza / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
+
+    # Forma Giuridica #1 (Maggioranza assoluta)
+    fg_1_name = str(fg_counts.index[0]).strip() if len(fg_counts) > 0 else "N.D."
+    fg_1_num = int(fg_counts.iloc[0]) if len(fg_counts) > 0 else 0
+    fg_1_perc = (fg_1_num / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
+    
+    # Variabili per retro-compatibilità con il resto del tuo codice
+    fg_maggioranza = fg_1_name 
+    num_fg_maggioranza = fg_1_num
+    perc_fg_maggioranza = fg_1_perc
+
+    # Forma Giuridica #2 (La seconda forza del mercato)
+    fg_2_name = str(fg_counts.index[1]).strip() if len(fg_counts) > 1 else None
+    fg_2_num = int(fg_counts.iloc[1]) if len(fg_counts) > 1 else 0
+    fg_2_perc = (fg_2_num / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
+
+    # Forme Giuridiche #3+ (Tutte le "briciole" sommate insieme, se esistono)
+    fg_altre_num = sum(fg_counts.iloc[2:]) if len(fg_counts) > 2 else 0
+    fg_altre_perc = (fg_altre_num / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
 
     df_target = df_orbis[df_orbis[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), regex=False, na=False)]
     
@@ -371,7 +388,39 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     else:
         p_iva = "n.d."
 
+    # 🟢 MOTORE NARRATIVO: COMPOSIZIONE SOCIETARIA DETTAGLIATA (Versione Ultra-Resistente)
+    target_fg = str(forma_giuridica).strip()
 
+    if target_fg.lower() == fg_1_name.lower():
+        # Caso A: L'azienda in analisi fa parte della Maggioranza #1
+        testo_fg = f"rappresenta la veste giuridica dominante assoluta del comparto, costituendo da sola il {format_euro(fg_1_perc)}% delle realtà censite ({f'{fg_1_num:,}'.replace(',', '.')} unità)."
+        
+        # Se esiste una seconda forma giuridica, continuiamo la frase
+        if fg_2_name:
+            testo_fg = testo_fg.rstrip(".") + f", mentre la restante parte del mercato è composta in larga misura da {fg_2_name} ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità)"
+            if fg_altre_num > 0:
+                testo_fg += f" e, in minor parte, da altre configurazioni societarie miste ({format_euro(fg_altre_perc)}%, {f'{fg_altre_num:,}'.replace(',', '.')} unità)."
+            else:
+                testo_fg += "."
+    else:
+        # Caso B: L'azienda in analisi NON è la Maggioranza #1
+        testo_fg = f"si inserisce in un comparto caratterizzato in larga parte da {fg_1_name}, struttura che controlla il {format_euro(fg_1_perc)}% delle componenti societarie ({f'{fg_1_num:,}'.replace(',', '.')} unità). "
+        
+        if fg_2_name and target_fg.lower() == fg_2_name.lower():
+            # Il target è esattamente il #2
+            testo_fg += f"A seguire si posiziona proprio la veste legale dell'azienda in analisi ({target_fg}), che rappresenta il {format_euro(fg_2_perc)}% del panel ({f'{fg_2_num:,}'.replace(',', '.')} unità)"
+            if fg_altre_num > 0:
+                testo_fg += f", affiancata in minor misura da altre configurazioni societarie miste ({format_euro(fg_altre_perc)}%, {f'{fg_altre_num:,}'.replace(',', '.')} unità)."
+            else:
+                testo_fg += "."
+        elif fg_2_name:
+            # Il target è dal #3 in giù
+            testo_fg += f"A seguire troviamo una forte presenza di {fg_2_name} ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità), mentre la veste societaria dell'azienda in analisi si colloca nel restante {format_euro(fg_altre_perc)}% del mercato, insieme ad altre configurazioni minoritarie."
+        else:
+            # Fail-safe nel caso ci fossero anomalie strane
+            testo_fg += f"L'azienda in analisi si inserisce in questo contesto con una quota del {format_euro(perc_fg_target)}%."
+
+    # ----------------------------------------------------
     # COSTRUZIONE DEL DIZIONARIO (Dati per il Word)
     context = {
         'ragione_sociale': ragione_sociale_pulita, 
@@ -380,6 +429,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         'partita_iva': p_iva, 
         'forma_giuridica': forma_giuridica,
         'forma_giuridica_espansa': fg_espansa,
+        'testo_forma_giuridica_strutturato': testo_fg,
         'perc_fg': format_euro(perc_fg_target), 'num_fg': f"{num_fg_target:,}".replace(',', '.'),
         'fg_maggioranza': fg_maggioranza, 'num_fg_maggioranza': f"{num_fg_maggioranza:,}".replace(',', '.'),
         'perc_fg_maggioranza': format_euro(perc_fg_maggioranza),
@@ -546,99 +596,147 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo in modo fisiologico al tessuto economico locale con un'incidenza del {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
     
     def get_testo_totale(rating):
-        if rating == 'A': return "Questo risultato riflette un profilo di eccellenza, stabilità e robustezza strutturale, posizionando l'azienda ai vertici del settore."
-        elif rating == 'B': return "Questo risultato riflette un profilo di sostanziale stabilità, evidenziando una struttura solida pur con alcuni margini di miglioramento in ambiti specifici."
-        elif rating == 'C': return "Questo risultato evidenzia elementi di vulnerabilità complessiva, suggerendo la necessità di interventi mirati per stabilizzare e rinforzare la struttura aziendale."
+        if rating == 'A':
+            return "Questo risultato riflette un profilo di eccellenza, stabilità e robustezza strutturale, posizionando l'azienda ai vertici del settore."
+        elif rating == 'B':
+            return "Questo risultato riflette un profilo di sostanziale stabilità, evidenziando una struttura solida pur con alcuni margini di miglioramento in ambiti specifici."
+        elif rating == 'C':
+            return "Questo risultato evidenzia elementi di vulnerabilità complessiva, suggerendo la necessità di interventi mirati per stabilizzare e rinforzare la struttura aziendale."
         return "Non sono disponibili dati sufficienti per elaborare un giudizio complessivo accurato."
 
     def get_testo_eco(rating):
-        if rating == 'A': return "La redditività si presenta eccellente e superiore alla media di settore, dimostrando una notevole efficienza nel trasformare il valore della produzione in profitto e un'ottima gestione dei costi operativi."
-        elif rating == 'B': return "La redditività risulta adeguata e in linea con le potenzialità dell'azienda, seppur con spazi di ottimizzazione. Un'attenta razionalizzazione dei costi potrebbe incrementare ulteriormente la trasformazione del valore in profitto netto."
-        elif rating == 'C': return "La redditività si presenta inferiore alle potenzialità dell'azienda, penalizzata da un elevato peso dei costi di gestione. I margini operativi si collocano al di sotto della media settoriale, segnalando l'urgenza di adottare misure mirate alla razionalizzazione dei costi."
+        if rating == 'A':
+            return "La redditività si presenta eccellente e superiore alla mediana di settore, dimostrando una notevole efficienza nel trasformare il valore della produzione in profitto e un'ottima gestione dei costi operativi."
+        elif rating == 'B':
+            return "La redditività risulta adeguata e in linea con le potenzialità dell'azienda, seppur con spazi di ottimizzazione. Un'attenta razionalizzazione dei costi potrebbe incrementare ulteriormente la trasformazione del valore in profitto netto."
+        elif rating == 'C':
+            return "La redditività si presenta inferiore alle potenzialità dell'azienda, penalizzata da un elevato peso dei costi di gestione. I margini operativi si collocano al di sotto dei parametri mediani settoriali, segnalando l'urgenza di adottare misure mirate alla razionalizzazione dei costi."
         return "Dati economici non disponibili o insufficienti."
 
     def get_testo_patr(rating):
-        if rating == 'A': return "Costituisce il punto di forza dell'azienda, che si distingue per l'assenza di rischi di insolvenza a lungo termine. Il Patrimonio Netto copre ampiamente l'attivo fisso, assicurando una solidità ineccepibile e un'autonomia economica di assoluto rilievo."
-        elif rating == 'B': return "La struttura patrimoniale appare equilibrata. L'azienda mostra una discreta indipendenza finanziaria, sebbene il ricorso al capitale di terzi debba essere monitorato per mantenere intatta la stabilità nel lungo periodo."
-        elif rating == 'C': return "La struttura evidenzia elementi di debolezza, con un livello di indebitamento potenzialmente critico rispetto al capitale proprio. È consigliabile un ribilanciamento delle fonti di finanziamento per mitigare i rischi a lungo termine."
+        if rating == 'A':
+            return "Costituisce il punto di forza dell'azienda, che si distingue per l'assenza di rischi di insolvenza a lungo termine. Il Patrimonio Netto copre ampiamente l'attivo fisso, assicurando una solidità ineccepibile e un'autonomia economica di assoluto rilievo."
+        elif rating == 'B':
+            return "La struttura patrimoniale appare equilibrata. L'azienda mostra una discreta indipendenza finanziaria, sebbene il ricorso al capitale di terzi debba essere monitorato per mantenere intatta la stabilità nel lungo periodo."
+        elif rating == 'C':
+            return "La struttura evidenzia elementi di debolezza, con un livello di indebitamento potenzialmente critico rispetto al capitale proprio. È consigliabile un ribilanciamento delle fonti di finanziamento per mitigare i rischi a lungo termine."
         return "Dati patrimoniali non disponibili o insufficienti."
 
     def get_testo_fin(rating):
-        if rating == 'A': return "La gestione della liquidità è ottimale. L'azienda genera ampi flussi di cassa ed evidenzia un'eccellente solvibilità a breve termine, garantendo la totale flessibilità nell'affrontare impegni correnti e contingenze."
-        elif rating == 'B': return "Si riscontra una solvibilità a breve termine sufficiente, pur con una flessibilità moderata nella gestione della liquidità. Le risorse coprono gli impegni, ma si suggerisce un monitoraggio costante del capitale circolante."
-        elif rating == 'C': return "Nonostante la continuità operativa, si riscontra una scarsa flessibilità nella gestione della liquidità immediata. Una quota rilevante delle risorse risulta vincolata in attività correnti difficilmente trasformabili in denaro liquido, esponendo l'azienda a potenziali difficoltà."
+        if rating == 'A':
+            return "La gestione della liquidità è ottimale. L'azienda genera ampi flussi di cassa ed evidenzia un'eccellente solvibilità a breve termine, garantendo la totale flessibilità nell'affrontare impegni correnti e contingenze."
+        elif rating == 'B':
+            return "Si riscontra una solvibilità a breve termine sufficiente, pur con una flessibilità moderata nella gestione della liquidità. Le risorse coprono gli impegni, ma si suggerisce un monitoraggio costante del capitale circolante."
+        elif rating == 'C':
+            return "Nonostante la continuità operativa, si riscontra una scarsa flessibilità nella gestione della liquidità immediata. Una quota rilevante delle risorse risulta vincolata in attività correnti difficilmente trasformabili in denaro liquido, esponendo l'azienda a potenziali difficoltà."
         return "Dati finanziari non disponibili o insufficienti."
 
     def get_testo_sintesi(rating):
-        if rating == 'A': return "In sintesi, l’azienda vanta fondamenta estremamente solide, garantendo continuità aziendale e ottime prospettive di sviluppo. Mantenendo questo approccio strategico virtuoso, le risorse potranno essere focalizzate serenamente su investimenti di espansione aziendale."
-        elif rating == 'B': return "In sintesi, l'azienda si poggia su basi strutturali solide per garantire la continuità operativa. Per migliorare la propria competitività, sarà cruciale concentrare gli sforzi strategici su una gestione ancora più efficace delle aree meno performanti per liberare ulteriori risorse utili alla crescita."
-        elif rating == 'C': return "In sintesi, l'azienda affronta sfide strutturali per garantire una serena continuità aziendale nel lungo termine. Per ripristinare la competitività, sarà cruciale concentrare gli sforzi strategici su una gestione drastica della riduzione dei costi e un attento recupero di liquidità immediata."
+        if rating == 'A':
+            return "In sintesi, l’azienda vanta fondamenta estremamente solide, garantendo continuità aziendale e ottime prospettive di sviluppo. Mantenendo questo approccio strategico virtuoso, le risorse potranno essere focalizzate serenamente su investimenti di espansione aziendale."
+        elif rating == 'B':
+            return "In sintesi, l'azienda si poggia su basi strutturali solide per garantire la continuità operativa. Per migliorare la propria competitività, sarà cruciale concentrare gli sforzi strategici su una gestione ancora più efficace delle aree meno performanti per liberare ulteriori risorse utili alla crescita."
+        elif rating == 'C':
+            return "In sintesi, l'azienda affronta sfide strutturali per garantire una serena continuità aziendale nel lungo termine. Per ripristinare la competitività, sarà cruciale concentrare gli sforzi strategici su una gestione drastica della riduzione dei costi e un attento recupero di liquidità immediata."
         return ""
 
     def get_intro_benchmark_eco(rating):
-        if rating == 'A': return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una redditività operativa e netta di assoluta eccellenza, nettamente superiore alle performance medie del settore di riferimento, come visibile di seguito:'
-        elif rating == 'B': return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una redditività operativa e netta adeguata e in linea con le medie del settore di riferimento, pur con fisiologici margini di miglioramento, come visibile di seguito:'
-        elif rating == 'C': return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una redditività operativa e netta al di sotto delle potenzialità medie del settore di riferimento, come visibile di seguito:'
+        if rating == 'A':
+            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una redditività operativa e netta di assoluta eccellenza, nettamente superiore alle performance mediane del settore di riferimento, come visibile di seguito:'
+        elif rating == 'B':
+            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una redditività operativa e netta adeguata e in linea con i parametri mediani del settore di riferimento, pur con fisiologici margini di miglioramento, come visibile di seguito:'
+        elif rating == 'C':
+            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una redditività operativa e netta al di sotto delle potenzialità mediane del settore di riferimento, come visibile di seguito:'
         return "Rispetto al Benchmark Economico, i dati a disposizione non consentono di esprimere una valutazione completa, come riassunto di seguito:"
 
     def get_analisi_margini_operativi(rating):
-        if rating == 'A': return "evidenziano un'eccellente capacità di convertire i ricavi in margini operativi. Tali valori indicano un'ottima ottimizzazione dei costi di gestione e un'elevata efficienza caratteristica rispetto al settore di riferimento;"
-        elif rating == 'B': return "evidenziano una buona capacità di convertire i ricavi in margini operativi. I valori risultano adeguati al settore di riferimento, pur lasciando spazio a un'ulteriore e fisiologica razionalizzazione dei costi di gestione;"
-        elif rating == 'C': return "evidenziano una limitata capacità di convertire i ricavi in margini operativi. Tali valori indicano una significativa incidenza dei costi di gestione rispetto agli standard del settore di riferimento, suggerendo la necessità di recuperare efficienza;"
+        if rating == 'A':
+            return "evidenziano un'eccellente capacità di convertire i ricavi in margini operativi. Tali valori indicano un'ottima ottimizzazione dei costi di gestione e un'elevata efficienza caratteristica rispetto al settore di riferimento;"
+        elif rating == 'B':
+            return "evidenziano una buona capacità di convertire i ricavi in margini operativi. I valori risultano adeguati al benchmark mediano del settore, pur lasciando spazio a un'ulteriore e fisiologica razionalizzazione dei costi di gestione;"
+        elif rating == 'C':
+            return "evidenziano una limitata capacità di convertire i ricavi in margini operativi. Tali valori indicano una significativa incidenza dei costi di gestione rispetto agli standard del settore di riferimento, suggerendo la necessità di recuperare efficienza;"
         return "non consentono una valutazione accurata della capacità di conversione dei ricavi in margini operativi."
 
     def get_analisi_margine_profitto(rating):
-        if rating == 'A': return "conferma un'elevata efficienza complessiva. L'azienda non solo genera ricavi, ma riesce a trattenerne una percentuale considerevole come utile netto, a dimostrazione di una gestione fortemente redditizia."
-        elif rating == 'B': return "segnala una redditività stabile. L'azienda genera ricavi trattenendo una percentuale equilibrata come utile netto, in linea con le dinamiche medie della catena del valore settoriale."
-        elif rating == 'C': return "conferma la capacità di generare ricavi, ma segnala al contempo una bassa efficienza complessiva nella catena del valore, trattenendo solo una modesta percentuale come utile netto."
+        if rating == 'A':
+            return "conferma un'elevata efficienza complessiva. L'azienda non solo genera ricavi, ma riesce a trattenerne una percentuale considerevole come utile netto, a dimostrazione di una gestione fortemente redditizia."
+        elif rating == 'B':
+            return "segnala una redditività stabile. L'azienda genera ricavi trattenendo una percentuale equilibrata come utile netto, in linea con le dinamiche mediane della catena del valore settoriale."
+        elif rating == 'C':
+            return "conferma la capacità di generare ricavi, ma segnala al contempo una bassa efficienza complessiva nella catena del valore, trattenendo solo una modesta percentuale come utile netto."
         return "non fornisce elementi sufficienti per un'analisi dettagliata della redditività netta."
-    
+
     def get_intro_benchmark_patr(rating):
-        if rating == 'A': return "attesta una straordinaria solidità strutturale dell'azienda, evidenziandone un'ottima copertura dai rischi a lungo termine. Questo risultato la colloca come un'eccellenza rispetto alla media del settore di riferimento:"
-        elif rating == 'B': return "evidenzia una solidità strutturale adeguata, con un buon livello di copertura dai rischi a lungo termine. Questo risultato riflette una situazione di generale equilibrio rispetto alla media del settore di riferimento:"
-        elif rating == 'C': return "segnala elementi di vulnerabilità strutturale, evidenziando una potenziale esposizione ai rischi a lungo termine. Questo risultato colloca l'azienda al di sotto delle performance medie del settore di riferimento, richiedendo attenzione su:"
+        if rating == 'A':
+            return "attesta una straordinaria solidità strutturale dell'azienda, evidenziandone un'ottima copertura dai rischi a lungo termine. Questo risultato la colloca come un'eccellenza rispetto alla mediana del settore di riferimento:"
+        elif rating == 'B':
+            return "evidenzia una solidità strutturale adeguata, con un buon livello di copertura dai rischi a lungo termine. Questo risultato riflette una situazione di generale equilibrio rispetto ai parametri mediani del settore di riferimento:"
+        elif rating == 'C':
+            return "segnala elementi di vulnerabilità strutturale, evidenziando una potenziale esposizione ai rischi a lungo termine. Questo risultato colloca l'azienda al di sotto delle performance mediane del settore di riferimento, richiedendo attenzione su:"
         return "non consente di esprimere una valutazione completa sui rischi a lungo termine a causa di dati insufficienti:"
 
     def get_analisi_indici_struttura(rating):
-        if rating == 'A': return "confermano che il Patrimonio Netto copre abbondantemente l'intero attivo fisso. In un contesto in cui gli investimenti strutturali richiedono stabilità, una tale copertura con risorse proprie rappresenta un chiaro indicatore di massima sicurezza e robustezza."
-        elif rating == 'B': return "mostrano valori che indicano una discreta copertura dell'attivo fisso tramite il Patrimonio Netto. Pur garantendo la continuità operativa, vi sono i margini per consolidare ulteriormente la robustezza patrimoniale nel medio-lungo periodo."
-        elif rating == 'C': return "evidenziano valori che indicano una parziale o insufficiente copertura dell'attivo fisso tramite mezzi propri. Questa situazione suggerisce un'eccessiva dipendenza dal capitale di terzi per finanziare asset a lungo termine, riducendo la flessibilità patrimoniale."
+        if rating == 'A':
+            return "confermano che il Patrimonio Netto copre abbondantemente l'intero attivo fisso. In un contesto in cui gli investimenti strutturali richiedono stabilità, una tale copertura con risorse proprie rappresenta un chiaro indicatori di massima sicurezza e robustezza."
+        elif rating == 'B':
+            return "mostrano valori che indicano una discreta copertura dell'attivo fisso tramite il Patrimonio Netto. Pur garantendo la continuità operativa, vi sono i margini per consolidare ulteriormente la robustezza patrimoniale nel medio-lungo periodo."
+        elif rating == 'C':
+            return "evidenziano valori che indicano una parziale o insufficiente copertura dell'attivo fisso tramite mezzi propri. Questa situazione suggerisce un'eccessiva dipendenza dal capitale di terzi per finanziare asset a lungo termine, riducendo la flessibilità patrimoniale."
         return "non forniscono elementi sufficienti per un'analisi dettagliata della copertura dell'attivo."
 
     def get_analisi_gearing(rating):
-        if rating == 'A': return "evidenzia un'incidenza minima o nulla del debito finanziario. L'azienda gode di un'elevata autonomia dal sistema bancario, riducendo drasticamente il rischio finanziario e consolidando una posizione di forza e stabilità rispetto alle dinamiche di settore."
-        elif rating == 'B': return "evidenzia un livello di indebitamento fisiologico e gestibile. L'azienda utilizza la leva finanziaria in modo equilibrato, mantenendo una struttura patrimoniale complessivamente sostenibile rispetto agli standard del settore."
-        elif rating == 'C': return "segnala una forte incidenza del debito rispetto ai mezzi propri. Questo elevato livello di leva finanziaria espone l'azienda a maggiori rischi legati alle variazioni dei tassi di interesse e ne limita l'autonomia dal sistema bancario."
+        if rating == 'A':
+            return "evidenzia un'incidenza minima o nulla del debito finanziario. L'azienda gode di un'elevata autonomia dal sistema bancario, riducendo drasticamente il rischio finanziario e consolidando una posizione di forza e stabilità rispetto alle dinamiche di settore."
+        elif rating == 'B':
+            return "evidenzia un livello di indebitamento fisiologico e gestibile. L'azienda utilizza la leva finanziaria in modo equilibrato, mantenendo una struttura patrimoniale complessivamente sostenibile rispetto agli standard del settore."
+        elif rating == 'C':
+            return "segnala una forte incidenza del debito rispetto ai mezzi propri. Questo elevato livello di leva finanziaria espone l'azienda a maggiori rischi legati alle variazioni dei tassi di interesse e ne limita l'autonomia dal sistema bancario."
         return "non permette di valutare accuratamente il peso della leva finanziaria."
-    
+
     def get_intro_benchmark_fin(rating):
-        if rating == 'A': return "evidenzia una gestione della liquidità ottimale. L'azienda dimostra una notevole capacità di generare risorse e far fronte agli impegni, posizionandosi ai vertici del settore di riferimento:"
-        elif rating == 'B': return "evidenzia una gestione della liquidità complessivamente equilibrata. Pur mostrando una struttura finanziaria solida, presenta fisiologici margini di miglioramento rispetto alle medie del settore di riferimento:"
-        elif rating == 'C': return "segnala elementi di potenziale criticità nella gestione della liquidità. Le dinamiche finanziarie mostrano margini di miglioramento necessari per garantire una maggiore flessibilità rispetto alle medie del settore di riferimento:"
+        if rating == 'A':
+            return "evidenzia una gestione della liquidità ottimale. L'azienda dimostra una notevole capacità di generare risorse e far fronte agli impegni, posizionandosi ai vertici del settore di riferimento:"
+        elif rating == 'B':
+            return "evidenzia una gestione della liquidità complessivamente equilibrata. Pur mostrando una struttura finanziaria solida, presenta fisiologici margini di miglioramento rispetto ai valori mediani del settore di riferimento:"
+        elif rating == 'C':
+            return "segnala elementi di potenziale criticità nella gestione della liquidità. Le dinamiche finanziarie mostrano margini di miglioramento necessari per garantire una maggiore flessibilità rispetto alle costanti mediane del settore di riferimento:"
         return "non consente di esprimere una valutazione completa sulla gestione della liquidità:"
 
     def get_analisi_rotazione(rating):
-        if rating == 'A': return "si distingue per un valore alto, posizionandosi al di sopra degli standard del settore. Questo dato sottolinea un'eccellente efficienza operativa e una notevole capacità di generare flussi di cassa rispetto al capitale investito."
-        elif rating == 'B': return "si attesta su valori in linea con le medie del settore. Questo dato evidenzia una buona efficienza operativa e un'adeguata capacità di far ruotare il capitale investito per generare flussi di cassa."
-        elif rating == 'C': return "mostra un valore inferiore rispetto agli standard ottimali di settore. Questo dato suggerisce la necessità di migliorare l'efficienza operativa per ottimizzare la generazione di flussi di cassa rispetto al capitale investito."
+        if rating == 'A':
+            return "si distingue per un valore alto, posizionandosi al di sopra degli standard del settore. Questo dato sottolinea un'eccellente efficienza operativa e una notevole capacità di generare flussi di cassa rispetto al capitale investito."
+        elif rating == 'B':
+            return "si attesta su valori stabili ed equilibrati. Questo dato evidenzia una buona efficienza operativa e un'adeguata capacità di far ruotare il capitale investito per generare flussi di cassa rispetto ai parametri del comparto."
+        elif rating == 'C':
+            return "mostra un valore inferiore rispetto agli standard ottimali di settore. Questo dato suggerisce la necessità di migliorare l'efficienza operativa per ottimizzare la generazione di flussi di cassa rispetto al capitale investito."
         return "non fornisce elementi sufficienti per un'analisi dettagliata dell'efficienza operativa."
 
     def get_analisi_current_ratio(rating):
-        if rating == 'A': return "conferma una spiccata solidità finanziaria nel breve periodo. Le attività correnti coprono in modo eccellente le passività correnti, rappresentando una garanzia assoluta per la capacità dell'azienda di far fronte agli impegni finanziari entro l'anno."
-        elif rating == 'B': return "indica una sufficiente solidità finanziaria nel breve periodo. Le attività correnti risultano adeguate a coprire le passività correnti, permettendo all'azienda di gestire gli impegni finanziari a breve scadenza."
-        elif rating == 'C': return "rappresenta un'area di potenziale attenzione. La copertura delle passività correnti tramite le attività a breve termine risulta limitata, suggerendo cautela nella pianificazione degli impegni finanziari entro l'anno."
+        if rating == 'A':
+            return "conferma una spiccata solidità finanziaria nel breve periodo. Le attività correnti coprono in modo eccellente le passività correnti, rappresentando una garanzia assoluta per la capacità dell'azienda di far fronte agli impegni finanziari entro l'anno."
+        elif rating == 'B':
+            return "indica una sufficiente solidità finanziaria nel breve periodo. Le attività correnti risultano adeguate a coprire le passività correnti, permettendo all'azienda di gestire gli impegni finanziari a breve scadenza in linea con la mediana settoriale."
+        elif rating == 'C':
+            return "rappresenta un'area di potenziale attenzione. La copertura delle passività correnti tramite le attività a breve termine risulta limitata, suggerendo cautela nella pianificazione degli impegni finanziari entro l'anno."
         return "non permette di valutare accuratamente la solidità a breve termine."
 
     def get_analisi_quick_ratio(rating):
-        if rating == 'A': return "dimostra un'ottima disponibilità di liquidità immediata. L'azienda è in grado di onorare le scadenze a brevissimo termine senza dover ricorrere allo smobilizzo delle rimanenze, evidenziando una struttura finanziaria estremamente reattiva."
-        elif rating == 'B': return "mostra un livello di liquidità immediata accettabile. Pur potendo far fronte agli impegni a breve, l'azienda potrebbe presentare una lieve dipendenza dalla rotazione del magazzino per ottimizzare i flussi di cassa."
-        elif rating == 'C': return "costituisce un'area di attenzione. Il valore indica che una quota rilevante della liquidità è vincolata in asset non prontamente convertibili in denaro, segnalando una potenziale fragilità nel rispondere a necessità finanziarie immediate."
+        if rating == 'A':
+            return "dimostra un'ottima disponibilità di liquidità immediata. L'azienda è in grado di onorare le scadenze a brevissimo termine senza dover ricorrere allo smobilizzo delle rimanenze, evidenziando una struttura finanziaria estremamente reattiva."
+        elif rating == 'B':
+            return "mostra un livello di liquidità immediata accettabile e coerente con il benchmark. Pur potendo far fronte agli impegni a breve, l'azienda potrebbe presentare una lieve dipendenza temporanea dalla rotazione delle scorte correnti."
+        elif rating == 'C':
+            return "costituisce un'area di attenzione. Il valore indica che una quota rilevante della liquidità è vincolata in asset non prontamente convertibili in denaro, segnalando una potenziale fragilità nel rispondere a necessità finanziarie immediate."
         return "non offre dati sufficienti per valutare la reattività di cassa."
 
     def get_analisi_posizionamento_fin(rating):
-        if rating == 'A': return "consolida questo profilo di eccellenza posizionandosi stabilmente nelle fasce più alte delle classifiche di settore, sia su scala nazionale che regionale. L'impresa vanta una struttura finanziaria agile e una notevole flessibilità, che la rendono un punto di riferimento competitivo nel proprio mercato."
-        elif rating == 'B': return "mostra un posizionamento intermedio e allineato alle medie di settore all'interno delle classifiche nazionali e regionali. Gli indicatori riflettono una struttura finanziaria resiliente e adatta a mantenere un buon livello di competitività nel contesto locale e generale."
-        elif rating == 'C': return "si colloca nelle fasce più basse della distribuzione rispetto al campione settoriale. Questo posizionamento riflette la necessità di strutturare soluzioni per rendere la gestione finanziaria più agile e meno immobilizzata nel capitale circolante, al fine di recuperare competitività locale e nazionale."
+        if rating == 'A':
+            return "consolida questo profilo di eccellenza posizionandosi stabilmente nelle fasce più alte delle classifiche di settore, sia su scala nazionale che regionale. L'impresa vanta una struttura finanziaria agile e una notevole flessibilità, che la rendono un punto di riferimento competitivo nel proprio mercato."
+        elif rating == 'B':
+            return "mostra un posizionamento intermedio e allineato alle risultanze mediane di settore all'interno delle classifiche nazionali e regionali. Gli indicatori riflettono una struttura finanziaria resiliente e adatta a mantenere un buon livello di competitività nel contesto locale e generale."
+        elif rating == 'C':
+            return "si colloca nelle fasce più basse della distribuzione rispetto al campione settoriale. Questo posizionamento riflette la necessità di strutturare soluzioni per rendere la gestione finanziaria più agile e meno immobilizzata nel capitale circolante, al fine di recuperare competitività locale e nazionale."
         return "presenta un quadro di posizionamento non pienamente valutabile a causa di informazioni incomplete."
     
     def get_analisi_combinata(eco, patr, fin):
@@ -669,9 +767,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return "non presenta dati sufficienti per un'analisi storica del posizionamento rispetto al settore."
 
     def get_asimmetria_ebitda(rating_eco):
-        if rating_eco == 'A': return "una spiccata asimmetria positiva nel Margine EBITDA dell'azienda rispetto al benchmark."
-        elif rating_eco == 'B': return "un sostanziale allineamento del Margine EBITDA dell'azienda rispetto alle medie del benchmark."
-        elif rating_eco == 'C': return "una significativa asimmetria negativa nel Margine EBITDA dell'azienda rispetto al benchmark."
+        if rating_eco == 'A': 
+            return "una spiccata asimmetria positiva nel Margine EBITDA dell'azienda rispetto al benchmark."
+        elif rating_eco == 'B': 
+            return "un sostanziale allineamento del Margine EBITDA dell'azienda rispetto al valore mediano del benchmark."
+        elif rating_eco == 'C': 
+            return "una significativa asimmetria negativa nel Margine EBITDA dell'azienda rispetto al benchmark."
         return "un quadro non pienamente valutabile per il Margine EBITDA."
 
     def get_confronto_costi_settore(rating_eco):
@@ -807,9 +908,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return "Tale indicatore non permette di definire univocamente il posizionamento rispetto alle soglie di sicurezza."
 
     def get_confronto_mediana_struttura1(rating_patr):
-        if rating_patr == 'A': return "Il posizionamento risulta nettamente superiore rispetto alla media del mercato di riferimento."
-        elif rating_patr == 'B': return "Il posizionamento risulta sostanzialmente allineato alle dinamiche mediane del mercato di riferimento."
-        elif rating_patr == 'C': return "Il posizionamento risulta inferiore e maggiormente esposto rispetto alle medie del mercato di riferimento."
+        if rating_patr == 'A': 
+            return "Il posizionamento risulta nettamente superiore rispetto alla mediana del mercato di riferimento."
+        elif rating_patr == 'B': 
+            return "Il posizionamento risulta sostanzialmente allineato alle dinamiche mediane del mercato di riferimento."
+        elif rating_patr == 'C': 
+            return "Il posizionamento risulta inferiore e maggiormente esposto rispetto ai parametri mediani del mercato di riferimento."
         return "Il confronto strutturale con la mediana settoriale non risulta pienamente valutabile."
 
     def get_implicazione_copertura_attivo(rating_patr):
@@ -867,9 +971,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return "Tale indicatore necessita di ulteriori approfondimenti per valutarne la portata storica."
 
     def get_confronto_gearing_settore(rating_patr):
-        if rating_patr == 'A': return "l'esposizione debitoria dell'impresa risulta nettamente inferiore e strutturalmente più sicura rispetto alle medie del comparto."
-        elif rating_patr == 'B': return "l'esposizione debitoria dell'impresa risulta in sostanziale allineamento con la fisiologica leva finanziaria utilizzata dalle aziende del comparto."
-        elif rating_patr == 'C': return "l'esposizione debitoria dell'impresa risulta sensibilmente superiore rispetto alle medie di settore, delineando un profilo di rischio più elevato."
+        if rating_patr == 'A': 
+            return "l'esposizione debitoria dell'impresa risulta nettamente inferiore e strutturalmente più sicura rispetto alla mediana del comparto."
+        elif rating_patr == 'B': 
+            return "l'esposizione debitoria dell'impresa risulta in sostanziale allineamento con la fisiologica leva finanziaria utilizzata dalle aziende del comparto."
+        elif rating_patr == 'C': 
+            return "l'esposizione debitoria dell'impresa risulta sensibilmente superiore rispetto al valore mediano di settore, delineando un profilo di rischio più elevato."
         return "non è possibile tracciare un parallelismo completo con i livelli di indebitamento del settore."
 
     def get_reazione_contesto_gearing(rating_patr):
@@ -987,10 +1094,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return "necessita di ulteriori approfondimenti sulle dinamiche dei flussi di cassa"
     
     def get_confronto_rotazione_mediana(rating_fin):
-        if rating_fin == 'A': return "si colloca su livelli di assoluta eccellenza, risultando nettamente superiore alla mediana settoriale e confermando una velocità di rotazione invidiabile."
-        elif rating_fin == 'B': return "si colloca in sostanziale allineamento con la mediana settoriale, riflettendo una velocità di rotazione adeguata e fisiologica per il comparto."
-        elif rating_fin == 'C': return "si colloca al di sotto della mediana settoriale, evidenziando una velocità di rotazione del capitale più lenta rispetto ai principali competitor."
-        return "non risulta facilmente confrontabile con le medie di mercato."
+        if rating_fin == 'A': 
+            return "si colloca su livelli di assoluta eccellenza, risultando nettamente superiore alla mediana settoriale e confermando una velocità di rotazione invidiabile."
+        elif rating_fin == 'B': 
+            return "si colloca in sostanziale allineamento con la mediana settoriale, riflettendo una velocità di rotazione adeguata e fisiologica per il comparto."
+        elif rating_fin == 'C': 
+            return "si colloca al di sotto della mediana settoriale, evidenziando una velocità di rotazione del capitale più lenta rispetto ai principali competitor."
+        return "non risulta facilmente confrontabile con i parametri mediani di mercato."
 
     def get_interpretazione_modello_rotazione(rating_fin):
         if rating_fin == 'A': return "denota un modello di business estremamente agile ed efficiente, capace di generare volumi di fatturato molto elevati rispetto alla dotazione patrimoniale investita."
