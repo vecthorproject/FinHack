@@ -1915,7 +1915,7 @@ def elabora_capitolo_6(df_filtered, azienda_target):
     # Scrittura standard delle soglie spostata più in basso (riga 6 anziché riga 1) per fare spazio al box sopra
     worksheet.write(5, start_col_tbl, "SOGLIE CALCOLATE 2024", fmt_header)
     worksheet.write(6, start_col_tbl, "Metrica", fmt_header)
-    intestazioni_tbl = ["MIN", "Soglia 1° Terzile", "Soglia 2° Terzile", "MAX"]
+    intestazioni_tbl = ["MIN", "Soglia 2° Terzile", "Soglia 1° Terzile", "MAX"]
     for i, h in enumerate(intestazioni_tbl):
         worksheet.write(6, start_col_tbl + 1 + i, h, fmt_header)
 
@@ -2371,24 +2371,42 @@ def elabora_capitolo_7(df_filtered, azienda_target):
     import zipfile
 
     # --- FUNZIONI DI SUPPORTO ---
+
+    # *** MODIFICA RISPETTO ALL'ORIGINALE ***
+    # Il punteggio ora rispecchia il rango del terzile:
+    #   1 = primo terzile  = valori più alti (MIGLIORI) per metriche dirette
+    #   2 = secondo terzile = valori medi
+    #   3 = terzo terzile  = valori più bassi (PEGGIORI)
+    # Nell'originale era invertito: 3 = migliore, 1 = peggiore.
+    # Il default NaN diventa 3 (peggiore) invece di 1.
     def calcola_punteggi_diretto(val, t1, t2):
-        if pd.isna(val): return 1
-        if val >= t2: return 3
+        if pd.isna(val): return 3  # MODIFICATO: era return 1
+        if val >= t2: return 1     # MODIFICATO: era return 3
         elif val >= t1: return 2
-        else: return 1
+        else: return 3             # MODIFICATO: era return 1
 
     def calcola_punteggi_inverso(val, t1, t2):
-        if pd.isna(val): return 1
-        if val <= t1: return 3
+        if pd.isna(val): return 3  # MODIFICATO: era return 1
+        if val <= t1: return 1     # MODIFICATO: era return 3  (gearing basso = 1° terzile = migliore)
         elif val <= t2: return 2
-        else: return 1
+        else: return 3             # MODIFICATO: era return 1
 
+    # assegna_lettera INVARIATA: usata per il Benchmark Totale (Sum_Lettere 3-9, scala A=3/B=2/C=1)
     def assegna_lettera(punti, soglia_A=8, soglia_B=5):
         if pd.isna(punti): return 'C'
         if punti >= soglia_A: return 'A'
         elif punti >= soglia_B: return 'B'
         else: return 'C'
 
+    # *** NUOVA FUNZIONE RISPETTO ALL'ORIGINALE ***
+    # Usata per le 3 aree (Eco, Fin, Pat) con il nuovo sistema punteggio 1=migliore:
+    #   Sum area da 3 (tre 1° terzili = eccellenza) a 9 (tre 3° terzili = vulnerabilità)
+    #   A ≤ 4 | B ≤ 7 | C > 7 — produce gli stessi A/B/C dell'originale
+    def assegna_lettera_area(punti):
+        if pd.isna(punti): return 'C'
+        return 'A' if punti <= 4 else ('B' if punti <= 7 else 'C')
+
+    # punti_da_lettera INVARIATO: converte le lettere di area in punti per il Benchmark Totale
     def punti_da_lettera(lettera):
         if lettera == 'A': return 3
         elif lettera == 'B': return 2
@@ -2476,17 +2494,17 @@ def elabora_capitolo_7(df_filtered, azienda_target):
 
     if all(f'Pts_{x}' in df.columns for x in ['M. Profitto 2024', 'M. EBITDA 2024', 'M. EBIT 2024']):
         df['Sum_Eco'] = df['Pts_M. Profitto 2024'] + df['Pts_M. EBITDA 2024'] + df['Pts_M. EBIT 2024']
-        df['Benchmark Economico'] = df['Sum_Eco'].apply(lambda x: assegna_lettera(x, 8, 5))
+        df['Benchmark Economico'] = df['Sum_Eco'].apply(assegna_lettera_area)  # MODIFICATO: era assegna_lettera(x, 8, 5)
     else: df['Benchmark Economico'] = 'C'
 
     if all(f'Pts_{x}' in df.columns for x in ['Rotazione C.Inv. 2024', 'Quick Ratio 2024', 'Current Ratio 2024']):
         df['Sum_Fin'] = df['Pts_Rotazione C.Inv. 2024'] + df['Pts_Quick Ratio 2024'] + df['Pts_Current Ratio 2024']
-        df['Benchmark Finanziario'] = df['Sum_Fin'].apply(lambda x: assegna_lettera(x, 8, 5))
+        df['Benchmark Finanziario'] = df['Sum_Fin'].apply(assegna_lettera_area)  # MODIFICATO: era assegna_lettera(x, 8, 5)
     else: df['Benchmark Finanziario'] = 'C'
 
     if all(f'Pts_{x}' in df.columns for x in ['Indice 1° Liv. 2024', 'Indice 2° Liv. 2024', 'Gearing 2024']):
         df['Sum_Pat'] = df['Pts_Indice 1° Liv. 2024'] + df['Pts_Indice 2° Liv. 2024'] + df['Pts_Gearing 2024']
-        df['Benchmark Patrimoniale'] = df['Sum_Pat'].apply(lambda x: assegna_lettera(x, 8, 5))
+        df['Benchmark Patrimoniale'] = df['Sum_Pat'].apply(assegna_lettera_area)  # MODIFICATO: era assegna_lettera(x, 8, 5)
     else: df['Benchmark Patrimoniale'] = 'C'
 
     df['Sum_Lettere'] = df['Benchmark Economico'].apply(punti_da_lettera) + \
@@ -2504,6 +2522,12 @@ def elabora_capitolo_7(df_filtered, azienda_target):
         asc_order = True if lower_is_better else False
         dataframe[f'RANK_{base_name}_NAZ'] = dataframe[col_kpi].rank(ascending=asc_order, method='min')
         dataframe[f'RANK_{base_name}_REG'] = dataframe.groupby(col_regione, observed=False)[col_kpi].rank(ascending=asc_order, method='min')
+
+    # *** NUOVO: pre-calcolo target e sottoinsieme regionale per le mediane regionali ***
+    df_target_row = df_master[df_master[col_ragione_sociale].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    regione_target = df_target_row.iloc[0][col_regione] if not df_target_row.empty else None
+    df_regione_master = df_master[df_master[col_regione] == regione_target] if regione_target is not None else pd.DataFrame()
+    nome_reg_pulita = str(regione_target).split(' - ')[-1] if regione_target else 'Regione N.D.'
 
     # Creazione del buffer ZIP per ospitare i 3 file Excel
     zip_buffer = io.BytesIO()
@@ -2549,6 +2573,65 @@ def elabora_capitolo_7(df_filtered, azienda_target):
             white_font = Font(color="FFFFFF", bold=True)
             center_align = Alignment(horizontal='center')
             thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+            # *** NUOVO: foglio "Riepilogo_Benchmark" con mediane nazionali e regionali ***
+            # Specchio del confronto Italia / Regione / Azienda che report_breve_corp usa nei grafici e tabelle.
+            ws_bench = wb.create_sheet("Riepilogo_Benchmark", 0)
+            headers_bench = [
+                'Metrica',
+                'Mediana Nazionale',
+                f'Mediana {nome_reg_pulita}',
+                f'Valore {azienda_target[:25]}',
+                'Rank Naz.',
+                'Rank Reg.'
+            ]
+            for ci, h in enumerate(headers_bench, 1):
+                ws_bench.cell(row=1, column=ci, value=h)  # header styling applicato dal loop sotto
+
+            for ri, (kpi_name, (kpi_col, is_lower)) in enumerate(kpi_dict.items(), 2):
+                if kpi_col not in df_master.columns:
+                    continue
+                med_naz = df_master[kpi_col].median()
+                med_reg = df_regione_master[kpi_col].median() if not df_regione_master.empty else np.nan
+                val_az  = df_target_row.iloc[0][kpi_col] if not df_target_row.empty else np.nan
+
+                # rank nazionale
+                tot_naz = int(df_master[kpi_col].notna().sum())
+                if not df_target_row.empty:
+                    _rn_series = df_master[kpi_col].rank(ascending=is_lower, method='min')
+                    _idx = df_target_row.index[0]
+                    _rn = _rn_series.get(_idx, np.nan)
+                    rank_naz_str = f"{int(_rn)}/{tot_naz}" if pd.notna(_rn) else "n.d."
+                else:
+                    rank_naz_str = "n.d."
+
+                # rank regionale
+                if not df_regione_master.empty and not df_target_row.empty:
+                    tot_reg = int(df_regione_master[kpi_col].notna().sum())
+                    _rr_series = df_regione_master[kpi_col].rank(ascending=is_lower, method='min')
+                    _rr = _rr_series.get(df_target_row.index[0], np.nan)
+                    rank_reg_str = f"{int(_rr)}/{tot_reg}" if pd.notna(_rr) else "n.d."
+                else:
+                    rank_reg_str = "n.d."
+
+                row_vals = [
+                    kpi_name,
+                    round(float(med_naz), 4) if pd.notna(med_naz) else None,
+                    round(float(med_reg), 4) if pd.notna(med_reg) else None,
+                    round(float(val_az),  4) if pd.notna(val_az)  else None,
+                    rank_naz_str,
+                    rank_reg_str,
+                ]
+                for ci, val in enumerate(row_vals, 1):
+                    cell = ws_bench.cell(row=ri, column=ci, value=val)
+                    cell.border = thin_border
+                    if ci in [2, 3, 4] and val is not None:
+                        cell.number_format = '#,##0.0000'
+                    cell.alignment = center_align if ci > 1 else Alignment(horizontal='left')
+
+            for col in ws_bench.columns:
+                max_len = max((len(str(c.value or '')) for c in col), default=12)
+                ws_bench.column_dimensions[col[0].column_letter].width = min(max_len + 4, 45)
 
             for ws in wb.worksheets:
                 for cell in ws[1]:
@@ -2896,17 +2979,17 @@ if uploaded_file is not None:
     # ==========================================
     
     # Crea le schede per i vari capitoli + Tab per il mega download
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab7_5, tab8, tab9 = st.tabs([
-        "Cap 1: Forma Giur.", 
-        "Cap 2: Territorio", 
-        "Cap 3: Economico", 
-        "Cap 4: Patrimoniale", 
-        "Cap 5: Finanziario", 
-        "Cap 6: Benchmark", 
-        "Cap 7: Ranking",
-        "Cap 7.5: Composizione", 
-        "⭐ Scarica Tutto",
+    tab9, tab8, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab7_5 = st.tabs([
         "📄 Genera Report + PPT",
+        "⭐ Scarica Tutto",
+        "Cap 1: Forma Giur.",
+        "Cap 2: Territorio",
+        "Cap 3: Economico",
+        "Cap 4: Patrimoniale",
+        "Cap 5: Finanziario",
+        "Cap 6: Benchmark",
+        "Cap 7: Ranking",
+        "Cap 7.5: Composizione",
     ])
 
     # --- SCHEDA CAPITOLO 1 ---

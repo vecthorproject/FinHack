@@ -66,6 +66,76 @@ def format_euro(numero, decimali=2):
     return formato.replace(',', 'X').replace('.', ',').replace('X', '.')
 
 
+# =================================================================
+# 🟢 INDICATORI ECONOMICI (100% SEPARATI)
+# =================================================================
+
+def get_intro_margini(descr_settore):
+    return f"Le risultanze relative al tessuto competitivo del mercato ({descr_settore}) evidenziano che:"
+
+def get_analisi_ebitda(az_ebitda, set_ebitda):
+    if az_ebitda < set_ebitda:
+        return f"• Il Margine EBITDA ({format_euro(az_ebitda)}%) risulta inferiore alla mediana settoriale ({format_euro(set_ebitda)}%). Valori più contenuti segnalano una minore capacità di trasformare i ricavi in margine operativo lordo, denotando una minore efficienza della gestione caratteristica prima degli ammortamenti e delle svalutazioni."
+    else:
+        return f"• Il Margine EBITDA ({format_euro(az_ebitda)}%) supera la mediana settoriale ({format_euro(set_ebitda)}%). Valori più elevati indicano una maggiore capacità dell'impresa di generare reddito dalla gestione caratteristica prima di ammortamenti e svalutazioni, evidenziando una superiore efficienza operativa."
+
+def get_analisi_ebit(az_ebit, set_ebit):
+    if az_ebit < set_ebit:
+        return f"• Il Margine EBIT ({format_euro(az_ebit)}%) si colloca al di sotto del target mediano ({format_euro(set_ebit)}%). Tale dato segnala una minore capacità di generare reddito operativo in relazione ai ricavi conseguiti a valle dell'assorbimento dei costi fissi operativi e degli ammortamenti."
+    else:
+        return f"• Il Margine EBIT ({format_euro(az_ebit)}%) si posiziona al di sopra della mediana di settore ({format_euro(set_ebit)}%). Questo livello indica una maggiore capacità di conseguire un risultato operativo soddisfacente dopo aver considerato gli ammortamenti e le svalutazioni."
+
+def get_analisi_margine_profitto_tag(az_prof, set_prof):
+    if az_prof < set_prof:
+        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in utile netto, evidenziando criticità nell'assorbimento della gestione straordinaria, degli oneri finanziari o del carico fiscale."
+    else:
+        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato netto finale, confermando un'efficace gestione degli oneri extra-caratteristici."
+
+# =================================================================
+# 🟠 INDICATORI PATRIMONIALI (100% SEPARATI)
+# =================================================================
+
+def get_analisi_struttura1(az_str1):
+    if az_str1 >= 1:
+        return f"• L'Indice primario di struttura ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi."
+    else:
+        return f"• L'Indice primario di struttura ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine."
+
+def get_analisi_struttura2(az_str2):
+    if az_str2 >= 1:
+        return f"• L'Indice secondario di struttura ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati."
+    else:
+        return f"• L'Indice secondario di struttura ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi."
+
+def get_analisi_gearing_tag(az_gear, set_gear):
+    if az_gear <= set_gear:
+        return f"• Il Gearing ({format_euro(az_gear)}%) si attesta al di sotto del parametro mediano del comparto ({format_euro(set_gear)}%). Tali valori contenuti indicano una limitata dipendenza dall'indebitamento oneroso e una solida autonomia rispetto ai creditori."
+    else:
+        return f"• Il Gearing ({format_euro(az_gear)}%) supera la mediana di settore ({format_euro(set_gear)}%). Valori più elevati segnalano un maggiore ricorso al capitale di terzi per il finanziamento aziendale, determinando un incremento del rischio finanziario e una minore autonomia."
+
+# =================================================================
+# 🔵 INDICATORI FINANZIARI (100% SEPARATI)
+# =================================================================
+
+def get_analisi_current_ratio_tag(az_cr, set_cr):
+    if az_cr >= 1:
+        return f"• Il Current Ratio ({format_euro(az_cr)}), superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio."
+    else:
+        return f"• Il Current Ratio ({format_euro(az_cr)}), inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio."
+
+def get_analisi_quick_ratio_tag(az_qr, set_qr):
+    if az_qr >= 1:
+        return f"• Il Quick Ratio ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita delle rimanenze di magazzino."
+    else:
+        return f"• Il Quick Ratio ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati."
+
+def get_analisi_rotazione_tag(az_rot, set_rot):
+    if az_rot < set_rot:
+        return f"• L'Indice di rotazione del capitale investito ({format_euro(az_rot)}) risulta inferiore alla mediana del comparto ({format_euro(set_rot)}). Valori più contenuti segnalano una minore capacità del capitale investito di tradursi in ricavi, denotando un impiego meno efficiente degli asset operativi."
+    else:
+        return f"• L'Indice di rotazione del capitale investito ({format_euro(az_rot)}) supera la mediana settoriale ({format_euro(set_rot)}). Valori più elevati indicano una maggiore capacità dell'impresa di generare ricavi attraverso le risorse investite, evidenziando un efficiente utilizzo del capitale."
+
+
 # =====================================================================
 # ☢️ LA LAVATRICE NUCLEARE (Ricostruisce l'XML di Word da zero)
 # =====================================================================
@@ -477,15 +547,29 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     # 📊 MOTORE DI CALCOLO NATIVO DEI RATING (Senza Excel!)
     # =================================================================
+    # *** MODIFICA RISPETTO ALL'ORIGINALE ***
+    # Il punteggio ora rispecchia il rango del terzile:
+    #   1 = primo terzile  = valori più alti (MIGLIORI) per metriche dirette
+    #   2 = secondo terzile = valori medi
+    #   3 = terzo terzile  = valori più bassi (PEGGIORI)
+    # Nell'originale era invertito: 3 = migliore, 1 = peggiore.
+    # Il default NaN diventa 3 (peggiore) invece di 1.
     def punteggio_diretto(val, t1, t2):
-        if pd.isna(val): return 1
-        return 3 if val >= t2 else (2 if val >= t1 else 1)
+        if pd.isna(val): return 3  # MODIFICATO: era return 1
+        return 1 if val >= t2 else (2 if val >= t1 else 3)  # MODIFICATO: era 3/.../1
 
     def punteggio_inverso(val, t1, t2):
-        if pd.isna(val): return 1
-        return 3 if val <= t1 else (2 if val <= t2 else 1)
+        if pd.isna(val): return 3  # MODIFICATO: era return 1
+        return 1 if val <= t1 else (2 if val <= t2 else 3)  # MODIFICATO: era 3/.../1
 
-    def assegna_lettera(punti):
+    # MODIFICATO: due funzioni distinte perché assegna_lettera è usata in due contesti:
+    # 1. assegna_lettera_area → per pts_eco/fin/pat (somma di 1/2/3 con 1=best, basso=buono)
+    # 2. assegna_lettera      → per pts_totali/Benchmark Totale (valori_lettere A=3, alto=buono)
+    def assegna_lettera_area(punti):  # NUOVO: soglia invertita, solo per somme di terzili area
+        if pd.isna(punti): return 'C'
+        return 'A' if punti <= 4 else ('B' if punti <= 7 else 'C')
+
+    def assegna_lettera(punti):  # INVARIATA rispetto all'originale: usata per Benchmark Totale
         if pd.isna(punti): return 'C'
         return 'A' if punti >= 8 else ('B' if punti >= 5 else 'C')
 
@@ -515,17 +599,17 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             else:
                 df_rating[f'pts_{m}'] = df_rating[m].apply(lambda x: punteggio_diretto(x, t1, t2))
         else:
-            df_rating[f'pts_{m}'] = 1  # Fallback se colonna non esiste
+            df_rating[f'pts_{m}'] = 3  # Fallback: colonna assente → terzo terzile (MODIFICATO: era 1)
 
     # 2. Somma Punti per Area (Economico, Finanziario, Patrimoniale)
     df_rating['pts_eco'] = df_rating[f'pts_{c_prof}'] + df_rating[f'pts_{c_ebitda}'] + df_rating[f'pts_{c_ebit}']
     df_rating['pts_fin'] = df_rating[f'pts_{c_rot}'] + df_rating[f'pts_{c_quick}'] + df_rating[f'pts_{c_curr}']
     df_rating['pts_pat'] = df_rating[f'pts_{c_str1}'] + df_rating[f'pts_{c_str2}'] + df_rating[f'pts_{c_gear}']
 
-    # 3. Assegnazione Lettere (A, B, C)
-    df_rating['Rating Economico'] = df_rating['pts_eco'].apply(assegna_lettera)
-    df_rating['Rating Finanziario'] = df_rating['pts_fin'].apply(assegna_lettera)
-    df_rating['Rating Patrimoniale'] = df_rating['pts_pat'].apply(assegna_lettera)
+    # 3. Assegnazione Lettere (A, B, C) — usa assegna_lettera_area (soglia invertita)
+    df_rating['Rating Economico'] = df_rating['pts_eco'].apply(assegna_lettera_area)
+    df_rating['Rating Finanziario'] = df_rating['pts_fin'].apply(assegna_lettera_area)
+    df_rating['Rating Patrimoniale'] = df_rating['pts_pat'].apply(assegna_lettera_area)
 
     # 4. Rating Combinato Testuale (es: AAA, BBB, ABC)
     df_rating['Rating Combinato'] = df_rating['Rating Economico'] + df_rating['Rating Patrimoniale'] + df_rating['Rating Finanziario']
@@ -583,604 +667,484 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         context['perc_rating_fin_parte'] = format_euro((1 / num_fin_fascia_real) * 100) if num_fin_fascia_real > 0 else "0,00"
 
 
-    # --- 🤖 MOTORE NARRATIVO (Testi Dinamici in base al Rating) ---
+    # --- 🤖 MOTORE NARRATIVO (Testi Dinamici e Tecnici in base ai Dati Reali) --- 
 
     def get_impatto_territoriale(perc, nome, ricavi_formattati):
         if perc >= 5.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale grazie a un impatto del {format_euro(perc)}% rispetto al totale dei ricavi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale grazie a un impatto pari al {format_euro(perc)}% rispetto al totale dei ricavi dell'area."
         elif perc >= 1.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale con un'incidenza del {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
         elif perc >= 0.1:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile e sana realtà territoriale con un'incidenza del {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile realtà territoriale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
         else:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo in modo fisiologico al tessuto economico locale con un'incidenza del {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
-    
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo al tessuto economico locale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+
     def get_testo_totale(rating):
         if rating == 'A':
-            return "Questo risultato riflette un profilo di eccellenza, stabilità e robustezza strutturale, posizionando l'azienda ai vertici del settore."
+            return "Questo risultato riflette un profilo economico-patrimoniale solido, con indicatori di redditività, indipendenza finanziaria ed equilibrio di breve termine superiori ai parametri mediani del settore."
         elif rating == 'B':
-            return "Questo risultato riflette un profilo di sostanziale stabilità, evidenziando una struttura solida pur con alcuni margini di miglioramento in ambiti specifici."
+            return "Questo risultato riflette un profilo di sostanziale stabilità complessiva, evidenziando un assetto economico-patrimoniale solido pur con margini di miglioramento specifici nell'ottimizzazione degli asset e dei margini operativi."
         elif rating == 'C':
-            return "Questo risultato evidenzia elementi di vulnerabilità complessiva, suggerendo la necessità di interventi mirati per stabilizzare e rinforzare la struttura aziendale."
+            return "Questo risultato evidenzia elementi di vulnerabilità nella struttura economica, patrimoniale e finanziaria, suggerendo l'opportunità di interventi mirati per stabilizzare i flussi di cassa, riequilibrare le fonti di finanziamento o recuperare marginalità operativa."
         return "Non sono disponibili dati sufficienti per elaborare un giudizio complessivo accurato."
 
     def get_testo_eco(rating):
         if rating == 'A':
-            return "La redditività si presenta eccellente e superiore alla mediana di settore, dimostrando una notevole efficienza nel trasformare il valore della produzione in profitto e un'ottima gestione dei costi operativi."
+            return "I margini operativi (EBITDA ed EBIT) e il margine di profitto si collocano stabilmente al di sopra dei parametri mediani di settore. L'impresa mostra una buona efficienza nel generare reddito dalla gestione caratteristica e nel trasformare i ricavi in risultato netto."
         elif rating == 'B':
-            return "La redditività risulta adeguata e in linea con le potenzialità dell'azienda, seppur con spazi di ottimizzazione. Un'attenta razionalizzazione dei costi potrebbe incrementare ulteriormente la trasformazione del valore in profitto netto."
+            return "La redditività operativa e netta risulta adeguata alle dinamiche di settore. L'azienda presenta una buona capacità di generare reddito operativo, seppur con spazi di ottimizzazione nell'assorbimento dei costi di gestione e degli oneri accessori per incrementare l'efficienza della struttura economica."
         elif rating == 'C':
-            return "La redditività si presenta inferiore alle potenzialità dell'azienda, penalizzata da un elevato peso dei costi di gestione. I margini operativi si collocano al di sotto dei parametri mediani settoriali, segnalando l'urgenza di adottare misure mirate alla razionalizzazione dei costi."
+            return "L'analisi dei margini segnala una minore capacità di trasformare i ricavi in risultato operativo e netto. Il posizionamento al di sotto dei parametri settoriali denota una minore efficienza della struttura economica e un'elevata incidenza dei costi di gestione."
         return "Dati economici non disponibili o insufficienti."
 
     def get_testo_patr(rating):
         if rating == 'A':
-            return "Costituisce il punto di forza dell'azienda, che si distingue per l'assenza di rischi di insolvenza a lungo termine. Il Patrimonio Netto copre ampiamente l'attivo fisso, assicurando una solidità ineccepibile e un'autonomia economica di assoluto rilievo."
+            return "La struttura patrimoniale rappresenta un punto di solidità dell'azienda. Il capitale proprio copre interamente gli investimenti a lungo termine (immobilizzazioni), garantendo una buona indipendenza dai vincoli di rimborso a breve termine."
         elif rating == 'B':
-            return "La struttura patrimoniale appare equilibrata. L'azienda mostra una discreta indipendenza finanziaria, sebbene il ricorso al capitale di terzi debba essere monitorato per mantenere intatta la stabilità nel lungo periodo."
+            return "La struttura patrimoniale appare equilibrata. L'azienda finanzia una parte adeguata delle proprie immobilizzazioni attraverso capitale permanente, sebbene il ricorso al capitale di terzi per sostenere gli impieghi a medio-lungo termine debba essere costantemente monitorato."
         elif rating == 'C':
-            return "La struttura evidenzia elementi di debolezza, con un livello di indebitamento potenzialmente critico rispetto al capitale proprio. È consigliabile un ribilanciamento delle fonti di finanziamento per mitigare i rischi a lungo termine."
+            return "La struttura patrimoniale evidenzia uno squilibrio nella correlazione temporale tra fonti e impieghi. Una porzione significativa delle immobilizzazioni risulta finanziata mediante capitale di terzi con obbligo di rimborso nel breve termine, esponendo l'azienda a potenziali rischi di rifinanziamento."
         return "Dati patrimoniali non disponibili o insufficienti."
 
     def get_testo_fin(rating):
         if rating == 'A':
-            return "La gestione della liquidità è ottimale. L'azienda genera ampi flussi di cassa ed evidenzia un'eccellente solvibilità a breve termine, garantendo la totale flessibilità nell'affrontare impegni correnti e contingenze."
+            return "L'equilibrio della struttura finanziaria di breve termine è solido. Le attività correnti coprono integralmente i debiti esigibili nell'esercizio e le risorse prontamente liquidabili assicurano una buona solvibilità immediata, senza necessità di smobilizzare le scorte."
         elif rating == 'B':
-            return "Si riscontra una solvibilità a breve termine sufficiente, pur con una flessibilità moderata nella gestione della liquidità. Le risorse coprono gli impegni, ma si suggerisce un monitoraggio costante del capitale circolante."
+            return "L'equilibrio della struttura finanziaria di breve termine è sufficiente a coprire gli impieghi correnti. Tuttavia, la liquidità immediata potrebbe presentare una parziale dipendenza dalla monetizzazione delle scorte o dall'incasso dei crediti per soddisfare tutti gli impegni a breve."
         elif rating == 'C':
-            return "Nonostante la continuità operativa, si riscontra una scarsa flessibilità nella gestione della liquidità immediata. Una quota rilevante delle risorse risulta vincolata in attività correnti difficilmente trasformabili in denaro liquido, esponendo l'azienda a potenziali difficoltà."
+            return "La struttura finanziaria registra potenziali tensioni di liquidità. L'incapacità delle attività correnti o prontamente liquidabili di far fronte agevolmente alle passività correnti segnala il rischio di dover ricorrere a ulteriori fonti di finanziamento esterne."
         return "Dati finanziari non disponibili o insufficienti."
 
     def get_testo_sintesi(rating):
         if rating == 'A':
-            return "In sintesi, l’azienda vanta fondamenta estremamente solide, garantendo continuità aziendale e ottime prospettive di sviluppo. Mantenendo questo approccio strategico virtuoso, le risorse potranno essere focalizzate serenamente su investimenti di espansione aziendale."
+            return "In sintesi, l'integrazione di questi equilibri mostra un'impresa con una struttura economica, patrimoniale e finanziaria solida. L'efficienza nell'impiego del capitale investito e la solidità delle fonti di finanziamento supportano i futuri percorsi di crescita."
         elif rating == 'B':
-            return "In sintesi, l'azienda si poggia su basi strutturali solide per garantire la continuità operativa. Per migliorare la propria competitività, sarà cruciale concentrare gli sforzi strategici su una gestione ancora più efficace delle aree meno performanti per liberare ulteriori risorse utili alla crescita."
+            return "In sintesi, il coordinamento tra struttura patrimoniale e liquidità finanziaria assicura all'impresa la continuità operativa. Risulta tuttavia opportuno monitorare la capacità del capitale investito di tradursi in ricavi, al fine di non erodere i margini di sicurezza nel lungo periodo."
         elif rating == 'C':
-            return "In sintesi, l'azienda affronta sfide strutturali per garantire una serena continuità aziendale nel lungo termine. Per ripristinare la competitività, sarà cruciale concentrare gli sforzi strategici su una gestione drastica della riduzione dei costi e un attento recupero di liquidità immediata."
+            return "In sintesi, la combinazione dei tre equilibri rivela inefficienze nella struttura economica, patrimoniale e finanziaria che penalizzano l'impiego del capitale e l'autonomia monetaria. È opportuno intervenire per ripristinare un migliore allineamento temporale tra le fonti di finanziamento e gli impieghi."
         return ""
 
     def get_intro_benchmark_eco(rating):
         if rating == 'A':
-            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una redditività operativa e netta di assoluta eccellenza, nettamente superiore alle performance mediane del settore di riferimento, come visibile di seguito:'
+            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una redditività operativa e netta superiore ai parametri mediani del comparto di riferimento:'
         elif rating == 'B':
-            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una redditività operativa e netta adeguata e in linea con i parametri mediani del settore di riferimento, pur con fisiologici margini di miglioramento, come visibile di seguito:'
+            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una capacità di generare reddito adeguata e allineata ai valori mediani del comparto di riferimento, pur con specifici margini di intervento:'
         elif rating == 'C':
-            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una redditività operativa e netta al di sotto delle potenzialità mediane del settore di riferimento, come visibile di seguito:'
+            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una marginalità operativa e netta contratta, al di sotto dei parametri mediani espressi dal comparto di riferimento:'
         return "Rispetto al Benchmark Economico, i dati a disposizione non consentono di esprimere una valutazione completa, come riassunto di seguito:"
 
-    def get_analisi_margini_operativi(rating):
-        if rating == 'A':
-            return "evidenziano un'eccellente capacità di convertire i ricavi in margini operativi. Tali valori indicano un'ottima ottimizzazione dei costi di gestione e un'elevata efficienza caratteristica rispetto al settore di riferimento;"
-        elif rating == 'B':
-            return "evidenziano una buona capacità di convertire i ricavi in margini operativi. I valori risultano adeguati al benchmark mediano del settore, pur lasciando spazio a un'ulteriore e fisiologica razionalizzazione dei costi di gestione;"
-        elif rating == 'C':
-            return "evidenziano una limitata capacità di convertire i ricavi in margini operativi. Tali valori indicano una significativa incidenza dei costi di gestione rispetto agli standard del settore di riferimento, suggerendo la necessità di recuperare efficienza;"
-        return "non consentono una valutazione accurata della capacità di conversione dei ricavi in margini operativi."
+    # =================================================================
+    # 🟢 INDICATORI ECONOMICI (Valore vs Mediana) - Formattati a Bullet Points
+    # =================================================================
+    def get_analisi_margini_operativi(az_ebitda, set_ebitda, az_ebit, set_ebit, descr_settore):
+        if az_ebitda < set_ebitda:
+            txt_ebitda = f"• Il **Margine EBITDA** ({format_euro(az_ebitda)}%) risulta inferiore alla mediana settoriale ({format_euro(set_ebitda)}%). Valori più contenuti segnalano una minore capacità di trasformare i ricavi in margine operativo lordo, denotando una minore efficienza della gestione caratteristica prima degli ammortamenti e delle svalutazioni.\n"
+        else:
+            txt_ebitda = f"• Il **Margine EBITDA** ({format_euro(az_ebitda)}%) supera la mediana settoriale ({format_euro(set_ebitda)}%). Valori più elevati indicano una maggiore capacità dell'impresa di generare reddito dalla gestione caratteristica prima di ammortamenti e svalutazioni, evidenziando una superiore efficienza operativa.\n"
 
-    def get_analisi_margine_profitto(rating):
-        if rating == 'A':
-            return "conferma un'elevata efficienza complessiva. L'azienda non solo genera ricavi, ma riesce a trattenerne una percentuale considerevole come utile netto, a dimostrazione di una gestione fortemente redditizia."
-        elif rating == 'B':
-            return "segnala una redditività stabile. L'azienda genera ricavi trattenendo una percentuale equilibrata come utile netto, in linea con le dinamiche mediane della catena del valore settoriale."
-        elif rating == 'C':
-            return "conferma la capacità di generare ricavi, ma segnala al contempo una bassa efficienza complessiva nella catena del valore, trattenendo solo una modesta percentuale come utile netto."
-        return "non fornisce elementi sufficienti per un'analisi dettagliata della redditività netta."
+        if az_ebit < set_ebit:
+            txt_ebit = f"• Il **Margine EBIT** ({format_euro(az_ebit)}%) si colloca al di sotto del target mediano ({format_euro(set_ebit)}%). Tale dato segnala una minore capacità di generare reddito operativo in relazione ai ricavi conseguiti a valle dell'assorbimento dei costi e degli ammortamenti."
+        else:
+            txt_ebit = f"• Il **Margine EBIT** ({format_euro(az_ebit)}%) si posiziona al di sopra della mediana di settore ({format_euro(set_ebit)}%). Questo livello indica una maggiore capacità di conseguire un risultato operativo soddisfacente dopo aver considerato gli ammortamenti e le svalutazioni."
 
+        return f"Le risultanze relative al mercato ({descr_settore}) evidenziano che:\n{txt_ebitda}{txt_ebit}"
+
+    def get_analisi_margine_profitto(az_prof, set_prof, descr_settore):
+        if az_prof < set_prof:
+            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in utile netto, evidenziando criticità nell'assorbimento della gestione straordinaria, degli oneri finanziari o del carico fiscale."
+        else:
+            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato netto finale, confermando una gestione ottimizzata degli oneri extra-caratteristici."
+
+    # =================================================================
+    # 🟠 INDICATORI PATRIMONIALI (Valore vs 1 e Gearing vs Mediana)
+    # =================================================================
     def get_intro_benchmark_patr(rating):
         if rating == 'A':
-            return "attesta una straordinaria solidità strutturale dell'azienda, evidenziandone un'ottima copertura dai rischi a lungo termine. Questo risultato la colloca come un'eccellenza rispetto alla mediana del settore di riferimento:"
+            return "L'analisi attesta una buona robustezza nella copertura degli investimenti, posizionando gli indici strutturali dell'azienda al di sopra delle soglie di sicurezza:"
         elif rating == 'B':
-            return "evidenzia una solidità strutturale adeguata, con un buon livello di copertura dai rischi a lungo termine. Questo risultato riflette una situazione di generale equilibrio rispetto ai parametri mediani del settore di riferimento:"
+            return "L'analisi evidenzia un rapporto tra capitale, debiti e immobilizzazioni adeguato e in linea con i parametri mediani del mercato di riferimento:"
         elif rating == 'C':
-            return "segnala elementi di vulnerabilità strutturale, evidenziando una potenziale esposizione ai rischi a lungo termine. Questo risultato colloca l'azienda al di sotto delle performance mediane del settore di riferimento, richiedendo attenzione su:"
-        return "non consente di esprimere una valutazione completa sui rischi a lungo termine a causa di dati insufficienti:"
+            return "L'analisi segnala squilibri nella correlazione temporale tra le fonti di copertura e le immobilizzazioni aziendali rispetto ai parametri di sicurezza:"
+        return "L'analisi non consente di esprimere una valutazione completa sui rischi a lungo termine a causa di dati insufficienti:"
 
-    def get_analisi_indici_struttura(rating):
-        if rating == 'A':
-            return "confermano che il Patrimonio Netto copre abbondantemente l'intero attivo fisso. In un contesto in cui gli investimenti strutturali richiedono stabilità, una tale copertura con risorse proprie rappresenta un chiaro indicatori di massima sicurezza e robustezza."
-        elif rating == 'B':
-            return "mostrano valori che indicano una discreta copertura dell'attivo fisso tramite il Patrimonio Netto. Pur garantendo la continuità operativa, vi sono i margini per consolidare ulteriormente la robustezza patrimoniale nel medio-lungo periodo."
-        elif rating == 'C':
-            return "evidenziano valori che indicano una parziale o insufficiente copertura dell'attivo fisso tramite mezzi propri. Questa situazione suggerisce un'eccessiva dipendenza dal capitale di terzi per finanziare asset a lungo termine, riducendo la flessibilità patrimoniale."
-        return "non forniscono elementi sufficienti per un'analisi dettagliata della copertura dell'attivo."
+    def get_analisi_indici_struttura(az_str1, set_str1, az_str2, set_str2):
+        if az_str1 >= 1:
+            txt_s1 = f"• L'**Indice primario di struttura** ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi.\n"
+        else:
+            txt_s1 = f"• L'**Indice primario di struttura** ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine.\n"
 
-    def get_analisi_gearing(rating):
-        if rating == 'A':
-            return "evidenzia un'incidenza minima o nulla del debito finanziario. L'azienda gode di un'elevata autonomia dal sistema bancario, riducendo drasticamente il rischio finanziario e consolidando una posizione di forza e stabilità rispetto alle dinamiche di settore."
-        elif rating == 'B':
-            return "evidenzia un livello di indebitamento fisiologico e gestibile. L'azienda utilizza la leva finanziaria in modo equilibrato, mantenendo una struttura patrimoniale complessivamente sostenibile rispetto agli standard del settore."
-        elif rating == 'C':
-            return "segnala una forte incidenza del debito rispetto ai mezzi propri. Questo elevato livello di leva finanziaria espone l'azienda a maggiori rischi legati alle variazioni dei tassi di interesse e ne limita l'autonomia dal sistema bancario."
-        return "non permette di valutare accuratamente il peso della leva finanziaria."
+        if az_str2 >= 1:
+            txt_s2 = f"• L'**Indice secondario di struttura** ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati."
+        else:
+            txt_s2 = f"• L'**Indice secondario di struttura** ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi."
 
+        return f"Analizzando la provvista allargata:\n{txt_s1}{txt_s2}"
+
+    def get_analisi_gearing(az_gear, set_gear):
+        if az_gear <= set_gear:
+            return f"\n• Il **Gearing** ({format_euro(az_gear)}%) si attesta al di sotto del parametro mediano del comparto ({format_euro(set_gear)}%). Tali valori più contenuti indicano una limitata dipendenza dell'impresa dall'indebitamento oneroso e una solida autonomia rispetto ai creditori."
+        else:
+            return f"\n• Il **Gearing** ({format_euro(az_gear)}%) supera la mediana di settore ({format_euro(set_gear)}%). Valori più elevati segnalano un maggiore ricorso al capitale di terzi per il finanziamento aziendale, determinando un incremento del rischio finanziario e una minore autonomia."
+
+    # =================================================================
+    # 🔵 INDICATORI FINANZIARI (Valore vs 1 e Rotazione vs Mediana)
+    # =================================================================
     def get_intro_benchmark_fin(rating):
         if rating == 'A':
-            return "evidenzia una gestione della liquidità ottimale. L'azienda dimostra una notevole capacità di generare risorse e far fronte agli impegni, posizionandosi ai vertici del settore di riferimento:"
+            return "L'analisi degli indicatori correnti evidenzia una condizione di stabilità nel breve periodo e una buona capacità di generare ricavi tramite l'impiego delle risorse, superiore ai parametri mediani del settore:"
         elif rating == 'B':
-            return "evidenzia una gestione della liquidità complessivamente equilibrata. Pur mostrando una struttura finanziaria solida, presenta fisiologici margini di miglioramento rispetto ai valori mediani del settore di riferimento:"
+            return "L'analisi degli indicatori correnti evidenzia un equilibrio finanziario di breve termine adeguato a coprire le passività correnti, in linea con gli standard del settore:"
         elif rating == 'C':
-            return "segnala elementi di potenziale criticità nella gestione della liquidità. Le dinamiche finanziarie mostrano margini di miglioramento necessari per garantire una maggiore flessibilità rispetto alle costanti mediane del settore di riferimento:"
-        return "non consente di esprimere una valutazione completa sulla gestione della liquidità:"
+            return "L'analisi degli indicatori correnti segnala potenziali tensioni di liquidità e un impiego meno efficiente delle risorse rispetto alle soglie di sicurezza:"
+        return "L'analisi non consente di esprimere una valutazione completa sulla gestione della liquidità:"
 
-    def get_analisi_rotazione(rating):
-        if rating == 'A':
-            return "si distingue per un valore alto, posizionandosi al di sopra degli standard del settore. Questo dato sottolinea un'eccellente efficienza operativa e una notevole capacità di generare flussi di cassa rispetto al capitale investito."
-        elif rating == 'B':
-            return "si attesta su valori stabili ed equilibrati. Questo dato evidenzia una buona efficienza operativa e un'adeguata capacità di far ruotare il capitale investito per generare flussi di cassa rispetto ai parametri del comparto."
-        elif rating == 'C':
-            return "mostra un valore inferiore rispetto agli standard ottimali di settore. Questo dato suggerisce la necessità di migliorare l'efficienza operativa per ottimizzare la generazione di flussi di cassa rispetto al capitale investito."
-        return "non fornisce elementi sufficienti per un'analisi dettagliata dell'efficienza operativa."
+    def get_analisi_current_ratio(az_cr, set_cr):
+        if az_cr >= 1:
+            return f"• Il **Current Ratio** ({format_euro(az_cr)}), essendo superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio.\n"
+        else:
+            return f"• Il **Current Ratio** ({format_euro(az_cr)}), risultando inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio.\n"
 
-    def get_analisi_current_ratio(rating):
-        if rating == 'A':
-            return "conferma una spiccata solidità finanziaria nel breve periodo. Le attività correnti coprono in modo eccellente le passività correnti, rappresentando una garanzia assoluta per la capacità dell'azienda di far fronte agli impegni finanziari entro l'anno."
-        elif rating == 'B':
-            return "indica una sufficiente solidità finanziaria nel breve periodo. Le attività correnti risultano adeguate a coprire le passività correnti, permettendo all'azienda di gestire gli impegni finanziari a breve scadenza in linea con la mediana settoriale."
-        elif rating == 'C':
-            return "rappresenta un'area di potenziale attenzione. La copertura delle passività correnti tramite le attività a breve termine risulta limitata, suggerendo cautela nella pianificazione degli impegni finanziari entro l'anno."
-        return "non permette di valutare accuratamente la solidità a breve termine."
+    def get_analisi_quick_ratio(az_qr, set_qr):
+        if az_qr >= 1:
+            return f"• Il **Quick Ratio** ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita forzata delle rimanenze di magazzino.\n"
+        else:
+            return f"• Il **Quick Ratio** ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati.\n"
 
-    def get_analisi_quick_ratio(rating):
-        if rating == 'A':
-            return "dimostra un'ottima disponibilità di liquidità immediata. L'azienda è in grado di onorare le scadenze a brevissimo termine senza dover ricorrere allo smobilizzo delle rimanenze, evidenziando una struttura finanziaria estremamente reattiva."
-        elif rating == 'B':
-            return "mostra un livello di liquidità immediata accettabile e coerente con il benchmark. Pur potendo far fronte agli impegni a breve, l'azienda potrebbe presentare una lieve dipendenza temporanea dalla rotazione delle scorte correnti."
-        elif rating == 'C':
-            return "costituisce un'area di attenzione. Il valore indica che una quota rilevante della liquidità è vincolata in asset non prontamente convertibili in denaro, segnalando una potenziale fragilità nel rispondere a necessità finanziarie immediate."
-        return "non offre dati sufficienti per valutare la reattività di cassa."
+    def get_analisi_rotazione(az_rot, set_rot, descr_settore):
+        if az_rot < set_rot:
+            return f"• L'**Indice di rotazione del capitale investito** ({format_euro(az_rot)}) risulta inferiore alla mediana del comparto ({format_euro(set_rot)}). Valori più contenuti segnalano una minore capacità del capitale investito di tradursi in ricavi, denotando un impiego meno efficiente degli asset operativi."
+        else:
+            return f"• L'**Indice di rotazione del capitale investito** ({format_euro(az_rot)}) supera la mediana settoriale ({format_euro(set_rot)}). Valori più elevati indicano una maggiore capacità dell'impresa di generare ricavi attraverso le risorse investite, evidenziando un efficiente utilizzo del capitale."
 
-    def get_analisi_posizionamento_fin(rating):
-        if rating == 'A':
-            return "consolida questo profilo di eccellenza posizionandosi stabilmente nelle fasce più alte delle classifiche di settore, sia su scala nazionale che regionale. L'impresa vanta una struttura finanziaria agile e una notevole flessibilità, che la rendono un punto di riferimento competitivo nel proprio mercato."
-        elif rating == 'B':
-            return "mostra un posizionamento intermedio e allineato alle risultanze mediane di settore all'interno delle classifiche nazionali e regionali. Gli indicatori riflettono una struttura finanziaria resiliente e adatta a mantenere un buon livello di competitività nel contesto locale e generale."
-        elif rating == 'C':
-            return "si colloca nelle fasce più basse della distribuzione rispetto al campione settoriale. Questo posizionamento riflette la necessità di strutturare soluzioni per rendere la gestione finanziaria più agile e meno immobilizzata nel capitale circolante, al fine di recuperare competitività locale e nazionale."
-        return "presenta un quadro di posizionamento non pienamente valutabile a causa di informazioni incomplete."
-    
+    def get_analisi_posizionamento_fin(az_cr, az_qr, set_cr, set_qr):
+        # La frase conclusiva sotto ai 3 bullet point finanziari
+        if az_cr >= set_cr and az_qr >= set_qr:
+            return "Il posizionamento finale nelle griglie distributive consolida un profilo di elevata affidabilità finanziaria, registrando indicatori correnti sistematicamente allineati o superiori ai parametri dei competitor caratteristici."
+        elif az_cr < set_cr and az_qr < set_qr:
+            return "Il posizionamento finale colloca la società nelle fasce contratte della distribuzione settoriale. Gli indicatori riflettono la necessità di velocizzare la rotazione degli asset circolanti per alleviare il potenziale rischio di insolvenza nel breve periodo."
+        else:
+            return "Il posizionamento finale riflette risultanze asimmetriche nel panel di settore. Sebbene la solvibilità generale risulti presidiata in linea con i valori mediani, permangono mirati elementi di sfasamento monetario sul ciclo di liquidazione immediata delle rimanenze."
+
     def get_analisi_combinata(eco, patr, fin):
-        dict_eco = {'A': "un'ottima marginalità", 'B': "una redditività adeguata", 'C': "margini economici da ottimizzare"}
-        dict_patr = {'A': "una stabilità patrimoniale d'eccellenza", 'B': "una solida base patrimoniale", 'C': "una struttura patrimoniale da riequilibrare"}
-        dict_fin = {'A': "una gestione ottimale della liquidità", 'B': "un equilibrio finanziario stabile", 'C': "una liquidità prontamente disponibile da migliorare"}
+        dict_eco = {'A': "un'ottima marginalità operativa", 'B': "una redditività caratteristica in linea col mercato", 'C': "una debole capacità di trasformare i ricavi in margini"}
+        dict_patr = {'A': "un'indipendenza finanziaria che copre le immobilizzazioni", 'B': "un capitale permanente adeguato agli asset", 'C': "un forte squilibrio nell'indebitamento a sostegno degli impieghi"}
+        dict_fin = {'A': "una rotazione ottimale per coprire le passività a breve", 'B': "un Current Ratio adeguato a onorare i debiti esigibili", 'C': "un Quick Ratio dipendente dallo smobilizzo delle rimanenze"}
 
         if eco in ['A','B','C'] and patr in ['A','B','C'] and fin in ['A','B','C']:
             return f"riflette un'azienda che poggia su {dict_patr[patr]}, associata a {dict_eco[eco]} e {dict_fin[fin]}."
         return "riflette un'azienda per la quale non è possibile tracciare un profilo combinato completo a causa di dati mancanti."
 
     def get_descr_fascia_appartenenza(rating):
-        if rating == 'A': return "l'eccellenza e il vertice prestazionale"
-        elif rating == 'B': return "il cuore solido e ben strutturato"
-        elif rating == 'C': return "la fascia che necessita di maggiori interventi di consolidamento"
+        if rating == 'A': return "la solidità reddituale, patrimoniale e finanziaria"
+        elif rating == 'B': return "l'adeguatezza agli indici di stabilità settoriale"
+        elif rating == 'C': return "la fascia che necessita di consolidamento per le tensioni su margini e liquidità"
         return "una porzione non classificabile"
 
-    def get_intro_divario_strutturale(rating_eco):
-        if rating_eco == 'A': return "un posizionamento di assoluta leadership gestionale e operativa da parte di"
-        elif rating_eco == 'B': return "un generale allineamento fisiologico tra le dinamiche di settore e la gestione di"
-        elif rating_eco == 'C': return "un significativo divario strutturale e prestazionale tra l'andamento mediano del comparto e la gestione di"
-        return "un quadro prestazionale misto rispetto all'andamento del comparto per"
+    def get_intro_divario_strutturale(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda:
+            return "un posizionamento favorevole in termini di ottimizzazione della gestione operativa e di struttura economica da parte di"
+        else:
+            return "un significativo divario prestazionale tra la mediana del comparto e l'efficienza della struttura economica di"
 
-    def get_analisi_trend_ebitda(rating_eco, mg_ebitda):
-        if rating_eco == 'A': return f"ha registrato performance di eccellenza, con un valore al 2024 pari al {mg_ebitda}%. Questo risultato dimostra una straordinaria capacità di assorbire gli shock esterni e mantenere una marginalità operativa nettamente superiore alla mediana settoriale."
-        elif rating_eco == 'B': return f"ha mostrato una buona tenuta, con un valore al 2024 pari al {mg_ebitda}%. Questo dato evidenzia una resilienza in linea con la mediana settoriale e una discreta capacità di difendere i margini operativi dalle pressioni macroeconomiche."
-        elif rating_eco == 'C': return f"ha registrato evidenti segnali di contrazione o stagnazione, con un valore al 2024 pari al {mg_ebitda}%. Questo risultato risulta modesto e al di sotto della mediana settoriale, segnalando una maggiore difficoltà nell'assorbire i rincari operativi rispetto ai principali player del mercato."
-        return "non presenta dati sufficienti per un'analisi storica del posizionamento rispetto al settore."
+    # =========================================================================================
+    # LE ALTRE FUNZIONI NARRATIVE PER LA PARTE DI TREND STORICO (Restano invariate o snellite)
+    # =========================================================================================
+    def get_analisi_trend_ebitda(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda:
+            return f"ha registrato performance favorevoli, con un valore al 2024 pari al {format_euro(az_ebitda)}%. Questo risultato dimostra una maggiore capacità della struttura economica di generare reddito dalla gestione caratteristica, superando la mediana del settore ({format_euro(set_ebitda)}%)."
+        else:
+            return f"ha registrato evidenti segnali di contrazione, con un valore al 2024 pari al {format_euro(az_ebitda)}%. Questo risultato si colloca al di sotto della mediana settoriale ({format_euro(set_ebitda)}%), segnalando una minore efficienza nell'assorbimento dei costi correnti."
 
-    def get_asimmetria_ebitda(rating_eco):
-        if rating_eco == 'A': 
-            return "una spiccata asimmetria positiva nel Margine EBITDA dell'azienda rispetto al benchmark."
-        elif rating_eco == 'B': 
-            return "un sostanziale allineamento del Margine EBITDA dell'azienda rispetto al valore mediano del benchmark."
-        elif rating_eco == 'C': 
-            return "una significativa asimmetria negativa nel Margine EBITDA dell'azienda rispetto al benchmark."
-        return "un quadro non pienamente valutabile per il Margine EBITDA."
+    def get_asimmetria_ebitda(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda: return "una spiccata forza del Margine EBITDA dell'azienda rispetto ai parametri mediani di settore."
+        else: return "una chiara criticità nella tenuta della struttura economica aziendale rispetto al benchmark mediano del comparto."
 
-    def get_confronto_costi_settore(rating_eco):
-        if rating_eco == 'A': return "sensibilmente inferiore e più ottimizzata rispetto agli standard mediani del mercato di riferimento"
-        elif rating_eco == 'B': return "proporzionata e complessivamente in linea con gli standard mediani del mercato di riferimento"
-        elif rating_eco == 'C': return "sensibilmente superiore e più gravosa rispetto agli standard mediani del mercato di riferimento"
-        return "non chiaramente determinabile"
+    def get_confronto_costi_settore(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda: return "ottimizzata e strutturalmente protetta rispetto ai parametri economici medi del mercato di riferimento"
+        else: return "maggiormente gravosa e penalizzante rispetto ai parametri economici mediani del mercato di riferimento"
 
-    def get_impatto_costi_su_margine(rating_eco):
-        if rating_eco == 'A': return "mette in evidenza un'eccellente efficienza nella gestione della spesa corrente, massimizzando il margine lordo e garantendo un netto vantaggio competitivo rispetto ai principali concorrenti"
-        elif rating_eco == 'B': return "indica una gestione equilibrata e fisiologica dei costi correnti, che preserva la tenuta del margine lordo pur lasciando ulteriore spazio a future ottimizzazioni"
-        elif rating_eco == 'C': return "mette in evidenza una rigidità nella gestione dei costi correnti, la cui incidenza elevata agisce comprimendo il margine lordo e finendo per penalizzare l'azienda rispetto ai principali concorrenti"
-        return "non permette di trarre conclusioni definitive sull'efficienza operativa"
-    
-    def get_analisi_trend_ebit(rating_eco):
-        if rating_eco == 'A': return "Questo dato evidenzia una solidità e una progressione estremamente positiva dell'utile operativo netto, a dimostrazione di un rigoroso ed efficiente controllo degli ammortamenti e degli accantonamenti."
-        elif rating_eco == 'B': return "Questo dato mostra una sostanziale tenuta dell'utile operativo netto, evidenziando una gestione nel complesso equilibrata e fisiologica degli ammortamenti e degli accantonamenti."
-        elif rating_eco == 'C': return "Questo dato evidenzia una dinamica di potenziale contrazione o stagnazione dell'utile operativo netto, riflettendo un'incidenza verosimilmente gravosa degli ammortamenti e degli accantonamenti operativi."
-        return "Questo indicatore non presenta dati sufficienti per valutare il trend dell'utile operativo netto."
+    def get_impatto_costi_su_margine(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda: return "evidenzia una spiccata efficienza nell'assorbimento dei costi operativi correnti a salvaguardia del margine lordo caratteristico"
+        else: return "segnala una minore efficienza nell'assorbimento dei costi industriali interni, comprimendo il potenziale residuo del Margine EBITDA"
 
-    def get_confronto_ebit_settore(rating_eco):
-        if rating_eco == 'A': return "L'azienda supera ampiamente la redditività operativa del settore, confermando una storica solidità nella gestione dei costi fissi e mantenendo un margine stabilmente superiore rispetto alla mediana dei competitor."
-        elif rating_eco == 'B': return "La redditività operativa si mantiene allineata ai valori mediani del settore, confermando una generale adeguatezza nella copertura dei costi operativi fissi rispetto alle dinamiche della concorrenza."
-        elif rating_eco == 'C': return "Tale valore resta al di sotto della redditività operativa del comparto, che - al contrario - mantiene mediamente una maggiore solidità strutturale nella copertura dei costi fissi rispetto alle performance dell'azienda analizzata."
-        return "Non è tuttavia possibile effettuare un confronto completo con le dinamiche storiche di settore."
-    
-    def get_sintesi_ebit_mediana(rating_eco):
-        if rating_eco == 'A': return "nettamente al di sopra della mediana di settore, segnando un evidente punto di forza per l'impresa"
-        elif rating_eco == 'B': return "in sostanziale allineamento con la mediana di settore, confermando un generale equilibrio gestionale"
-        elif rating_eco == 'C': return "al di sotto della mediana di settore, rappresentando un'area di potenziale criticità per l'impresa"
-        return "in una posizione non chiaramente definibile rispetto alla mediana di settore"
+    def get_analisi_trend_ebit(az_ebit, set_ebit):
+        if az_ebit >= set_ebit: return f"Questo dato dimostra un'elevata redditività dopo aver considerato gli ammortamenti e le svalutazioni, con un valore pari al {format_euro(az_ebit)}% che supera stabilmente la mediana."
+        else: return f"Questo dato riflette una minore capacità di conseguire un risultato operativo soddisfacente in rapporto ai ricavi di vendita conseguiti, posizionandosi sotto la mediana settoriale al {format_euro(az_ebit)}%."
 
-    def get_analisi_verticale_ebit(rating_eco):
-        if rating_eco == 'A': return "una virtuosa dinamica dei costi: all'eccellente redditività a livello di EBITDA si affianca un'incidenza degli ammortamenti sul Valore della Produzione perfettamente ottimizzata rispetto agli standard settoriali"
-        elif rating_eco == 'B': return "una struttura di costo bilanciata: la redditività a livello di EBITDA è supportata da un'incidenza degli ammortamenti sul Valore della Produzione complessivamente proporzionata agli standard settoriali"
-        elif rating_eco == 'C': return "un cosiddetto 'effetto forbice': da una parte si registra una limitata redditività a livello di EBITDA, dall’altra l’incidenza degli ammortamenti sul Valore della Produzione risulta più elevata rispetto agli standard settoriali"
-        return "un quadro contabile che necessita di ulteriori approfondimenti sui costi fissi"
+    def get_confronto_ebit_settore(az_ebit, set_ebit):
+        if az_ebit >= set_ebit: return "L'efficienza nell'impiego operativo delle risorse aziendali è confermata dal posizionamento nettamente superiore alla mediana dell'EBIT."
+        else: return "La capacità di generare reddito operativo a valle dei costi fissi si attesta al di sotto dei livelli di riferimento mediani espressi dal settore in esame."
 
-    def get_efficienza_struttura_asset(rating_eco):
-        if rating_eco == 'A': return "altamente scalabile e particolarmente efficiente nel tradurre gli asset aziendali e il capitale investito in puro valore operativo netto"
-        elif rating_eco == 'B': return "adeguatamente dimensionata e sufficientemente efficiente nel tradurre gli asset aziendali in valore operativo netto"
-        elif rating_eco == 'C': return "parzialmente sovradimensionata o carente in efficienza nel tradurre gli asset aziendali e il capitale investito in valore operativo netto"
-        return "di difficile valutazione in termini di efficienza operativa globale"
-    
-    def get_analisi_trend_profitto(rating_eco):
-        if rating_eco == 'A': return "Questo dato rappresenta l'apice di una gestione d'eccellenza, a conferma della capacità dell'azienda di assorbire efficacemente la pressione fiscale e gli oneri finanziari, consolidando la propria stabilità economica netta nel tempo."
-        elif rating_eco == 'B': return "Questo dato riflette una redditività netta nel complesso positiva e stabilizzata, a conferma di un'adeguata gestione della pressione fiscale e degli oneri finanziari nel corso degli ultimi esercizi."
-        elif rating_eco == 'C': return "Questo dato riflette una redditività netta ancora contenuta o in potenziale contrazione, segnalando una marcata incidenza degli oneri finanziari, della gestione straordinaria o della pressione fiscale che hanno eroso il risultato di periodo."
-        return "Questo dato non risulta sufficiente per tracciare un quadro completo della redditività netta nel tempo."
+    def get_sintesi_ebit_mediana(az_ebit, set_ebit):
+        if az_ebit >= set_ebit: return f"al di sopra della mediana di settore (pari a {format_euro(set_ebit)}%) per quanto concerne l'utile operativo EBIT"
+        else: return f"al di sotto della mediana di settore (pari a {format_euro(set_ebit)}%) per quanto concerne l'utile operativo EBIT"
 
-    def get_confronto_profitto_settore(rating_eco):
-        if rating_eco == 'A': return "Il posizionamento risulta di assoluta leadership: l'impresa supera ampiamente le performance mediane dei concorrenti, distinguendosi per una spiccata propensione alla creazione di valore netto."
-        elif rating_eco == 'B': return "Il posizionamento risulta pienamente allineato alle performance mediane dei concorrenti, confermando una competitività proporzionata agli standard generali del mercato di riferimento."
-        elif rating_eco == 'C': return "Il distacco rispetto ai concorrenti rimane tuttavia un'area di attenzione: l'impresa si colloca al di sotto delle performance mediane del settore, faticando a replicare le traiettorie di consolidamento dei principali player di mercato."
-        return "Non è tuttavia possibile stabilire un confronto affidabile con la mediana settoriale."
+    def get_analisi_verticale_ebit(az_ebitda, az_ebit, set_ebitda, set_ebit):
+        spread_azienda = az_ebitda - az_ebit
+        spread_settore = set_ebitda - set_ebit
+        if spread_azienda > spread_settore + 3.0: return "un cosiddetto 'effetto forbice' più marcato rispetto al settore: le quote di ammortamento e svalutazione erodono la redditività generata dai ricavi in misura superiore alla media di comparto, appesantendo la struttura economica a valle della gestione lorda caratteristica"
+        else: return "un bilanciamento della struttura economica in linea con il settore: l'incidenza degli ammortamenti sul Valore della Produzione risulta paragonabile a quella dei competitor, senza un ulteriore assottigliamento della redditività nel passaggio da EBITDA a EBIT"
 
-    def get_prospettiva_redditivita_futura(rating_eco):
-        if rating_eco == 'A': return "si affaccia alle sfide future da una posizione di estrema solidità, pronta a cogliere opportunità di espansione."
-        elif rating_eco == 'B': return "si affaccia alle sfide future da una posizione di sostanziale equilibrio, con una struttura resiliente ma perfettibile."
-        elif rating_eco == 'C': return "si ritrova a fronteggiare una fase di potenziale fragilità, richiedendo interventi tempestivi per invertire il trend reddituale."
-        return "affronta il prossimo esercizio con un quadro reddituale in via di definizione."
+    def get_efficienza_struttura_asset(az_ebit, set_ebit):
+        if az_ebit >= set_ebit: return "efficiente nell'impiego, nel rinnovo e nella valorizzazione delle risorse e della struttura a disposizione"
+        else: return "caratterizzata da una minore efficienza nell'utilizzo strutturale delle proprie immobilizzazioni operative"
 
-    def get_posizionamento_margine_profitto_fine(rating_eco):
-        if rating_eco == 'A': return "ai vertici del mercato, riflettendo una spiccata propensione alla creazione di valore netto"
-        elif rating_eco == 'B': return "su livelli intermedi, in generale allineamento con le performance dei principali competitor"
-        elif rating_eco == 'C': return "su livelli di attenzione rispetto ai competitor, limitando di fatto i margini di manovra dell'impresa"
-        return "su livelli non pienamente quantificabili"
+    def get_analisi_trend_profitto(az_prof, set_prof):
+        if az_prof >= set_prof: return f"Questo dato, pari al {format_euro(az_prof)}%, dimostra un'elevata efficacia nella gestione dei costi accessori, degli oneri finanziari e del carico fiscale complessivo."
+        else: return f"Questo dato ({format_euro(az_prof)}%) riflette una redditività netta complessivamente più limitata, risentendo del peso degli oneri extra-caratteristici."
 
-    def get_sintesi_bilancio_finale(rating_eco):
-        if rating_eco == 'A': return "i frutti di una gestione oculata e altamente strategica"
-        elif rating_eco == 'B': return "i risultati di una gestione nel complesso ordinaria e bilanciata"
-        elif rating_eco == 'C': return "le conseguenze di inefficienze gestionali o rigidità strutturali non ancora risolte"
-        return "un quadro contabile misto"
+    def get_confronto_profitto_settore(az_prof, set_prof):
+        if az_prof >= set_prof: return f"La struttura dell'impresa supera la performance mediana dei concorrenti (pari a {format_euro(set_prof)}%), distinguendosi per una forte propensione alla generazione di utile netto di periodo."
+        else: return f"La capacità di convertire i ricavi in risultato netto si colloca al di sotto della performance mediana espressa dal settore ({format_euro(set_prof)}%)."
 
-    def get_impatto_gestione_caratteristica(rating_eco):
-        if rating_eco == 'A': return "ottimale, massimizzando l'efficienza dei costi operativi e degli ammortamenti"
-        elif rating_eco == 'B': return "proporzionata, evidenziando una fisiologica incidenza dei costi operativi e degli ammortamenti"
-        elif rating_eco == 'C': return "eccessivamente gravosa, penalizzando il risultato a causa di crescenti costi operativi o ammortamenti pesanti"
-        return "variabile"
+    def get_prospettiva_redditivita_futura(az_prof, set_prof):
+        if az_prof >= set_prof: return "dimostra di poter sostenere le dinamiche gestionali future grazie all'ottimizzazione del proprio ciclo dell'utile netto."
+        else: return "deve focalizzarsi sul recupero dell'efficienza sui costi complessivi per migliorare la trasformazione del fatturato in utile netto."
 
-    def get_impatto_oneri_accessori(rating_eco):
-        if rating_eco == 'A': return "risulta ampiamente sostenibile, permettendo all'azienda di produrre un utile di assoluto rilievo"
-        elif rating_eco == 'B': return "risulta gestibile, consentendo all'azienda di produrre un margine netto soddisfacente"
-        elif rating_eco == 'C': return "aggiunge un ulteriore elemento di pressione, che rischia di compromettere la capacità dell'azienda di produrre un margine netto competitivo"
-        return "non permette di esprimere un giudizio definitivo"
-    
-    def get_interpretazione_risultato_eco(rating_eco):
-        if rating_eco == 'A': return "riflette una configurazione ottimale e strutturata, confermando la piena solidità del modello di business."
-        elif rating_eco == 'B': return "indica un profilo complessivamente stabile, pur evidenziando fisiologiche aree suscettibili di ulteriore ottimizzazione."
-        elif rating_eco == 'C': return "non può essere attribuito a fattori puramente transitori, ma evidenzia uno squilibrio di natura strutturale."
-        return "restituisce un quadro di non immediata e univoca interpretazione."
+    def get_posizionamento_margine_profitto_fine(az_prof, set_prof):
+        if az_prof >= set_prof: return "su livelli superiori alla mediana di settore, confermando una buona capacità di trasformare i ricavi in risultato netto"
+        else: return "su livelli compressi che limitano la redditività finale in confronto al comparto"
 
-    def get_stato_struttura_operativa(rating_eco):
-        if rating_eco == 'A': return "altamente performante, caratterizzata da spiccata flessibilità ed efficienza"
-        elif rating_eco == 'B': return "adeguata e resiliente, caratterizzata da un generale equilibrio gestionale"
-        elif rating_eco == 'C': return "inadeguata rispetto agli standard competitivi, caratterizzata da rigidità ed inefficienza"
-        return "in via di definizione rispetto ai parametri medi"
+    def get_sintesi_bilancio_finale(az_prof, set_prof):
+        if az_prof >= set_prof: return "una più elevata efficacia nella gestione dei costi lungo tutta la catena del valore aziendale"
+        else: return "il forte peso delle gestioni accessorie, degli oneri del debito o del carico fiscale rispetto alla ricchezza economica operativa generata"
 
-    def get_gestione_costi_ricavi_core(rating_eco):
-        if rating_eco == 'A': return "gestisce in modo eccellente i costi operativi esterni, potendo contare su ricavi core ampiamente in grado di coprire i costi fissi, gli ammortamenti e gli oneri finanziari, generando un surplus significativo"
-        elif rating_eco == 'B': return "mantiene un'incidenza proporzionata dei costi operativi, con ricavi core in grado di coprire in modo sufficiente i costi fissi, gli ammortamenti e gli oneri finanziari, garantendo la continuità aziendale"
-        elif rating_eco == 'C': return "sostiene costi operativi esterni significativamente elevati e deve fronteggiare un onere sproporzionato di costi fissi, come ammortamenti e oneri finanziari, che i ricavi core non sono più in grado di coprire adeguatamente"
-        return "presenta un assorbimento dei costi da parte dei ricavi parzialmente tracciabile"
+    def get_impatto_gestione_caratteristica(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda: return "pienamente efficiente rispetto ai costi diretti correnti"
+        else: return "debole, disperdendo gran parte del valore operativo in costi di produzione e spese d'esercizio"
 
-    def get_implicazione_finale_eco(rating_eco):
-        if rating_eco == 'A': return "Il posizionamento ai vertici del mercato rappresenta una chiara conferma della validità delle strategie intraprese: mantenendo questo livello di ottimizzazione dei costi e redditività degli asset, l'azienda si garantisce una leadership economica duratura e sostenibile rispetto ai concorrenti."
-        elif rating_eco == 'B': return "Il posizionamento nella fascia media del mercato rappresenta una base sicura: attraverso mirati interventi strategici volti a ottimizzare ulteriormente i costi operativi e migliorare la redditività degli asset, l'azienda potrà puntare a un consolidamento superiore nel proprio mercato di riferimento."
-        elif rating_eco == 'C': return "Il posizionamento in questa fascia rappresenta un chiaro campanello d'allarme: senza un intervento strategico urgente volto a tagliare i costi operativi e migliorare la redditività degli asset, l'azienda rischia di restare intrappolata in una condizione di insostenibilità economica rispetto ai livelli minimi richiesti dal mercato."
-        return "L'assenza di dati completi suggerisce cautela nell'esprimere un verdetto definitivo sulla continuità economica di lungo periodo."
+    def get_impatto_oneri_accessori(az_ebit, az_prof):
+        if (az_ebit - az_prof) > 4.0: return "assorbe le residue disponibilità operative, contraendo la marginalità netta a causa del peso della gestione extra-operativa"
+        else: return "impatta in modo proporzionato, consentendo di registrare un utile finale in linea con i target attesi"
 
-    def get_sintesi_quadriennio_patr(rating_patr):
-        if rating_patr == 'A': return "un profilo di notevole solidità e indipendenza finanziaria, ponendo l'impresa nettamente al di sopra dei benchmark settoriali"
-        elif rating_patr == 'B': return "un profilo di sostanziale equilibrio e adeguatezza patrimoniale, in linea con le dinamiche mediane dei benchmark settoriali"
-        elif rating_patr == 'C': return "un profilo di vulnerabilità e forte dipendenza finanziaria, collocando l'impresa al di sotto dei principali benchmark settoriali"
-        return "un quadro di equilibrio patrimoniale in via di definizione"
+    def get_interpretazione_risultato_eco(az_ebitda, set_ebitda, az_prof, set_prof):
+        if az_ebitda >= set_ebitda and az_prof >= set_prof: return "conferma in maniera analitica la piena solidità del modello e la gestione ottimale dei costi lungo tutta la catena del valore."
+        elif az_ebitda < set_ebitda and az_prof < set_prof: return "indica uno squilibrio nell'area economica per la debole conversione dei ricavi lungo la filiera produttiva aziendale."
+        else: return "restituisce una dinamica asimmetrica tra l'efficienza industriale caratteristica (EBITDA) e il rendimento netto complessivo."
 
-    def get_analisi_copertura_attivo_fisso(rating_patr):
-        if rating_patr == 'A': return "l'impresa finanzia interamente, o quasi, le proprie immobilizzazioni e i propri investimenti strutturali tramite il Capitale Proprio, svincolandosi dalle logiche del debito"
-        elif rating_patr == 'B': return "l'impresa finanzia una quota adeguata delle proprie immobilizzazioni tramite il Capitale Proprio, bilanciando in modo fisiologico il ricorso al capitale di terzi"
-        elif rating_patr == 'C': return "l'impresa presenta un deficit di copertura strutturale, finanziando gran parte delle proprie immobilizzazioni tramite il capitale di terzi ed esponendosi maggiormente ai rischi"
-        return "la struttura di copertura del capitale non è pienamente valutabile"
+    def get_stato_struttura_operativa(az_ebit, set_ebit):
+        if az_ebit >= set_ebit: return "altamente performante nella massimizzazione dei ricavi e del reddito caratteristico"
+        else: return "vulnerabile a causa di un'efficienza non ottimizzata sul rendimento degli asset caratteristici"
 
-    def get_confronto_struttura_settore(rating_patr):
-        if rating_patr == 'A': return "il posizionamento dell'azienda si conferma di assoluta eccellenza. Mentre un'ampia fetta del mercato continua a finanziare l'acquisto di asset strutturali attraverso debito a lungo termine, l'azienda utilizza il Patrimonio Netto come scudo e leva primaria di crescita"
-        elif rating_patr == 'B': return "il posizionamento dell'azienda risulta allineato ai valori mediani. In un mercato che sta gradualmente ottimizzando il rapporto tra debito a lungo termine e mezzi propri, l'impresa partecipa attivamente a questo processo di consolidamento"
-        elif rating_patr == 'C': return "il divario rispetto alla mediana di mercato appare evidente. Mentre il settore avvia processi di riduzione del debito e rafforzamento patrimoniale, l'azienda sconta ancora una marcata dipendenza dalla leva finanziaria a lungo termine"
-        return "non è tuttavia possibile tracciare un confronto storico completo con il settore"
+    def get_gestione_costi_ricavi_core(az_ebitda, set_ebitda):
+        if az_ebitda >= set_ebitda: return "gestisce in modo efficiente i costi operativi esterni, generando un surplus soddisfacente rispetto ai ricavi di vendita"
+        else: return "subisce un forte assorbimento dei ricavi a causa di una rigida incidenza dei costi di gestione operativa correnti"
 
-    def get_analisi_soglia_struttura1(rating_patr):
-        if rating_patr == 'A': return "Tale valore evidenzia una performance di capitalizzazione di assoluto rilievo, superando ampiamente le soglie ideali di sicurezza strutturale (>1)."
-        elif rating_patr == 'B': return "Tale valore evidenzia una struttura di capitale adeguata, posizionandosi in prossimità delle soglie di sicurezza e garantendo una fisiologica solidità di base."
-        elif rating_patr == 'C': return "Tale valore si colloca al di sotto delle soglie ottimali di sicurezza, segnalando una potenziale tensione nella struttura di capitalizzazione dell'impresa."
-        return "Tale indicatore non permette di definire univocamente il posizionamento rispetto alle soglie di sicurezza."
+    def get_implicazione_finale_eco(az_prof, set_prof):
+        if az_prof >= set_prof: return "Mantenendo tale assetto organizzativo, l'impresa garantisce una solida autonomia nel lungo periodo grazie alla propria capacità di trasformazione dei ricavi in utile netto."
+        else: return "La società necessita di interventi mirati per ottimizzare l'incidenza dei costi operativi e extra-caratteristici, al fine di recuperare redditività complessiva e autonomia economica."
 
-    def get_confronto_mediana_struttura1(rating_patr):
-        if rating_patr == 'A': 
-            return "Il posizionamento risulta nettamente superiore rispetto alla mediana del mercato di riferimento."
-        elif rating_patr == 'B': 
-            return "Il posizionamento risulta sostanzialmente allineato alle dinamiche mediane del mercato di riferimento."
-        elif rating_patr == 'C': 
-            return "Il posizionamento risulta inferiore e maggiormente esposto rispetto ai parametri mediani del mercato di riferimento."
-        return "Il confronto strutturale con la mediana settoriale non risulta pienamente valutabile."
+    def get_sintesi_quadriennio_patr(az_str1, az_str2):
+        if az_str1 >= 1.0 and az_str2 >= 1.0: return "un'elevata stabilità della struttura patrimoniale e l'assenza di rischi derivanti dal disequilibrio tra investimenti e capitale permanente"
+        elif az_str1 < 1.0 and az_str2 < 1.0: return "uno squilibrio nella correlazione temporale tra fonti e impieghi, con potenziale immobilizzazione di capitale circolante a copertura di asset duraturi"
+        else: return "un posizionamento asimmetrico e parzialmente sbilanciato nell'assetto di medio-lungo termine della struttura patrimoniale"
 
-    def get_implicazione_copertura_attivo(rating_patr):
-        if rating_patr == 'A': return "non solo è in grado di coprire compiutamente il valore del proprio attivo fisso con il capitale proprio, ma si pone in una posizione di elevata immunità rispetto alle restrizioni creditizie e alle preoccupazioni di insolvenza che affliggono i concorrenti."
-        elif rating_patr == 'B': return "è in grado di garantire un'adeguata copertura degli investimenti a lungo termine, mantenendo un'esposizione al credito gestibile e preservando una serena continuità operativa."
-        elif rating_patr == 'C': return "finanzia una quota rilevante del proprio attivo fisso ricorrendo a capitale di terzi, esponendosi maggiormente alle fluttuazioni dei tassi e alle restrizioni creditizie rispetto ai concorrenti dotati di una base patrimoniale più solida."
-        return "presenta un quadro di copertura degli investimenti in via di consolidamento."
-    
-    def get_analisi_trend_struttura2(rating_patr):
-        if rating_patr == 'A': return "Questo dato conferma un'eccellente capacità di copertura dell'attivo fisso tramite il capitale proprio e le passività consolidate, delineando una struttura finanziaria altamente solida."
-        elif rating_patr == 'B': return "Questo dato indica un'adeguata capacità di copertura dell'attivo fisso tramite le fonti permanenti di capitale, delineando una struttura finanziaria complessivamente bilanciata."
-        elif rating_patr == 'C': return "Questo dato evidenzia una parziale vulnerabilità nella copertura dell'attivo fisso, segnalando un ricorso potenzialmente eccessivo a fonti di finanziamento a breve termine per sostenere investimenti duraturi."
-        return "Questo dato non risulta sufficiente per elaborare un'analisi completa sulla copertura a lungo termine."
+    def get_analisi_copertura_attivo_fisso(az_str1):
+        if az_str1 >= 1.0: return "il capitale proprio finanzia integralmente gli investimenti a lungo periodo, non presentando vincoli di scadenza e riducendo l'esposizione verso terzi"
+        else: return "si evidenzia una parziale copertura degli asset fissi, dipendendo in larga misura dal debito verso terzi, il che obbliga a un puntuale rimborso a breve"
 
-    def get_confronto_settore_struttura2(rating_patr):
-        if rating_patr == 'A': return "Il valore risulta significativamente più elevato rispetto alla mediana settoriale, confermando un netto vantaggio competitivo nella gestione delle fonti di finanziamento."
-        elif rating_patr == 'B': return "Il valore si mantiene in sostanziale allineamento con la mediana settoriale, rispecchiando le dinamiche fisiologiche del mercato di riferimento."
-        elif rating_patr == 'C': return "Il valore risulta inferiore rispetto alla mediana settoriale, evidenziando una maggiore esposizione dell'impresa rispetto ai principali competitor."
-        return "Un confronto diretto con la mediana di settore non è al momento elaborabile."
+    def get_confronto_struttura_settore(az_str1, set_str1):
+        if az_str1 >= set_str1: return "L'assetto patrimoniale dell'azienda si distacca in modo favorevole rispetto alla mediana settoriale, limitando l'uso della leva finanziaria."
+        else: return "L'assetto patrimoniale sconta un divario rispetto al posizionamento mediano dei competitor in termini di capitalizzazione autonoma."
 
-    def get_conclusione_struttura2(rating_patr):
-        if rating_patr == 'A': return "riflette una prudente e virtuosa strategia di capitalizzazione che protegge l'azienda da potenziali tensioni di liquidità a lungo termine e dai rischi di rifinanziamento"
-        elif rating_patr == 'B': return "riflette una strategia di capitalizzazione adeguata, che garantisce la continuità operativa limitando l'esposizione ai rischi di rifinanziamento nel lungo periodo"
-        elif rating_patr == 'C': return "suggerisce la necessità di un riequilibrio delle fonti di finanziamento, al fine di mitigare l'esposizione alle restrizioni del credito e proteggere l'azienda dai rischi di rifinanziamento"
-        return "rimane in attesa di un consolidamento dei dati storici"
+    def get_analisi_soglia_struttura1(az_str1):
+        if az_str1 >= 1.0: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, indica che il capitale proprio ha finanziato interamente le immobilizzazioni, garantendo la sicurezza degli investimenti."
+        else: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, erodendo i parametri di sicurezza."
 
-    def get_evoluzione_vantaggio_competitivo(rating_patr):
-        if rating_patr == 'A': return "riesce a consolidare un vantaggio competitivo strutturale di altissimo profilo rispetto ai principali operatori del comparto."
-        elif rating_patr == 'B': return "mantiene una solida e fisiologica posizione competitiva, ben allineata alle dinamiche di stabilizzazione del comparto."
-        elif rating_patr == 'C': return "affronta una fase di transizione sfidante, evidenziando la necessità di colmare un divario strutturale rispetto ai principali operatori del comparto."
-        return "mostra un posizionamento competitivo in fase di definizione."
+    def get_confronto_mediana_struttura1(az_str1, set_str1):
+        if az_str1 >= set_str1: return f"Il posizionamento dell'Indice risulta nettamente superiore alla mediana del comparto di riferimento (pari a {format_euro(set_str1)})."
+        else: return f"L'azienda sconta un ritardo nella solidità del proprio Indice rispetto ai parametri mediani di settore (attestati a {format_euro(set_str1)})."
 
-    def get_resilienza_credit_crunch(rating_patr):
-        if rating_patr == 'A': return "appare altamente resiliente alle fluttuazioni e agli effetti delle restrizioni creditizie, grazie a un saldo ampiamente positivo di fonti stabili"
-        elif rating_patr == 'B': return "mostra una buona tenuta rispetto agli effetti delle dinamiche creditizie, supportata da un adeguato e proporzionato equilibrio delle fonti stabili"
-        elif rating_patr == 'C': return "risulta maggiormente esposto agli effetti delle restrizioni creditizie, evidenziando la chiara necessità di incrementare la quota di fonti stabili"
-        return "presenta caratteristiche di stabilità in via di assestamento"
+    def get_implicazione_copertura_attivo(az_str1):
+        if az_str1 >= 1.0: return "gode di un assetto bilanciato e immune ai tempi di disinvestimento medio-lunghi delle immobilizzazioni."
+        else: return "è soggetta a forte pressione temporale sui rimborsi dei capitali prestati da terzi a causa dello squilibrio d'impiego."
 
-    def get_flessibilita_strategica_asset(rating_patr):
-        if rating_patr == 'A': return "un'elevata flessibilità strategica nella gestione, nel rinnovo e nello sviluppo dei propri asset operativi"
-        elif rating_patr == 'B': return "una flessibilità strategica sufficiente e idonea per la gestione ordinaria e il rinnovamento dei propri asset operativi"
-        elif rating_patr == 'C': return "limitati margini di flessibilità strategica per la gestione e lo sviluppo di lungo termine dei propri asset operativi"
-        return "un quadro di flessibilità gestionale da monitorare nel tempo"
-    
-    def get_intro_analisi_gearing(rating_patr):
-        if rating_patr == 'A': return "emerge un quadro di eccellente indipendenza finanziaria."
-        elif rating_patr == 'B': return "emerge un quadro di fisiologico ricorso al capitale di terzi."
-        elif rating_patr == 'C': return "emerge una marcata esposizione strutturale verso il capitale di terzi."
-        return "emerge un quadro di indipendenza finanziaria in via di accertamento."
+    def get_analisi_trend_struttura2(az_str2):
+        if az_str2 >= 1.0: return f"L'Indice secondario di struttura ({format_euro(az_str2)}) segnala che il capitale permanente ha finanziato interamente le immobilizzazioni, assicurando correlazione temporale."
+        else: return f"L'Indice secondario di struttura ({format_euro(az_str2)}) indica che una parte delle immobilizzazioni è stata finanziata attraverso capitale a breve termine, determinando uno squilibrio temporale."
 
-    def get_andamento_storico_gearing(rating_patr):
-        if rating_patr == 'A': return "Questo dato riflette un livello di indebitamento oneroso nullo o estremamente contenuto, a testimonianza di una solida politica di autofinanziamento."
-        elif rating_patr == 'B': return "Questo dato riflette un livello di indebitamento sostenibile e bilanciato, in grado di supportare l'operatività senza appesantire in modo eccessivo la struttura."
-        elif rating_patr == 'C': return "Questo dato riflette un livello di indebitamento elevato, segnalando una forte dipendenza dalla leva finanziaria per il sostegno degli investimenti o dell'operatività."
-        return "Tale indicatore necessita di ulteriori approfondimenti per valutarne la portata storica."
+    def get_confronto_settore_struttura2(az_str2, set_str2):
+        if az_str2 >= set_str2: return "Tale dinamica risulta superiore alle performance di copertura strutturale dei competitor."
+        else: return "Il trend sconta uno svantaggio in confronto alla correlazione temporale mediana del mercato."
 
-    def get_confronto_gearing_settore(rating_patr):
-        if rating_patr == 'A': 
-            return "l'esposizione debitoria dell'impresa risulta nettamente inferiore e strutturalmente più sicura rispetto alla mediana del comparto."
-        elif rating_patr == 'B': 
-            return "l'esposizione debitoria dell'impresa risulta in sostanziale allineamento con la fisiologica leva finanziaria utilizzata dalle aziende del comparto."
-        elif rating_patr == 'C': 
-            return "l'esposizione debitoria dell'impresa risulta sensibilmente superiore rispetto al valore mediano di settore, delineando un profilo di rischio più elevato."
-        return "non è possibile tracciare un parallelismo completo con i livelli di indebitamento del settore."
+    def get_conclusione_struttura2(az_str2):
+        if az_str2 >= 1.0: return "riduce sensibilmente il rischio legato a rinegoziazioni del debito per la copertura delle immobilizzazioni fisse."
+        else: return "comporta il rischio di tensioni finanziarie al momento del rinnovo degli affidamenti bancari a breve scadenza."
 
-    def get_reazione_contesto_gearing(rating_patr):
-        if rating_patr == 'A': return "rappresenta un'eccellenza, distinguendosi per un'assenza quasi totale di debito finanziario oneroso e per un'incredibile immunità dalle fluttuazioni dei tassi d'interesse"
-        elif rating_patr == 'B': return "mantiene una gestione ragionata, assorbendo le variazioni dei tassi d'interesse all'interno di un equilibrio patrimoniale controllato e mitigando le tensioni sui rimborsi"
-        elif rating_patr == 'C': return "risulta particolarmente vulnerabile, subendo in modo diretto l'impatto dei tassi variabili e rendendo prioritaria una rigorosa strategia di rientro e consolidamento del debito"
-        return "mostra dinamiche di reazione al costo del denaro in via di consolidamento"
-    
-    def get_sintesi_valore_gearing(rating_patr):
-        if rating_patr == 'A': return "svela la chiave definitiva dell'eccellenza strutturale aziendale."
-        elif rating_patr == 'B': return "conferma il generale stato di salute e l'equilibrio strutturale dell'impresa."
-        elif rating_patr == 'C': return "rappresenta il nodo critico dell'attuale struttura patrimoniale dell'impresa."
-        return "non permette di trarre una conclusione definitiva sulla solidità aziendale."
+    def get_evoluzione_vantaggio_competitivo(az_str1, set_str1):
+        if az_str1 >= set_str1: return "riesce a consolidare un vantaggio patrimoniale di rilievo all'interno del proprio segmento competitivo."
+        else: return "necessita di colmare il divario patrimoniale rispetto ai principali operatori del comparto per preservare il rating."
 
-    def get_analisi_rischio_default(rating_patr):
-        if rating_patr == 'A': return "un profilo di rischio finanziario praticamente inesistente, blindando l'azienda da potenziali shock esterni o restrizioni creditizie."
-        elif rating_patr == 'B': return "un profilo di rischio finanziario moderato e fisiologico, gestibile attraverso i normali flussi operativi senza compromettere la continuità aziendale."
-        elif rating_patr == 'C': return "un profilo di rischio finanziario elevato, rendendo l'impresa vulnerabile a potenziali shock esterni, rincari dei tassi o richieste di rientro da parte delle banche."
-        return "un profilo di rischio finanziario in via di accertamento."
+    def get_resilienza_credit_crunch(az_str2):
+        if az_str2 >= 1.0: return "è fortemente tutelato contro eventuali restrizioni creditizie grazie alla completa copertura fornita dal capitale permanente"
+        else: return "risulta maggiormente esposto agli effetti delle restrizioni creditizie a causa dello squilibrio tra fonti correnti e immobilizzazioni"
 
-    def get_conclusione_autonomia_finanziaria(rating_patr):
-        if rating_patr == 'A': return "si distingue per l'assenza di un indebitamento strutturale significativo, garantendosi una piena e duratura autonomia finanziaria."
-        elif rating_patr == 'B': return "raggiunge un compromesso sostenibile tra mezzi propri e capitale di terzi, preservando una sufficiente autonomia finanziaria."
-        elif rating_patr == 'C': return "evidenzia un'esposizione marcata verso il sistema creditizio, limitando fortemente la propria autonomia finanziaria e le prospettive di investimento indipendente."
-        return "mostra un quadro di autonomia finanziaria ancora da consolidare."
-    
-    def get_sintesi_finale_patr(rating_patr):
-        if rating_patr == 'A': return "rappresenta un esempio di eccellenza e riflette una gestione aziendale prudente, solida e ampiamente capitalizzata, capace di sostenere agevolmente l'operatività corrente."
-        elif rating_patr == 'B': return "riflette una gestione aziendale nel complesso equilibrata e adeguatamente capitalizzata, con una solida tenuta strutturale di base."
-        elif rating_patr == 'C': return "evidenzia alcune criticità strutturali, riflettendo una capitalizzazione non ottimale che necessita di interventi di riequilibrio per garantire maggiore sicurezza."
-        return "non permette di formulare un giudizio definitivo a causa di dati incompleti."
+    def get_flessibilita_strategica_asset(az_str1):
+        if az_str1 >= 1.0: return "una buona flessibilità per nuovi piani di sviluppo strategico e investimenti durevoli."
+        else: return "una rigidità nel finanziare nuovi progetti di rinnovamento degli asset e degli impianti fisici."
 
-    def get_impatto_rischio_sistemico(rating_patr):
-        if rating_patr == 'A': return "mitiga quasi totalmente il rischio sistemico, garantendo un’elevata protezione e una corazza inespugnabile contro eventuali instabilità nel mercato del credito"
-        elif rating_patr == 'B': return "mantiene il rischio sistemico a livelli fisiologici e gestibili, offrendo una protezione adeguata contro le normali fluttuazioni del mercato creditizio"
-        elif rating_patr == 'C': return "espone l'impresa a un maggiore rischio sistemico, riducendo significativamente le difese interne contro eventuali restrizioni creditizie e shock di mercato"
-        return "presenta un livello di esposizione al rischio non chiaramente calcolabile"
+    def get_intro_analisi_gearing(az_gear, set_gear):
+        if az_gear <= set_gear: return "L'analisi conferma un contenimento del Gearing coerente con la solidità della struttura patrimoniale."
+        else: return "L'analisi evidenzia una marcata esposizione verso il capitale di terzi per il finanziamento aziendale."
 
-    def get_posizionamento_competitivo_patr(rating_patr):
-        if rating_patr == 'A': return "si distingue come un modello virtuoso e un punto di riferimento di solidità per l’intero comparto,"
-        elif rating_patr == 'B': return "si inserisce stabilmente nella media del settore, dimostrando buona resilienza,"
-        elif rating_patr == 'C': return "affronta una sfida cruciale per riallinearsi agli standard di sicurezza del mercato,"
-        return "presenta un quadro di posizionamento da consolidare,"
-    
-    def get_sintesi_modello_operativo_fin(rating_fin):
-        if rating_fin == 'A': return "un modello operativo di assoluta eccellenza, caratterizzato da una straordinaria velocità di rotazione del capitale e da una gestione della liquidità ampiamente superiore alla mediana del settore."
-        elif rating_fin == 'B': return "un modello operativo nel complesso equilibrato e in linea con il settore, mostrando una fisiologica e adeguata capacità di far fronte agli impegni a breve termine."
-        elif rating_fin == 'C': return "un modello operativo che si discosta dalle efficienze ottimali di settore, evidenziando alcune rigidità nella rotazione del capitale investito e flussi operativi meno dinamici."
-        return "un modello operativo la cui efficienza finanziaria è ancora in via di definizione."
+    def get_andamento_storico_gearing(az_gear, set_gear):
+        if az_gear <= set_gear: return f"Il dato rivela un Gearing oneroso pari al {format_euro(az_gear)}%. Valori contenuti indicano una limitata dipendenza dall'indebitamento bancario e una maggiore solidità complessiva."
+        else: return f"Il dato palesa un Gearing elevato pari al {format_euro(az_gear)}%. Valori più alti segnalano un forte ricorso ai terzi, determinando un incremento del rischio finanziario."
 
-    def get_analisi_trend_current_ratio(rating_fin):
-        if rating_fin == 'A': return "riflette un'eccellente capacità di copertura delle passività correnti attraverso l'attivo circolante, posizionandosi stabilmente al di sopra dei livelli di sicurezza e della mediana di settore."
-        elif rating_fin == 'B': return "riflette una buona capacità di copertura delle passività correnti attraverso l'attivo circolante, garantendo la solvibilità aziendale in sostanziale allineamento con gli standard del mercato."
-        elif rating_fin == 'C': return "denota una potenziale vulnerabilità nella copertura delle passività correnti attraverso l'attivo circolante, posizionandosi su livelli di attenzione rispetto agli standard di sicurezza richiesti."
-        return "non risulta sufficiente per elaborare una valutazione storica della solvibilità a breve termine."
+    def get_confronto_gearing_settore(az_gear, set_gear):
+        if az_gear <= set_gear: return f"l'esposizione debitoria risulta nettamente inferiore rispetto alla mediana del comparto ({format_euro(set_gear)}%), riducendo l'indice di rischio aziendale."
+        else: return f"l'esposizione debitoria risulta del {format_euro(az_gear)}%, sensibilmente superiore rispetto al valore mediano di settore ({format_euro(set_gear)}%), incrementando il rischio d'insolvenza."
 
-    def get_reazione_contesto_liquidita(rating_fin):
-        if rating_fin == 'A': return "ha dimostrato una straordinaria resilienza, difendendo i propri margini di liquidità e confermando una struttura finanziaria pressoché immune alle dinamiche di erosione che hanno colpito il comparto"
-        elif rating_fin == 'B': return "ha saputo gestire l'impatto di tali dinamiche, assorbendo le pressioni inflattive con una fisiologica flessione della liquidità che non ne ha comunque compromesso la continuità operativa"
-        elif rating_fin == 'C': return "si è trovata maggiormente esposta a questa fase di erosione, registrando un assorbimento della liquidità più marcato rispetto alla media, il che rende prioritario un tempestivo ripristino delle scorte di cassa"
-        return "ha mostrato dinamiche di assorbimento della cassa in fase di assestamento"
-    
-    def get_confronto_current_ratio_mediana(rating_fin):
-        if rating_fin == 'A': return "appare di assoluta eccellenza, con un Current Ratio che si posiziona stabilmente al di sopra del benchmark di riferimento"
-        elif rating_fin == 'B': return "appare complessivamente equilibrata, con un Current Ratio che si mantiene allineato al benchmark di riferimento"
-        elif rating_fin == 'C': return "appare più critica, con un Current Ratio che si colloca al di sotto delle soglie ottimali, allontanandosi dal benchmark di riferimento"
-        return "restituisce un quadro di posizionamento non pienamente definito"
+    def get_reazione_contesto_gearing(az_gear, set_gear):
+        if az_gear <= set_gear: return "garantisce all'impresa una buona autonomia dai vincoli creditizi, riducendo l'indebitamento oneroso"
+        else: return "richiede attenzione costante alla sostenibilità degli oneri, la cui leva agisce incrementando il rischio sui margini"
 
-    def get_rapporto_attivita_passivita_brevi(rating_fin):
-        if rating_fin == 'A': return "le attività correnti dell'azienda coprano in modo eccellente le passività a breve termine, garantendo un'ampia flessibilità finanziaria e azzerando le tensioni di cassa"
-        elif rating_fin == 'B': return "le attività correnti dell'azienda siano sufficienti a coprire le passività a breve termine, mantenendo una fisiologica condizione di stabilità finanziaria"
-        elif rating_fin == 'C': return "le passività a breve termine dell'azienda premano in modo significativo sulle sue attività correnti, portandola in una condizione di potenziale tensione finanziaria"
-        return "la proporzione tra attività e passività a breve termine risulti in fase di consolidamento"
+    def get_sintesi_valore_gearing(az_gear, set_gear):
+        if az_gear <= set_gear: return "conferma la solidità aziendale e il limitato ricorso al capitale di terzi."
+        else: return "rappresenta l'elemento di maggiore leva finanziaria che incide sull'autonomia economica complessiva."
 
-    def get_capacita_generazione_liquidita(rating_fin):
-        if rating_fin == 'A': return "dimostra una straordinaria capacità di generare e mantenere una liquidità abbondante, affrontando in totale serenità gli obblighi finanziari a breve termine"
-        elif rating_fin == 'B': return "dimostra un'adeguata capacità di mantenere la liquidità necessaria per far fronte agli obblighi finanziari a breve termine senza particolari criticità operative"
-        elif rating_fin == 'C': return "riscontra oggettive difficoltà nel generare o mantenere un buffer di liquidità sufficiente per far fronte in totale sicurezza agli obblighi finanziari a breve termine"
-        return "mostra un andamento dei flussi di liquidità da monitorare"
-    
-    def get_analisi_quick_ratio_soglia(rating_fin):
-        if rating_fin == 'A': return "si posiziona nettamente al di sopra della soglia ideale di sicurezza, evidenziando un'eccellente reattività di cassa e superando ampiamente le performance della mediana settoriale"
-        elif rating_fin == 'B': return "si mantiene in prossimità delle soglie di sicurezza, allineandosi in modo fisiologico e bilanciato alle dinamiche della mediana settoriale"
-        elif rating_fin == 'C': return "si colloca al di sotto della soglia ottimale di sicurezza e della mediana settoriale, mettendo in luce un'area di potenziale criticità e attenzione per la società"
-        return "restituisce un quadro di posizionamento non pienamente quantificabile"
+    def get_analisi_rischio_default(az_gear, set_gear):
+        if az_gear <= set_gear: return "una minore esposizione ai rischi di insolvenza legati ai debiti onerosi o alle pressioni sui rimborsi."
+        else: return "una potenziale tensione nella capacità di rimborso in scenari di stress e restrizione del credito."
 
-    def get_implicazione_liquidita_immediata(rating_fin):
-        if rating_fin == 'A': return "la disponibilità di liquidità immediata risulta eccellente e del tutto indipendente dallo smobilizzo del magazzino, garantendo all'impresa una struttura finanziaria estremamente elastica e superiore a quella dei concorrenti"
-        elif rating_fin == 'B': return "la disponibilità di liquidità immediata risulta adeguata al ciclo operativo aziendale, mostrando una gestione fisiologica e controllabile delle rimanenze per far fronte agli impegni a brevissimo termine"
-        elif rating_fin == 'C': return "una quota rilevante dell'attivo circolante risulta vincolata in rimanenze; pertanto, la disponibilità di liquidità immediata dipenderà strettamente dal ciclo delle vendite e dallo smobilizzo del magazzino, denotando una struttura finanziaria meno elastica rispetto ai concorrenti"
-        return "la reale disponibilità di liquidità a brevissimo termine rimane da monitorare"
-    
-    def get_andamento_liquidita_primaria(rating_fin):
-        if rating_fin == 'A': return "la straordinaria capacità dell'azienda di consolidare e incrementare la propria liquidità primaria"
-        elif rating_fin == 'B': return "la fisiologica capacità dell'azienda di mantenere stabile la propria liquidità primaria"
-        elif rating_fin == 'C': return "la difficoltà dell'azienda nel ricostituire o mantenere la propria liquidità primaria ai livelli ottimali"
-        return "le dinamiche di assestamento della liquidità primaria"
+    def get_conclusione_autonomia_finanziaria(az_gear, set_gear):
+        if az_gear <= set_gear: return "conferma la validità della propria politica di autofinanziamento, limitando la dipendenza esterna."
+        else: return "necessita di un rafforzamento del patrimonio attraverso ricapitalizzazioni o utili portati a nuovo per mitigare il debito."
 
-    def get_confronto_quick_ratio_settore(rating_fin):
-        if rating_fin == 'A': return "ben al di sopra della mediana di settore"
-        elif rating_fin == 'B': return "in sostanziale allineamento con la mediana di settore"
-        elif rating_fin == 'C': return "al di sotto della mediana di settore"
-        return "su livelli non pienamente confrontabili con la mediana di settore"
+    def get_sintesi_finale_patr(az_str1, az_gear, set_gear):
+        if az_str1 >= 1.0 and az_gear <= set_gear: return "conferma una solida copertura degli indici di struttura del passivo, fondata su capitale permanente."
+        else: return "evidenzia la necessità di ricalibrare gli squilibri temporali e ridurre il ricorso al capitale di terzi per stabilizzare gli asset."
 
-    def get_copertura_debiti_breve_quick(rating_fin):
-        if rating_fin == 'A': return "sono più che sufficienti a coprire agevolmente i debiti a breve scadenza, garantendo un ampio e solido margine di manovra"
-        elif rating_fin == 'B': return "risultano adeguati a coprire in modo sufficiente i debiti a breve scadenza, preservando il necessario equilibrio di cassa"
-        elif rating_fin == 'C': return "non risultano pienamente sufficienti a coprire i debiti a breve scadenza in modo autonomo, creando dipendenza dal magazzino"
-        return "presentano un quadro di copertura in via di definizione"
+    def get_impatto_rischio_sistemico(az_gear, set_gear):
+        if az_gear <= set_gear: return "riduce i rischi derivanti dall'irrigidimento del mercato creditizio o dall'aumento dei tassi"
+        else: return "amplifica la vulnerabilità dell'azienda nei confronti delle variazioni dei tassi di interesse applicati dal sistema bancario"
 
-    def get_interpretazione_flussi_cassa_quick(rating_fin):
-        if rating_fin == 'A': return "rappresenta un chiaro segnale di eccellente efficienza nella gestione degli incassi e dei flussi operativi, ponendo l'azienda al riparo da tensioni di liquidità nel breve periodo"
-        elif rating_fin == 'B': return "conferma una gestione ordinata degli incassi e dei flussi operativi, limitando di fatto l'esposizione ai rischi di illiquidità nel breve periodo"
-        elif rating_fin == 'C': return "rappresenta un potenziale segnale di inefficienza nella gestione degli incassi o di un anomalo assorbimento di cassa per l'operatività corrente, esponendo l'azienda a un tangibile rischio di illiquidità nel breve periodo"
-        return "necessita di ulteriori approfondimenti sulle dinamiche dei flussi di cassa"
-    
-    def get_confronto_rotazione_mediana(rating_fin):
-        if rating_fin == 'A': 
-            return "si colloca su livelli di assoluta eccellenza, risultando nettamente superiore alla mediana settoriale e confermando una velocità di rotazione invidiabile."
-        elif rating_fin == 'B': 
-            return "si colloca in sostanziale allineamento con la mediana settoriale, riflettendo una velocità di rotazione adeguata e fisiologica per il comparto."
-        elif rating_fin == 'C': 
-            return "si colloca al di sotto della mediana settoriale, evidenziando una velocità di rotazione del capitale più lenta rispetto ai principali competitor."
-        return "non risulta facilmente confrontabile con i parametri mediani di mercato."
+    def get_posizionamento_competitivo_patr(az_str1, set_str1):
+        if az_str1 >= set_str1: return "si colloca favorevolmente nelle classifiche settoriali in termini di stabilità strutturale a medio-lungo termine,"
+        else: return "occupa i gradini più bassi della distribuzione per solidità e coordinamento temporale delle coperture,"
 
-    def get_interpretazione_modello_rotazione(rating_fin):
-        if rating_fin == 'A': return "denota un modello di business estremamente agile ed efficiente, capace di generare volumi di fatturato molto elevati rispetto alla dotazione patrimoniale investita."
-        elif rating_fin == 'B': return "denota un modello di business equilibrato, che riesce a bilanciare la gestione degli asset con la generazione di ricavi in modo coerente con le aspettative del mercato."
-        elif rating_fin == 'C': return "suggerisce un modello di business caratterizzato da una gestione degli asset potenzialmente rigida, dove la generazione di ricavi fatica a tenere il passo con l'ammontare del capitale investito."
-        return "richiede un ulteriore consolidamento storico per valutare il modello di business."
-    
-    def get_analisi_anomalia_rotazione(rating_fin):
-        if rating_fin == 'A': return "tale valore evidenzia una spiccata efficienza commerciale e una configurazione operativa altamente ottimizzata."
-        elif rating_fin == 'B': return "tale valore riflette un'efficienza commerciale adeguata e una configurazione aziendale allineata agli standard fisiologici."
-        elif rating_fin == 'C': return "tale valore evidenzia una rigidità commerciale e una configurazione operativa meno dinamica rispetto ai competitor."
-        return "tale valore restituisce un quadro di efficienza in via di definizione."
+    def get_sintesi_modello_operativo_fin(az_cr, az_qr, az_rot, set_rot):
+        solvibile = az_cr >= 1.0 and az_qr >= 1.0
+        efficiente = az_rot >= set_rot
+        if solvibile and efficiente: return "una capacità adeguata di convertire le proprie risorse in liquidità per onorare il debito corrente, unita a una rotazione commerciale superiore alla mediana di settore."
+        elif solvibile and not efficiente: return "una solvibilità di breve termine adeguata, a fronte di una rotazione del capitale investito inferiore alla mediana di settore."
+        elif not solvibile and efficiente: return "una rotazione del capitale investito superiore alla mediana di settore, a fronte di un certo livello di dipendenza dalla monetizzazione delle scorte per onorare gli impegni correnti."
+        else: return "un modello d'esercizio che sconta parziali rallentamenti operativi e un certo livello di dipendenza dalla monetizzazione delle scorte correnti."
 
-    def get_rapporto_capitale_fatturato(rating_fin):
-        if rating_fin == 'A': return "risulti particolarmente contenuto e ottimizzato in relazione all'elevato volume d'affari generato"
-        elif rating_fin == 'B': return "risulti proporzionato ed equilibrato rispetto al volume d'affari sviluppato"
-        elif rating_fin == 'C': return "risulti eccessivamente gravoso e sproporzionato rispetto al limitato volume d'affari generato"
-        return "non sia ancora pienamente stabilizzato rispetto ai volumi di vendita"
+    def get_analisi_trend_current_ratio(az_cr):
+        if az_cr >= 1.0: return f"L'azienda dispone sistematicamente di attività a breve termine sufficienti a coprire integralmente i debiti esigibili, registrando un coefficiente di {format_euro(az_cr)}."
+        else: return f"Si segnala una contrazione delle attività liquidabili in rapporto alle passività esigibili (coefficiente a {format_euro(az_cr)}), segno di tensione corrente."
 
-    def get_motivazione_strutturale_rotazione(rating_fin):
-        if rating_fin == 'A': return "un modello di business agile, capace di massimizzare la resa degli asset operativi storici o di sfruttare cicli di vendita estremamente veloci."
-        elif rating_fin == 'B': return "un modello di business consolidato, in cui la dotazione patrimoniale supporta coerentemente i cicli di vendita senza generare particolari inefficienze."
-        elif rating_fin == 'C': return "un modello di business appesantito da asset scarsamente produttivi o da un ciclo delle vendite rallentato, che necessita di mirati interventi di ottimizzazione."
-        return "un modello di business in fase di transizione e assestamento."
-    
-    def get_sintesi_finale_fin(rating_fin):
-        if rating_fin == 'A': return "uno stato di salute eccellente, caratterizzato da un'abbondante liquidità e un'ottimale rotazione del capitale investito"
-        elif rating_fin == 'B': return "un quadro complessivamente equilibrato, caratterizzato da una liquidità adeguata e una fisiologica rotazione del capitale"
-        elif rating_fin == 'C': return "un profondo squilibrio strutturale, caratterizzato da un evidente deterioramento degli indicatori di liquidità nonostante i volumi generati"
-        return "un quadro di liquidità e rotazione in fase di accertamento"
+    def get_reazione_contesto_liquidita(az_cr):
+        if az_cr >= 1.0: return "ha garantito costanti eccedenze di cassa (Current Ratio > 1) per prevenire tensioni finanziarie d'esercizio"
+        else: return "ha manifestato l'incapacità delle attività correnti di far fronte alle passività a breve scadenza, limitando l'operatività"
 
-    def get_motivazione_rating_fin(rating_fin):
-        if rating_fin == 'A': return "la straordinaria capacità dell'azienda di mantenere livelli ottimali di Current Ratio e Quick Ratio, garantendo una totale copertura dei debiti a breve termine e azzerando i rischi di illiquidità"
-        elif rating_fin == 'B': return "la buona capacità dell'azienda di mantenere livelli sufficienti di Current Ratio e Quick Ratio, assicurando la copertura dei debiti a breve e mitigando i rischi operativi"
-        elif rating_fin == 'C': return "l'incapacità dell'azienda di mantenere livelli adeguati di Current Ratio e Quick Ratio per coprire i debiti a breve termine, evidenziando una rigidità finanziaria che i modelli di valutazione penalizzano severamente"
-        return "le fisiologiche dinamiche di incasso e pagamento aziendali"
+    def get_confronto_current_ratio_mediana(az_cr, set_cr):
+        if az_cr >= set_cr: return f"supera il parametro mediano del Current Ratio ({format_euro(set_cr)}), evidenziando una solidità a breve scadenza superiore rispetto ai competitor."
+        else: return f"subisce un divario in negativo rispetto ai valori mediani del Current Ratio ({format_euro(set_cr)}), esponendo la liquidità a potenziali contrazioni monetarie."
 
-    def get_gestione_tesoreria_fin(rating_fin):
-        if rating_fin == 'A': return "si distingue per una gestione virtuosa della tesoreria: l'operatività genera flussi di cassa abbondanti e costanti, fornendo ampie risorse per far fronte alle obbligazioni correnti senza alcuno stress"
-        elif rating_fin == 'B': return "mantiene un controllo adeguato sulla tesoreria: la gestione operativa genera flussi sufficienti a sostenere gli impegni a breve, mantenendo un corretto allineamento temporale tra incassi e uscite"
-        elif rating_fin == 'C': return "si trova ad affrontare una forte pressione sulla tesoreria: la gestione operativa assorbe liquidità invece di generarla, prosciugando le risorse necessarie per far fronte alle obbligazioni correnti e creando un pericoloso disallineamento temporale"
-        return "mostra un andamento dei flussi di cassa da stabilizzare"
+    def get_rapporto_attivita_passivita_brevi(az_cr):
+        if az_cr >= 1.0: return "le attività correnti coprono con margine adeguato gli oneri di breve termine, confermando l'equilibrio monetario"
+        else: return "il livello dei debiti a breve eccede le disponibilità di pari durata, svalutando l'equilibrio della liquidità d'impresa"
 
-    def get_priorita_strategica_fin(rating_fin):
-        if rating_fin == 'A': return "non tanto il risanamento, ormai ampiamente superato, quanto il mantenimento di queste eccellenti performance di cassa e la massimizzazione del rendimento per gli investimenti futuri"
-        elif rating_fin == 'B': return "il progressivo rafforzamento del capitale circolante e la costante ottimizzazione dei cicli di incasso, al fine di blindare ulteriormente l'indipendenza finanziaria a breve termine"
-        elif rating_fin == 'C': return "non tanto la mera efficienza commerciale, quanto il recupero urgente del capitale circolante, la dilazione del debito a breve e il rafforzamento vitale delle riserve liquide"
-        return "il monitoraggio costante dei flussi di cassa nel breve termine"
-    
+    def get_capacita_generazione_liquidita(az_cr):
+        if az_cr >= 1.0: return "conferma una situazione di pieno equilibrio finanziario di breve termine (Current Ratio >= 1)."
+        else: return "configura l'incapacità temporanea delle attività correnti di estinguere le scadenze (Current Ratio < 1)."
+
+    def get_analisi_quick_ratio_soglia(az_qr):
+        if az_qr >= 1.0: return f"L'indice depurato dal magazzino si attesta a {format_euro(az_qr)}. Valori uguali o superiori all'unità indicano che la cassa copre gli impegni senza dover smobilizzare il magazzino."
+        else: return f"L'indice depurato dal magazzino si contrae a {format_euro(az_qr)}. Valori inferiori ad uno evidenziano una dipendenza dalla vendita delle scorte per non fallire gli impegni di breve periodo."
+
+    def get_implicazione_liquidita_immediata(az_qr):
+        if az_qr >= 1.0: return "la flessibilità immediata garantisce la copertura integrale senza vendite forzate a sconto (Quick Ratio)."
+        else: return "l'azienda dipenderà fisiologicamente dalla monetizzazione delle scorte per soddisfare i pagamenti a brevissimo termine (Quick Ratio)."
+
+    def get_andamento_liquidita_primaria(az_qr):
+        if az_qr >= 1.0: return "una gestione ottimizzata della liquidità primaria, potendo contare su solide riserve bancarie o crediti certi."
+        else: return "una chiara carenza monetaria immediata che espone l'equilibrio d'esercizio alla rotazione dei magazzini fisici."
+
+    def get_confronto_quick_ratio_settore(az_qr, set_qr):
+        if az_qr >= set_qr: return f"superiore ai livelli mediani del Quick Ratio ({format_euro(set_qr)}), proteggendo le casse dall'obbligo di smobilizzo coatto delle merci."
+        elif az_qr >= 1.0: return f"al di sotto della mediana di mercato nel Quick Ratio ({format_euro(set_qr)}), un divario da monitorare rispetto ai competitor pur restando la liquidità immediata su livelli di per sé adeguati."
+        else: return f"al di sotto della mediana di mercato nel Quick Ratio ({format_euro(set_qr)}), forzando l'impresa verso un realizzo più intensivo delle scorte per onorare gli impegni a breve."
+
+    def get_copertura_debiti_breve_quick(az_qr):
+        if az_qr >= 1.0: return "risultano ampiamente sufficienti per coprire gli esborsi immediati (Quick Ratio >= 1)."
+        else: return "risultano parziali, confermando lo squilibrio e la debolezza del Quick Ratio inferiore all'unità."
+
+    def get_interpretazione_flussi_cassa_quick(az_qr):
+        if az_qr >= 1.0: return "testimonia una buona velocità di conversione del circolante netto, senza gravare sulle rimanenze commerciali."
+        else: return "dimostra inefficienze del ciclo d'incasso, con la chiara dipendenza dalle scorte che affossa il Quick Ratio."
+
+    def get_confronto_rotazione_mediana(az_rot, set_rot):
+        if az_rot >= set_rot: return f"L'efficienza d'utilizzo si colloca su livelli favorevoli, risultando superiore al parametro mediano ({format_euro(set_rot)}) e confermando un'ottimale resa."
+        else: return f"L'Indice di rotazione si colloca al di sotto della mediana settoriale ({format_euro(set_rot)}), evidenziando un impiego poco performante del capitale."
+
+    def get_interpretazione_modello_rotazione(az_rot, set_rot):
+        if az_rot >= set_rot: return "si distingue per valori elevati dell'Indice di Rotazione, a dimostrazione di una spiccata capacità dell'impresa di generare ricavi attraverso le risorse investite e di una maggiore efficienza operativa."
+        else: return "si caratterizza per valori contenuti dell'Indice di Rotazione, segnalando una ridotta capacità del capitale di tradursi in ricavi e una minore efficienza operativa nell'allocazione degli asset."
+
+    def get_analisi_anomalia_rotazione(az_rot, set_rot):
+        if az_rot >= set_rot: return "l'efficienza commerciale e d'incasso si riflette in modo positivo sulla produttività dell'Indice di Rotazione."
+        else: return "la carenza di fatturato rispetto al capitale immesso penalizza l'andamento della Rotazione d'esercizio."
+
+    def get_rapporto_capitale_fatturato(az_rot, set_rot):
+        if az_rot >= set_rot: return "risulta produttivo in termini di traduzione in ricavi lordi"
+        else: return "risulta scarsamente produttivo, a causa di un impiego rigido delle risorse immobilizzate che deprime il rapporto con i ricavi lordi"
+
+    def get_motivazione_strutturale_rotazione(az_rot, set_rot):
+        if az_rot >= set_rot: return "un modello di business capace di sfruttare efficacemente gli investimenti storici operati."
+        else: return "un eccesso di asset non pienamente operativi che ingessa il rapporto tra capitale investito e vendite realizzate."
+
+    def get_sintesi_finale_fin(az_cr, az_qr, az_rot, set_rot):
+        solvibile = az_cr >= 1.0 and az_qr >= 1.0
+        efficiente = az_rot >= set_rot
+        if solvibile and efficiente: return "un giudizio di equilibrio sulle metriche di solvibilità di breve termine, unito a una rotazione dell'attivo superiore alla mediana di settore."
+        elif solvibile and not efficiente: return "un giudizio di equilibrio sulla solvibilità di breve termine, a fronte di una rotazione dell'attivo da migliorare rispetto alla mediana di settore."
+        elif not solvibile and efficiente: return "una rotazione dell'attivo superiore alla mediana di settore, a fronte di margini di miglioramento sulla solvibilità di breve termine."
+        else: return "debolezze su più fronti: l'indice segnala tensioni di cassa correnti unite a un'inefficienza nella rotazione operativa del capitale."
+
+    def get_motivazione_rating_fin(az_cr, az_qr):
+        if az_cr >= 1.0 and az_qr >= 1.0: return "l'azienda dispone di risorse sufficienti a coprire i debiti (Current Ratio >= 1) senza svendere rimanenze (Quick Ratio >= 1)."
+        elif az_cr >= 1.0: return "l'azienda copre i debiti a breve con le attività correnti nel loro complesso (Current Ratio >= 1), ma tale copertura dipende in parte dallo smobilizzo delle rimanenze (Quick Ratio < 1)."
+        else: return "l'azienda risente di un'incapacità parziale di estinguere le passività a breve senza attingere al magazzino."
+
+    def get_gestione_tesoreria_fin(az_cr, az_qr):
+        if az_cr >= 1.0 and az_qr >= 1.0: return "assicura un equilibrio di breve termine solido e privo di esposizione allo smobilizzo merci."
+        elif az_cr >= 1.0: return "assicura la copertura complessiva dei debiti a breve, pur con una quota di dipendenza dallo smobilizzo delle rimanenze."
+        else: return "evidenzia la necessità stringente di monitorare la cassa immediata per far fronte agli impegni non dilazionabili."
+
+    def get_priorita_strategica_fin(az_rot, set_rot):
+        if az_rot >= set_rot: return "È possibile focalizzarsi su piani di sviluppo commerciale per sfruttare la redditività di rotazione già superiore alla mediana di settore."
+        else: return "È opportuno valutare la dismissione di asset non core o un incremento delle vendite per tradurre in flussi di cassa il capitale immesso."
+
     def get_sintesi_profilo_integrato(rating_comb):
-        if rating_comb == 'A': return "altamente competitivo e strutturalmente solido."
-        elif rating_comb == 'B': return "complessivamente equilibrato e resiliente."
-        else: return "caratterizzato da vulnerabilità strutturali e operative."
+        if rating_comb == 'A': return "un modello solido, patrimonialmente indipendente e con buone coperture di liquidità a breve."
+        elif rating_comb == 'B': return "un assetto complessivamente equilibrato che assicura la continuità in linea col mercato di riferimento."
+        else: return "uno scenario di vulnerabilità su più fronti (marginalità o cassa) disallineato rispetto alla concorrenza."
 
     def get_sintesi_posizionamento_lungo_periodo(rating_comb):
-        if rating_comb == 'A': return "leader, capace di affrontare con sicurezza le sfide di lungo periodo."
-        elif rating_comb == 'B': return "stabile, in grado di mantenere la propria posizione competitiva nel tempo."
-        else: return "esposta, che necessita di interventi per garantire la continuità nel lungo periodo."
+        if rating_comb == 'A': return "in grado di assorbire con maggiore margine le perturbazioni di mercato, grazie a solidi indici di solvibilità e redditività operativa."
+        elif rating_comb == 'B': return "resiliente e atta a garantire la sopravvivenza d'esercizio mantenendo un attento bilanciamento dei costi."
+        else: return "esposta a un maggiore rischio di tensione di liquidità e di erosione dei margini, in presenza di una leva finanziaria elevata."
 
-    def get_conclusione_patrimoniale(rating_patr):
-        if rating_patr == 'A': return "l'azienda dimostra un'eccellente capacità di coprire gli investimenti con mezzi propri."
-        elif rating_patr == 'B': return "l'azienda mantiene un adeguato bilanciamento tra mezzi propri e capitale di terzi."
-        else: return "emerge la necessità di ridurre l'esposizione debitoria per riequilibrare la struttura."
+    def get_conclusione_patrimoniale(az_str1, az_gear, set_gear):
+        if az_str1 >= 1.0 and az_gear <= set_gear: return "La copertura tramite mezzi propri e il Gearing contenuto riducono l'esposizione dell'azienda a eventuali restrizioni del credito bancario."
+        else: return "È prioritario avviare azioni volte a riequilibrare il capitale, riducendo l'esposizione al debito per mitigare il rischio tassi."
 
-    def get_conclusione_economica(rating_eco):
-        if rating_eco == 'A': return "confermano una straordinaria capacità di generare valore e ottimizzare i costi."
-        elif rating_eco == 'B': return "mostrano una redditività soddisfacente e in linea con le aspettative del mercato."
-        else: return "evidenziano l'urgenza di un contenimento dei costi per recuperare marginalità."
+    def get_conclusione_economica(az_ebitda, set_ebitda, az_prof, set_prof):
+        if az_ebitda >= set_ebitda and az_prof >= set_prof: return "Confermano la capacità di generare reddito lordo dalla gestione caratteristica e di ottimizzare gli oneri fino all'utile netto finale."
+        else: return "Indicano l'opportunità di rivedere l'incidenza dei costi operativi e di ridurre il peso del carico fiscale o degli oneri finanziari."
 
-    def get_conclusione_finanziaria_dettaglio(rating_fin):
-        if rating_fin == 'A': return "garantisce un'ottima elasticità di cassa e sicurezza nei pagamenti a breve."
-        elif rating_fin == 'B': return "assicura una solvibilità adeguata per la gestione operativa corrente."
-        else: return "segnala possibili tensioni di liquidità da monitorare con attenzione."
+    def get_conclusione_finanziaria_dettaglio(az_cr, az_qr):
+        if az_cr >= 1.0 and az_qr >= 1.0: return "Conferma coperture di cassa senza tensioni evidenti e non subordinate allo svuotamento dei magazzini."
+        elif az_cr >= 1.0: return "Conferma la copertura dei debiti a breve nel complesso, pur con una componente di dipendenza dallo smobilizzo dei magazzini."
+        else: return "Rivela fragilità strutturali nel circolante netto, a conferma dell'opportunità di incassare o dismettere scorte in tempi più contratti."
 
     def get_raccomandazione_finale(rating_comb):
-        if rating_comb == 'A': return "possiede tutte le carte in regola per puntare a un'ulteriore espansione nel proprio settore."
-        elif rating_comb == 'B': return "dovrebbe concentrarsi sul consolidamento dei propri punti di forza e sull'efficientamento delle aree meno performanti."
-        else: return "dovrebbe adottare tempestivamente misure di risanamento strutturale e finanziario per invertire il trend."
-
-
+        if rating_comb == 'A': return "dispone di un buon margine per accedere a nuovo credito per investimenti o espansione settoriale."
+        elif rating_comb == 'B': return "dovrebbe concentrare l'azione manageriale sull'ottimizzazione del circolante per compiere uno scale-up stabile."
+        else: return "dovrebbe strutturare un piano di rafforzamento patrimoniale e operativo, valutando iniezioni di capitale e un contenimento mirato dei costi non strategici."
 
 
     context['descr_rating_tot'] = get_testo_totale(context['rating_comb'])
@@ -1188,18 +1152,71 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['descr_rating_patr'] = get_testo_patr(context['rating_patr'])
     context['descr_rating_fin'] = get_testo_fin(context['rating_fin'])
     context['descr_sintesi'] = get_testo_sintesi(context['rating_comb'])
-    context['intro_benchmark_eco'] = get_intro_benchmark_eco(context['rating_eco'])
-    context['analisi_margini_operativi'] = get_analisi_margini_operativi(context['rating_eco'])
-    context['analisi_margine_profitto'] = get_analisi_margine_profitto(context['rating_eco'])
-    context['intro_benchmark_patr'] = get_intro_benchmark_patr(context['rating_patr'])
-    context['analisi_indici_struttura'] = get_analisi_indici_struttura(context['rating_patr'])
-    context['analisi_gearing'] = get_analisi_gearing(context['rating_patr'])
-    context['intro_benchmark_fin'] = get_intro_benchmark_fin(context['rating_fin'])
-    context['analisi_rotazione'] = get_analisi_rotazione(context['rating_fin'])
-    context['analisi_current_ratio'] = get_analisi_current_ratio(context['rating_fin'])
-    context['analisi_quick_ratio'] = get_analisi_quick_ratio(context['rating_fin'])
-    context['analisi_posizionamento_fin'] = get_analisi_posizionamento_fin(context['rating_fin'])
     
+    # =================================================================
+    # 🟢 ESTRAZIONE VALORI NUMERICI REALI (FLOAT) E MEDIANE DI SETTORE (2024)
+    # =================================================================
+    if not df_target.empty:
+        riga_target = df_target.iloc[0]
+        val_az_ebitda_24 = pd.to_numeric(riga_target.get('Margine EBITDA (*) % 2024'), errors='coerce')
+        val_az_ebit_24 = pd.to_numeric(riga_target.get('Margine EBIT (*) % 2024'), errors='coerce')
+        val_az_profitto_24 = pd.to_numeric(riga_target.get('Margine di Profitto (*) % 2024'), errors='coerce')
+        val_az_strut1_24 = pd.to_numeric(riga_target.get('Indice di Struttura 1° livello (*) 2024'), errors='coerce')
+        val_az_strut2_24 = pd.to_numeric(riga_target.get('Indice di Struttura 2° livello (*) 2024'), errors='coerce')
+        val_az_gearing_24 = pd.to_numeric(riga_target.get('Gearing (*) % 2024'), errors='coerce')
+        val_az_cr_24 = pd.to_numeric(riga_target.get('Current Ratio (*) 2024'), errors='coerce')
+        val_az_qr_24 = pd.to_numeric(riga_target.get('Quick Ratio (*) 2024'), errors='coerce')
+        val_az_rot_24 = pd.to_numeric(riga_target.get('Indice di Rotazione del Capitale Investito (*) 2024'), errors='coerce')
+    else:
+        val_az_ebitda_24 = val_az_ebit_24 = val_az_profitto_24 = 0
+        val_az_strut1_24 = val_az_strut2_24 = val_az_gearing_24 = 0
+        val_az_cr_24 = val_az_qr_24 = val_az_rot_24 = 0
+
+    # Mediane del settore (2024)
+    val_set_ebitda_24 = df_orbis['Margine EBITDA (*) % 2024'].median() if 'Margine EBITDA (*) % 2024' in df_orbis.columns else 0
+    val_set_ebit_24 = df_orbis['Margine EBIT (*) % 2024'].median() if 'Margine EBIT (*) % 2024' in df_orbis.columns else 0
+    val_set_profitto_24 = df_orbis['Margine di Profitto (*) % 2024'].median() if 'Margine di Profitto (*) % 2024' in df_orbis.columns else 0
+    val_set_strut1_24 = df_orbis['Indice di Struttura 1° livello (*) 2024'].median() if 'Indice di Struttura 1° livello (*) 2024' in df_orbis.columns else 0
+    val_set_strut2_24 = df_orbis['Indice di Struttura 2° livello (*) 2024'].median() if 'Indice di Struttura 2° livello (*) 2024' in df_orbis.columns else 0
+    val_set_gearing_24 = df_orbis['Gearing (*) % 2024'].median() if 'Gearing (*) % 2024' in df_orbis.columns else 0
+    val_set_cr_24 = df_orbis['Current Ratio (*) 2024'].median() if 'Current Ratio (*) 2024' in df_orbis.columns else 0
+    val_set_qr_24 = df_orbis['Quick Ratio (*) 2024'].median() if 'Quick Ratio (*) 2024' in df_orbis.columns else 0
+    val_set_rot_24 = df_orbis['Indice di Rotazione del Capitale Investito (*) 2024'].median() if 'Indice di Rotazione del Capitale Investito (*) 2024' in df_orbis.columns else 0
+
+    # =================================================================
+    # 🎯 POPOLAMENTO REALE DEL DIZIONARIO CON CHIAMATE POSIZIONALI CORRETTE
+    # =================================================================
+    context['intro_benchmark_eco'] = get_intro_benchmark_eco(context['rating_eco'])
+    context['analisi_margini_operativi'] = get_analisi_margini_operativi(val_az_ebitda_24, val_set_ebitda_24, val_az_ebit_24, val_set_ebit_24, desc_nace_pulita)
+    context['analisi_margine_profitto'] = get_analisi_margine_profitto(val_az_profitto_24, val_set_profitto_24, desc_nace_pulita)
+
+    context['intro_benchmark_patr'] = get_intro_benchmark_patr(context['rating_patr'])
+    context['analisi_indici_struttura'] = get_analisi_indici_struttura(val_az_strut1_24, val_set_strut1_24, val_az_strut2_24, val_set_strut2_24)
+    context['analisi_gearing'] = get_analisi_gearing(val_az_gearing_24, val_set_gearing_24)
+
+    context['intro_benchmark_fin'] = get_intro_benchmark_fin(context['rating_fin'])
+    context['analisi_rotazione'] = get_analisi_rotazione(val_az_rot_24, val_set_rot_24, desc_nace_pulita)
+    context['analisi_current_ratio'] = get_analisi_current_ratio(val_az_cr_24, val_set_cr_24)
+    context['analisi_quick_ratio'] = get_analisi_quick_ratio(val_az_qr_24, val_set_qr_24)
+    context['analisi_posizionamento_fin'] = get_analisi_posizionamento_fin(val_az_cr_24, val_az_qr_24, val_set_cr_24, val_set_qr_24)
+
+    # -----------------------------------------------------
+    # INIEZIONE TAG COMPLETAMENTE SEPARATI PER WORD
+    # -----------------------------------------------------
+    context['intro_margini'] = get_intro_benchmark_eco(context['rating_eco']) + " " + get_intro_margini(desc_nace_pulita)
+    context['analisi_ebitda'] = get_analisi_ebitda(val_az_ebitda_24, val_set_ebitda_24)
+    context['analisi_ebit'] = get_analisi_ebit(val_az_ebit_24, val_set_ebit_24)
+    context['analisi_margine_profitto'] = get_analisi_margine_profitto_tag(val_az_profitto_24, val_set_profitto_24)
+
+    context['analisi_struttura1'] = get_analisi_struttura1(val_az_strut1_24)
+    context['analisi_struttura2'] = get_analisi_struttura2(val_az_strut2_24)
+    context['analisi_gearing'] = get_analisi_gearing_tag(val_az_gearing_24, val_set_gearing_24)
+
+    context['analisi_current_ratio'] = get_analisi_current_ratio_tag(val_az_cr_24, val_set_cr_24)
+    context['analisi_quick_ratio'] = get_analisi_quick_ratio_tag(val_az_qr_24, val_set_qr_24)
+    context['analisi_rotazione'] = get_analisi_rotazione_tag(val_az_rot_24, val_set_rot_24)
+
+
     # Calcolo dei totali per la fascia di Rating dell'Azienda
     target_glob = context['rating_comb']
     
@@ -1221,77 +1238,87 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['num_eco_fascia'] = f"{num_eco_fascia:,}".replace(',', '.')
     context['num_patr_fascia'] = f"{num_patr_fascia:,}".replace(',', '.')
     context['num_fin_fascia'] = f"{num_fin_fascia:,}".replace(',', '.')
-    context['intro_divario_strutturale'] = get_intro_divario_strutturale(context['rating_eco'])
-    context['analisi_trend_ebitda'] = get_analisi_trend_ebitda(context['rating_eco'], context['mg_ebitda'])
-    context['asimmetria_ebitda'] = get_asimmetria_ebitda(context['rating_eco'])
-    context['confronto_costi_settore'] = get_confronto_costi_settore(context['rating_eco'])
-    context['impatto_costi_su_margine'] = get_impatto_costi_su_margine(context['rating_eco'])
-    context['analisi_trend_ebit'] = get_analisi_trend_ebit(context['rating_eco'])
-    context['confronto_ebit_settore'] = get_confronto_ebit_settore(context['rating_eco'])
-    context['sintesi_ebit_mediana'] = get_sintesi_ebit_mediana(context['rating_eco'])
-    context['analisi_verticale_ebit'] = get_analisi_verticale_ebit(context['rating_eco'])
-    context['efficienza_struttura_asset'] = get_efficienza_struttura_asset(context['rating_eco'])
-    context['analisi_trend_profitto'] = get_analisi_trend_profitto(context['rating_eco'])
-    context['confronto_profitto_settore'] = get_confronto_profitto_settore(context['rating_eco'])
-    context['prospettiva_redditivita_futura'] = get_prospettiva_redditivita_futura(context['rating_eco'])
-    context['posizionamento_margine_profitto_fine'] = get_posizionamento_margine_profitto_fine(context['rating_eco'])
-    context['sintesi_bilancio_finale'] = get_sintesi_bilancio_finale(context['rating_eco'])
-    context['impatto_gestione_caratteristica'] = get_impatto_gestione_caratteristica(context['rating_eco'])
-    context['impatto_oneri_accessori'] = get_impatto_oneri_accessori(context['rating_eco'])
-    context['interpretazione_risultato_eco'] = get_interpretazione_risultato_eco(context['rating_eco'])
-    context['stato_struttura_operativa'] = get_stato_struttura_operativa(context['rating_eco'])
-    context['gestione_costi_ricavi_core'] = get_gestione_costi_ricavi_core(context['rating_eco'])
-    context['implicazione_finale_eco'] = get_implicazione_finale_eco(context['rating_eco'])
-    context['sintesi_quadriennio_patr'] = get_sintesi_quadriennio_patr(context['rating_patr'])
-    context['analisi_copertura_attivo_fisso'] = get_analisi_copertura_attivo_fisso(context['rating_patr'])
-    context['confronto_struttura_settore'] = get_confronto_struttura_settore(context['rating_patr'])
-    context['analisi_soglia_struttura1'] = get_analisi_soglia_struttura1(context['rating_patr'])
-    context['confronto_mediana_struttura1'] = get_confronto_mediana_struttura1(context['rating_patr'])
-    context['implicazione_copertura_attivo'] = get_implicazione_copertura_attivo(context['rating_patr'])
-    context['analisi_trend_struttura2'] = get_analisi_trend_struttura2(context['rating_patr'])
-    context['confronto_settore_struttura2'] = get_confronto_settore_struttura2(context['rating_patr'])
-    context['conclusione_struttura2'] = get_conclusione_struttura2(context['rating_patr'])
-    context['evoluzione_vantaggio_competitivo'] = get_evoluzione_vantaggio_competitivo(context['rating_patr'])
-    context['resilienza_credit_crunch'] = get_resilienza_credit_crunch(context['rating_patr'])
-    context['flessibilita_strategica_asset'] = get_flessibilita_strategica_asset(context['rating_patr'])
-    context['intro_analisi_gearing'] = get_intro_analisi_gearing(context['rating_patr'])
-    context['andamento_storico_gearing'] = get_andamento_storico_gearing(context['rating_patr'])
-    context['confronto_gearing_settore'] = get_confronto_gearing_settore(context['rating_patr'])
-    context['reazione_contesto_gearing'] = get_reazione_contesto_gearing(context['rating_patr'])
-    context['sintesi_valore_gearing'] = get_sintesi_valore_gearing(context['rating_patr'])
-    context['analisi_rischio_default'] = get_analisi_rischio_default(context['rating_patr'])
-    context['conclusione_autonomia_finanziaria'] = get_conclusione_autonomia_finanziaria(context['rating_patr'])
-    context['sintesi_finale_patr'] = get_sintesi_finale_patr(context['rating_patr'])
-    context['impatto_rischio_sistemico'] = get_impatto_rischio_sistemico(context['rating_patr'])
-    context['posizionamento_competitivo_patr'] = get_posizionamento_competitivo_patr(context['rating_patr'])
-    context['sintesi_modello_operativo_fin'] = get_sintesi_modello_operativo_fin(context['rating_fin'])
-    context['analisi_trend_current_ratio'] = get_analisi_trend_current_ratio(context['rating_fin'])
-    context['reazione_contesto_liquidita'] = get_reazione_contesto_liquidita(context['rating_fin'])
-    context['confronto_current_ratio_mediana'] = get_confronto_current_ratio_mediana(context['rating_fin'])
-    context['rapporto_attivita_passivita_brevi'] = get_rapporto_attivita_passivita_brevi(context['rating_fin'])
-    context['capacita_generazione_liquidita'] = get_capacita_generazione_liquidita(context['rating_fin'])
-    context['analisi_quick_ratio_soglia'] = get_analisi_quick_ratio_soglia(context['rating_fin'])
-    context['implicazione_liquidita_immediata'] = get_implicazione_liquidita_immediata(context['rating_fin'])
-    context['andamento_liquidita_primaria'] = get_andamento_liquidita_primaria(context['rating_fin'])
-    context['confronto_quick_ratio_settore'] = get_confronto_quick_ratio_settore(context['rating_fin'])
-    context['copertura_debiti_breve_quick'] = get_copertura_debiti_breve_quick(context['rating_fin'])
-    context['interpretazione_flussi_cassa_quick'] = get_interpretazione_flussi_cassa_quick(context['rating_fin'])
-    context['confronto_rotazione_mediana'] = get_confronto_rotazione_mediana(context['rating_fin'])
-    context['interpretazione_modello_rotazione'] = get_interpretazione_modello_rotazione(context['rating_fin'])
-    context['analisi_anomalia_rotazione'] = get_analisi_anomalia_rotazione(context['rating_fin'])
-    context['rapporto_capitale_fatturato'] = get_rapporto_capitale_fatturato(context['rating_fin'])
-    context['motivazione_strutturale_rotazione'] = get_motivazione_strutturale_rotazione(context['rating_fin'])
-    context['sintesi_finale_fin'] = get_sintesi_finale_fin(context['rating_fin'])
-    context['motivazione_rating_fin'] = get_motivazione_rating_fin(context['rating_fin'])
-    context['gestione_tesoreria_fin'] = get_gestione_tesoreria_fin(context['rating_fin'])
-    context['priorita_strategica_fin'] = get_priorita_strategica_fin(context['rating_fin'])
+
+    context['intro_divario_strutturale'] = get_intro_divario_strutturale(val_az_ebitda_24, val_set_ebitda_24)
+    context['analisi_trend_ebitda'] = get_analisi_trend_ebitda(val_az_ebitda_24, val_set_ebitda_24)
+    context['asimmetria_ebitda'] = get_asimmetria_ebitda(val_az_ebitda_24, val_set_ebitda_24)
+    context['confronto_costi_settore'] = get_confronto_costi_settore(val_az_ebitda_24, val_set_ebitda_24)
+    context['impatto_costi_su_margine'] = get_impatto_costi_su_margine(val_az_ebitda_24, val_set_ebitda_24)
+
+    context['analisi_trend_ebit'] = get_analisi_trend_ebit(val_az_ebit_24, val_set_ebit_24)
+    context['confronto_ebit_settore'] = get_confronto_ebit_settore(val_az_ebit_24, val_set_ebit_24)
+    context['sintesi_ebit_mediana'] = get_sintesi_ebit_mediana(val_az_ebit_24, val_set_ebit_24)
+    context['analisi_verticale_ebit'] = get_analisi_verticale_ebit(val_az_ebitda_24, val_az_ebit_24, val_set_ebitda_24, val_set_ebit_24)
+    context['efficienza_struttura_asset'] = get_efficienza_struttura_asset(val_az_ebit_24, val_set_ebit_24)
+
+    context['analisi_trend_profitto'] = get_analisi_trend_profitto(val_az_profitto_24, val_set_profitto_24)
+    context['confronto_profitto_settore'] = get_confronto_profitto_settore(val_az_profitto_24, val_set_profitto_24)
+    context['prospettiva_redditivita_futura'] = get_prospettiva_redditivita_futura(val_az_profitto_24, val_set_profitto_24)
+    context['posizionamento_margine_profitto_fine'] = get_posizionamento_margine_profitto_fine(val_az_profitto_24, val_set_profitto_24)
+    context['sintesi_bilancio_finale'] = get_sintesi_bilancio_finale(val_az_profitto_24, val_set_profitto_24)
+
+    context['impatto_gestione_caratteristica'] = get_impatto_gestione_caratteristica(val_az_ebitda_24, val_set_ebitda_24)
+    context['impatto_oneri_accessori'] = get_impatto_oneri_accessori(val_az_ebit_24, val_az_profitto_24)
+    context['interpretazione_risultato_eco'] = get_interpretazione_risultato_eco(val_az_ebitda_24, val_set_ebitda_24, val_az_profitto_24, val_set_profitto_24)
+    context['stato_struttura_operativa'] = get_stato_struttura_operativa(val_az_ebit_24, val_set_ebit_24)
+    context['gestione_costi_ricavi_core'] = get_gestione_costi_ricavi_core(val_az_ebitda_24, val_set_ebitda_24)
+    context['implicazione_finale_eco'] = get_implicazione_finale_eco(val_az_profitto_24, val_set_profitto_24)
+
+    context['sintesi_quadriennio_patr'] = get_sintesi_quadriennio_patr(val_az_strut1_24, val_az_strut2_24)
+    context['analisi_copertura_attivo_fisso'] = get_analisi_copertura_attivo_fisso(val_az_strut1_24)
+    context['confronto_struttura_settore'] = get_confronto_struttura_settore(val_az_strut1_24, val_set_strut1_24)
+    context['analisi_soglia_struttura1'] = get_analisi_soglia_struttura1(val_az_strut1_24)
+    context['confronto_mediana_struttura1'] = get_confronto_mediana_struttura1(val_az_strut1_24, val_set_strut1_24)
+    context['implicazione_copertura_attivo'] = get_implicazione_copertura_attivo(val_az_strut1_24)
+
+    context['analisi_trend_struttura2'] = get_analisi_trend_struttura2(val_az_strut2_24)
+    context['confronto_settore_struttura2'] = get_confronto_settore_struttura2(val_az_strut2_24, val_set_strut2_24)
+    context['conclusione_struttura2'] = get_conclusione_struttura2(val_az_strut2_24)
+    context['evoluzione_vantaggio_competitivo'] = get_evoluzione_vantaggio_competitivo(val_az_strut1_24, val_set_strut1_24)
+    context['resilienza_credit_crunch'] = get_resilienza_credit_crunch(val_az_strut2_24)
+    context['flessibilita_strategica_asset'] = get_flessibilita_strategica_asset(val_az_strut1_24)
+
+    context['intro_analisi_gearing'] = get_intro_analisi_gearing(val_az_gearing_24, val_set_gearing_24)
+    context['andamento_storico_gearing'] = get_andamento_storico_gearing(val_az_gearing_24, val_set_gearing_24)
+    context['confronto_gearing_settore'] = get_confronto_gearing_settore(val_az_gearing_24, val_set_gearing_24)
+    context['reazione_contesto_gearing'] = get_reazione_contesto_gearing(val_az_gearing_24, val_set_gearing_24)
+    context['sintesi_valore_gearing'] = get_sintesi_valore_gearing(val_az_gearing_24, val_set_gearing_24)
+    context['analisi_rischio_default'] = get_analisi_rischio_default(val_az_gearing_24, val_set_gearing_24)
+    context['conclusione_autonomia_finanziaria'] = get_conclusione_autonomia_finanziaria(val_az_gearing_24, val_set_gearing_24)
+    context['sintesi_finale_patr'] = get_sintesi_finale_patr(val_az_strut1_24, val_az_gearing_24, val_set_gearing_24)
+    context['impatto_rischio_sistemico'] = get_impatto_rischio_sistemico(val_az_gearing_24, val_set_gearing_24)
+    context['posizionamento_competitivo_patr'] = get_posizionamento_competitivo_patr(val_az_strut1_24, val_set_strut1_24)
+
+    context['sintesi_modello_operativo_fin'] = get_sintesi_modello_operativo_fin(val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
+    context['analisi_trend_current_ratio'] = get_analisi_trend_current_ratio(val_az_cr_24)
+    context['reazione_contesto_liquidita'] = get_reazione_contesto_liquidita(val_az_cr_24)
+    context['confronto_current_ratio_mediana'] = get_confronto_current_ratio_mediana(val_az_cr_24, val_set_cr_24)
+    context['rapporto_attivita_passivita_brevi'] = get_rapporto_attivita_passivita_brevi(val_az_cr_24)
+    context['capacita_generazione_liquidita'] = get_capacita_generazione_liquidita(val_az_cr_24)
+
+    context['analisi_quick_ratio_soglia'] = get_analisi_quick_ratio_soglia(val_az_qr_24)
+    context['implicazione_liquidita_immediata'] = get_implicazione_liquidita_immediata(val_az_qr_24)
+    context['andamento_liquidita_primaria'] = get_andamento_liquidita_primaria(val_az_qr_24)
+    context['confronto_quick_ratio_settore'] = get_confronto_quick_ratio_settore(val_az_qr_24, val_set_qr_24)
+    context['copertura_debiti_breve_quick'] = get_copertura_debiti_breve_quick(val_az_qr_24)
+    context['interpretazione_flussi_cassa_quick'] = get_interpretazione_flussi_cassa_quick(val_az_qr_24)
+
+    context['confronto_rotazione_mediana'] = get_confronto_rotazione_mediana(val_az_rot_24, val_set_rot_24)
+    context['interpretazione_modello_rotazione'] = get_interpretazione_modello_rotazione(val_az_rot_24, val_set_rot_24)
+    context['analisi_anomalia_rotazione'] = get_analisi_anomalia_rotazione(val_az_rot_24, val_set_rot_24)
+    context['rapporto_capitale_fatturato'] = get_rapporto_capitale_fatturato(val_az_rot_24, val_set_rot_24)
+    context['motivazione_strutturale_rotazione'] = get_motivazione_strutturale_rotazione(val_az_rot_24, val_set_rot_24)
+    context['sintesi_finale_fin'] = get_sintesi_finale_fin(val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
+    context['motivazione_rating_fin'] = get_motivazione_rating_fin(val_az_cr_24, val_az_qr_24)
+    context['gestione_tesoreria_fin'] = get_gestione_tesoreria_fin(val_az_cr_24, val_az_qr_24)
+    context['priorita_strategica_fin'] = get_priorita_strategica_fin(val_az_rot_24, val_set_rot_24)
+
     context['sintesi_profilo_integrato'] = get_sintesi_profilo_integrato(context['rating_comb'])
     context['sintesi_posizionamento_lungo_periodo'] = get_sintesi_posizionamento_lungo_periodo(context['rating_comb'])
-    context['conclusione_patrimoniale'] = get_conclusione_patrimoniale(context['rating_patr'])
-    context['conclusione_economica'] = get_conclusione_economica(context['rating_eco'])
-    context['conclusione_finanziaria_dettaglio'] = get_conclusione_finanziaria_dettaglio(context['rating_fin'])
+    context['conclusione_patrimoniale'] = get_conclusione_patrimoniale(val_az_strut1_24, val_az_gearing_24, val_set_gearing_24)
+    context['conclusione_economica'] = get_conclusione_economica(val_az_ebitda_24, val_set_ebitda_24, val_az_profitto_24, val_set_profitto_24)
+    context['conclusione_finanziaria_dettaglio'] = get_conclusione_finanziaria_dettaglio(val_az_cr_24, val_az_qr_24)
     context['raccomandazione_finale'] = get_raccomandazione_finale(context['rating_comb'])
-
     context['impatto_territoriale'] = get_impatto_territoriale(perc_ricavi_target_su_macro, ragione_sociale_pulita, format_euro(ricavi_mln))
 
     # Costruzione delle Medaglie di Settore!!!
@@ -2728,33 +2755,89 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             dati_azienda[nome_metrica].append(val_az_pct)
             
 
-    # 2. COSTRUZIONE TABELLA 7 (Word)
-    sd_tab7 = doc.new_subdoc()
-    t7 = sd_tab7.add_table(rows=1, cols=5)
-    t7.style = 'Table Grid'
+        # 2. COSTRUZIONE TABELLA 7 (Word) - Layout Split-Panel #?
+        sd_tab7 = doc.new_subdoc()
+        t7 = sd_tab7.add_table(rows=1, cols=5)
+        t7.style = 'Table Grid'
+        
+        # Allineamento globale della tabella al centro
+        tbl_pr = t7._tbl.tblPr
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'center')
+        tbl_pr.append(jc)
 
-    # Intestazioni
-    headers_t7 = ['Metrica / Componente %', '2021', '2022', '2023', '2024']
-    for i, h in enumerate(headers_t7):
-        t7.cell(0, i).text = h
-        t7.cell(0, i).paragraphs[0].runs[0].bold = True
-
-    # Inserimento righe alternate (Settore / Azienda)
-    for nome_metrica, _ in metriche:
-        # Riga Settore
-        row_sett = t7.add_row().cells
-        row_sett[0].text = f"{nome_metrica} (Mediane Settore)"
-        for i, val in enumerate(dati_settore[nome_metrica]):
-            row_sett[i+1].text = f"{val:.2f}%".replace('.', ',') if pd.notna(val) else "N.D."
+        # --- INTESTAZIONE PRINCIPALE ---
+        headers_t7 = ['% su Valore Produzione', '2021', '2022', '2023', '2024']
+        for i, h in enumerate(headers_t7):
+            cell = t7.cell(0, i)
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
             
-        # Riga Azienda
-        row_az = t7.add_row().cells
-        row_az[0].text = f"{nome_metrica} ({context.get('ragione_sociale', 'Azienda')})"
-        row_az[0].paragraphs[0].runs[0].bold = True # Evidenziamo il nome azienda
-        for i, val in enumerate(dati_azienda[nome_metrica]):
-            row_az[i+1].text = f"{val:.2f}%".replace('.', ',') if pd.notna(val) else "N.D."
+            # Testo a sinistra per la prima colonna, a DESTRA per gli anni
+            if i == 0:
+                cell.paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+            else:
+                cell.paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
+            
+            # Sfondo grigio scuro/elegante per l'intestazione
+            from docx.oxml import parse_xml
+            from docx.oxml.ns import nsdecls
+            shd = parse_xml(r'<w:shd %s w:val="clear" w:color="auto" w:fill="E7E6E6"/>' % nsdecls('w'))
+            cell._tc.get_or_add_tcPr().append(shd)
 
-    context['tabella_7_dinamica'] = sd_tab7
+        # ==========================================
+        # BLOCCO 1: AZIENDA
+        # ==========================================
+        # Riga di divisione (Unisce tutte le celle)
+        row_az_title = t7.add_row().cells
+        row_az_title[0].merge(row_az_title[4])
+        row_az_title[0].text = f"AZIENDA: {context.get('ragione_sociale', 'Azienda Target').upper()}"
+        row_az_title[0].paragraphs[0].runs[0].bold = True
+        row_az_title[0].paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+        
+        # Sfondo azzurrino per il titolo dell'azienda
+        shd_az = parse_xml(r'<w:shd %s w:val="clear" w:color="auto" w:fill="DDEBF7"/>' % nsdecls('w'))
+        row_az_title[0]._tc.get_or_add_tcPr().append(shd_az)
+
+        # Inserimento metriche Azienda
+        for nome_metrica, _ in metriche:
+            row_az = t7.add_row().cells
+            row_az[0].text = nome_metrica
+            row_az[0].paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+            
+            for i, val in enumerate(dati_azienda[nome_metrica]):
+                testo_val = f"{val:.2f}%".replace('.', ',') if pd.notna(val) else "N.D."
+                row_az[i+1].text = testo_val
+                # Numeri allineati rigorosamente a destra
+                row_az[i+1].paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
+
+        # ==========================================
+        # BLOCCO 2: MEDIANA SETTORE
+        # ==========================================
+        # Riga di divisione (Unisce tutte le celle)
+        row_set_title = t7.add_row().cells
+        row_set_title[0].merge(row_set_title[4])
+        row_set_title[0].text = "MEDIANA DI SETTORE"
+        row_set_title[0].paragraphs[0].runs[0].bold = True
+        row_set_title[0].paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+        
+        # Sfondo grigio tenue per il titolo del settore
+        shd_set = parse_xml(r'<w:shd %s w:val="clear" w:color="auto" w:fill="F2F2F2"/>' % nsdecls('w'))
+        row_set_title[0]._tc.get_or_add_tcPr().append(shd_set)
+
+        # Inserimento metriche Settore
+        for nome_metrica, _ in metriche:
+            row_sett = t7.add_row().cells
+            row_sett[0].text = nome_metrica
+            row_sett[0].paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+            
+            for i, val in enumerate(dati_settore[nome_metrica]):
+                testo_val = f"{val:.2f}%".replace('.', ',') if pd.notna(val) else "N.D."
+                row_sett[i+1].text = testo_val
+                # Numeri allineati rigorosamente a destra
+                row_sett[i+1].paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
+
+        context['tabella_7_dinamica'] = sd_tab7
 
     # 3. GENERAZIONE GRAFICI (Matplotlib)
     def genera_grafico_barre_impilate(dati, titolo):
@@ -2783,7 +2866,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
         aggiungi_watermark_fig(fig, modalita_teaser) # <--- AGGIUNGI ", modalita_teaser"
 
-        plt.savefig(mem_img, format='png', dpi=300, bbox_inches='tight')
+        plt.savefig(mem_img, format='png', dpi=(150 if modalita_teaser else 300), bbox_inches='tight')
         plt.close(fig)
         mem_img.seek(0)
         return mem_img
@@ -2875,7 +2958,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
         aggiungi_watermark_fig(fig, modalita_teaser) # <--- AGGIUNGI ", modalita_teaser"
 
-        plt.savefig(mem_img, format='png', dpi=300, bbox_inches='tight')
+        plt.savefig(mem_img, format='png', dpi=(150 if modalita_teaser else 300), bbox_inches='tight')
         plt.close(fig)
         mem_img.seek(0)
         return mem_img
@@ -2931,7 +3014,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
         aggiungi_watermark_fig(fig, modalita_teaser) # <--- AGGIUNGI ", modalita_teaser"
         
-        plt.savefig(mem_img, format='png', dpi=300, bbox_inches='tight')
+        plt.savefig(mem_img, format='png', dpi=(150 if modalita_teaser else 300), bbox_inches='tight')
         plt.close(fig)
         mem_img.seek(0)
         return mem_img
@@ -3526,69 +3609,82 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
 
     # 1. Funzione intelligente per calcolare e formattare i terzili di una colonna
-    def calcola_terzili(df, col_name):
+    # NOTA: la numerazione dei terzili segue il "terzile di merito" (1° = migliore, 3° = peggiore),
+    # coerente con il motore di rating (punteggio_diretto/punteggio_inverso più sopra).
+    # Per le variabili dirette (valore più alto = performance migliore) il 1° terzile è quindi il
+    # terzo SUPERIORE della distribuzione (ordine decrescente). Il Gearing è l'unica variabile
+    # inversa (valore più basso = performance migliore): per coerenza il suo 1° terzile resta il
+    # terzo INFERIORE della distribuzione (ordine crescente).
+    def calcola_terzili(df, col_name, inverso=False):
         if col_name not in df.columns:
             return ["N.D.", "N.D.", "N.D."]
-        
+
         # Prendiamo solo i dati validi (senza NaN)
         s = df[col_name].dropna()
         if s.empty:
             return ["N.D.", "N.D.", "N.D."]
-            
+
         vmin = s.min()
         v33 = s.quantile(0.3333)
         v66 = s.quantile(0.6666)
         vmax = s.max()
-        
+
         # Funzione per formattare i numeri in stile italiano (1.234,56)
         def fmt(val):
             return f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
-        # Creazione delle tre stringhe per i terzili
-        t1 = f"[{fmt(vmin)} - {fmt(v33)})"
-        t2 = f"[{fmt(v33)} - {fmt(v66)})"
-        t3 = f"[{fmt(v66)} - {fmt(vmax)}]"
-        
-        return [t1, t2, t3]
+        fascia_bassa = f"[{fmt(vmin)} - {fmt(v33)})"
+        fascia_media = f"[{fmt(v33)} - {fmt(v66)})"
+        fascia_alta = f"[{fmt(v66)} - {fmt(vmax)}]"
+
+        if inverso:
+            # Gearing: 1° terzile (Best) = valori più bassi
+            return [fascia_bassa, fascia_media, fascia_alta]
+        else:
+            # Variabili dirette: 1° terzile (Best) = valori più alti
+            return [fascia_alta, fascia_media, fascia_bassa]
 
     # Funzione per costruire dinamicamente le tabelle Word dei terzili
-    def crea_tabella_terzili(doc, headers, col_names_orbis):
+    def crea_tabella_terzili(doc, headers, col_names_orbis, colonne_inverse=None):
+        colonne_inverse = colonne_inverse or []
         sd = doc.new_subdoc()
         t = sd.add_table(rows=4, cols=4)
         t.style = 'Table Grid'
-        
+
         # Intestazioni (Riga 0)
         t.cell(0, 0).text = "Terzili"
         t.cell(0, 0).paragraphs[0].runs[0].bold = True
         for i, h in enumerate(headers):
             t.cell(0, i+1).text = h
             t.cell(0, i+1).paragraphs[0].runs[0].bold = True
-            
+
         # Nomi delle righe
-        t.cell(1, 0).text = "1°"
-        t.cell(2, 0).text = "2°"
-        t.cell(3, 0).text = "3°"
-        
+        t.cell(1, 0).text = "1° (Best)"
+        t.cell(2, 0).text = "2° (Average)"
+        t.cell(3, 0).text = "3° (Worst)"
+        for r in (1, 2, 3):
+            t.cell(r, 0).paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
         # Popolamento dati incrociati
         for i, col_name in enumerate(col_names_orbis):
-            fasce = calcola_terzili(df_orbis, col_name)
+            fasce = calcola_terzili(df_orbis, col_name, inverso=(col_name in colonne_inverse))
             t.cell(1, i+1).text = fasce[0]
             t.cell(2, i+1).text = fasce[1]
             t.cell(3, i+1).text = fasce[2]
-            
+
         return sd
 
-    # --- Creazione Tabella 1 (Profitto, EBITDA, EBIT) ---
+    # --- Creazione Tabella 1 (Profitto, EBITDA, EBIT) --- tutte variabili dirette
     headers_t1 = ['Margine di profitto', 'Margine EBITDA', 'Margine EBIT']
     colonne_t1 = [f"{col_base_profitto} 2024", f"{col_base_ebitda} 2024", f"{col_base_ebit} 2024"]
     context['tabella_terzili_1'] = crea_tabella_terzili(doc, headers_t1, colonne_t1)
 
-    # --- Creazione Tabella 2 (Struttura 1°, Struttura 2°, Gearing) ---
+    # --- Creazione Tabella 2 (Struttura 1°, Struttura 2°, Gearing) --- Gearing è inversa
     headers_t2 = ['Indice Struttura 1° Livello', 'Indice Struttura 2° Livello', 'Indice Gearing']
     colonne_t2 = [f"{col_base_strut1} 2024", f"{col_base_strut2} 2024", f"{col_base_gearing} 2024"]
-    context['tabella_terzili_2'] = crea_tabella_terzili(doc, headers_t2, colonne_t2)
+    context['tabella_terzili_2'] = crea_tabella_terzili(doc, headers_t2, colonne_t2, colonne_inverse=[f"{col_base_gearing} 2024"])
 
-    # --- Creazione Tabella 3 (Rotazione, Quick, Current) ---
+    # --- Creazione Tabella 3 (Rotazione, Quick, Current) --- tutte variabili dirette
     headers_t3 = ['Indice Rotazione Cap.Inv.', 'Quick Ratio', 'Current Ratio']
     colonne_t3 = [f"{col_base_rotazione} 2024", f"{col_base_qr} 2024", f"{col_base_cr} 2024"]
     context['tabella_terzili_3'] = crea_tabella_terzili(doc, headers_t3, colonne_t3)
@@ -3865,7 +3961,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # --- INDENTAZIONE AUTOMATICA DEI TESTI DISCORSIVI ---
     chiavi_narrative = [
         'descr_rating_tot', 'descr_rating_eco', 'descr_rating_patr', 'descr_rating_fin', 'descr_sintesi',
-        'intro_benchmark_eco', 'intro_benchmark_patr', 'intro_benchmark_fin', 'analisi_combinata', 
+        'intro_benchmark_eco', 'intro_benchmark_patr', 'intro_benchmark_fin', 'intro_margini', 'analisi_combinata',
         'intro_divario_strutturale', 'sintesi_quadriennio_patr', 'sintesi_modello_operativo_fin',
         'analisi_margini_operativi', 'analisi_margine_profitto', 'analisi_indici_struttura', 'analisi_gearing',
         'analisi_rotazione', 'analisi_current_ratio', 'analisi_quick_ratio', 'analisi_posizionamento_fin',
@@ -3999,14 +4095,21 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                 if valore_reale not in ["N.D.", "n.d.", "-", "", "0", "0,00", "0.0", "0.00"]:
                     valori_da_sostituire.append(valore_reale)
                 
-        chiavi_discorsive = ['analisi_trend_ebitda', 'impatto_territoriale']
+        # NOTA: la censura testuale non si limita più a un elenco fisso di 2 chiavi
+        # ('analisi_trend_ebitda', 'impatto_territoriale'), che lasciava scoperte
+        # decine di altre frasi narrative (bullet di benchmark, trend storici) che
+        # riportano gli stessi valori sensibili in chiaro. Ora la sostituzione per
+        # sottostringa viene applicata a QUALSIASI valore di testo residuo nel
+        # context (le chiavi già svuotate sopra vengono escluse perché non serve
+        # ripassarle), così da coprire anche eventuali nuove funzioni narrative
+        # aggiunte in futuro senza dover aggiornare manualmente un elenco.
+        chiavi_discorsive = [k for k in context if k not in variabili_sensibili and isinstance(context[k], str)]
         for k in chiavi_discorsive:
-            if k in context:
-                testo_normale = str(context[k])
-                for val in valori_da_sostituire:
-                    if len(val) >= 2: 
-                        testo_normale = testo_normale.replace(val, testo_censura_sicuro)
-                context[k] = testo_normale
+            testo_normale = context[k]
+            for val in valori_da_sostituire:
+                if len(val) >= 2:
+                    testo_normale = testo_normale.replace(val, testo_censura_sicuro)
+            context[k] = testo_normale
 
     # Ora genera il documento in totale sicurezza! (Renderizza il testo crudo)
     doc.render(context)
@@ -4085,7 +4188,267 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     output_word = migliora_layout(output_word)
 
+    # =================================================================
+    # 📐 POST-PROCESSOR: Corregge i riquadri fluttuanti degli indicatori
+    # (Equilibrio Economico/Patrimoniale/Finanziario) che si accavallano
+    # =================================================================
+    output_word = correggi_riquadri_indicatori(output_word)
+
+    # =================================================================
+    # 📐 POST-PROCESSOR: Allinea i 3 box KPI dell'Executive Summary
+    # (Totale Valore Produzione / Totale Attivo / Forza Lavoro)
+    # =================================================================
+    output_word = correggi_box_kpi_executive_summary(output_word)
+
     return output_word
+
+
+def correggi_box_kpi_executive_summary(output_buffer):
+    """
+    Allinea i 3 box KPI dell'Executive Summary (Totale Valore Produzione,
+    Totale Attivo, Forza Lavoro), ciascuno una tabella a una cella separata
+    sovrapposta a un'unica immagine di sfondo fissa.
+
+    Nel template il rientro (w:ind) del testo dentro le 3 celle era stato
+    modificato a mano in modo scalare (641 -> 1379 -> 2099 twips), quindi il
+    testo appariva sempre piu' spostato a destra passando da un box al
+    successivo. Il box "Forza Lavoro", inoltre, teneva titolo e valore nello
+    stesso paragrafo separati da un a-capo manuale (w:br) invece che in due
+    paragrafi distinti come gli altri due: lo spazio sotto al titolo dipende
+    percio' dall'interlinea invece che dalla spaziatura del paragrafo, e
+    risultava diverso dagli altri due box.
+
+    La funzione:
+    - separa titolo e valore del box "Forza Lavoro" in due paragrafi come
+      negli altri due box, cosi' la spaziatura sotto al titolo e' generata
+      allo stesso modo in tutti e 3;
+    - riporta il rientro del paragrafo-titolo (solo sinistro) e dei paragrafi
+      di valore/descrizione (sinistro + destro, per contenere la larghezza
+      del testo dentro il riquadro) alla stessa misura in tutti e 3 i box,
+      usando come riferimento i valori del primo box (il meno alterato).
+    """
+    INDENT_LEFT = 641          # rientro sinistro del testo, uguale per tutti e 3 i box
+    INDENT_RIGHT_VALORE = 4239  # rientro destro delle righe di valore/descrizione, per non sforare il riquadro
+
+    def _separa_titolo_valore(paragrafo):
+        """Se il paragrafo contiene un a-capo manuale (w:br), sposta tutto cio' che
+        viene dopo in un nuovo paragrafo, cosi' titolo e valore hanno ciascuno la
+        propria spaziatura di paragrafo invece di dipendere dall'interlinea."""
+        p_el = paragrafo._p
+        run_break = None
+        for r in p_el.findall(qn('w:r')):
+            if r.findall(qn('w:br')):
+                run_break = r
+                break
+        if run_break is None:
+            return
+
+        parent = p_el.getparent()
+        idx = list(parent).index(p_el)
+
+        nuovo_p = OxmlElement('w:p')
+        pPr_orig = p_el.find(qn('w:pPr'))
+        if pPr_orig is not None:
+            nuovo_p.append(copy.deepcopy(pPr_orig))
+
+        tutti_i_run = p_el.findall(qn('w:r'))
+        pos_break = tutti_i_run.index(run_break)
+        for r in tutti_i_run[pos_break:]:
+            p_el.remove(r)
+            if r is not run_break:  # il run col solo <w:br> non serve piu': il confine ora e' il paragrafo
+                nuovo_p.append(r)
+
+        parent.insert(idx + 1, nuovo_p)
+
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+
+    prefissi = ('Totale Valore Produzione', 'Totale Attivo', 'Forza Lavoro')
+    for t in doc.tables:
+        primo_testo = t.rows[0].cells[0].text.strip()
+        if not any(primo_testo.startswith(pref) for pref in prefissi):
+            continue
+
+        cell = t.rows[0].cells[0]
+        _separa_titolo_valore(cell.paragraphs[0])
+
+        for i, p in enumerate(cell.paragraphs):
+            pPr = p._p.find(qn('w:pPr'))
+            if pPr is None:
+                pPr = OxmlElement('w:pPr')
+                p._p.insert(0, pPr)
+            ind = pPr.find(qn('w:ind'))
+            if ind is None:
+                ind = OxmlElement('w:ind')
+                pPr.append(ind)
+            ind.set(qn('w:left'), str(INDENT_LEFT))
+            if i == 0:
+                # titolo: solo rientro sinistro, larghezza piena per il testo del titolo
+                if ind.get(qn('w:right')) is not None:
+                    del ind.attrib[qn('w:right')]
+            else:
+                ind.set(qn('w:right'), str(INDENT_RIGHT_VALORE))
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
+
+
+def correggi_riquadri_indicatori(output_buffer):
+    """
+    Corregge la spaziatura verticale dei gruppi di 3 riquadri fluttuanti
+    (etichetta + descrizione) usati per gli indicatori di Equilibrio
+    Economico/Patrimoniale/Finanziario. Nel template questi 3 riquadri sono
+    impilati con appena ~6-7pt di margine l'uno dall'altro: il testo statico
+    che contengono impagina anche di poco oltre l'altezza dichiarata (cy) e
+    si accavallano fra loro. Il paragrafo che li ancora, inoltre, non
+    riserva la propria altezza come farebbe un paragrafo normale: se cade a
+    ridosso del fondo pagina il gruppo puo' "spaccarsi" fra due pagine invece
+    di scendere in blocco alla pagina successiva.
+
+    I gruppi si riconoscono genericamente (non per indice fisso) cercando
+    paragrafi con 3+ forme ancorate "relativeFrom=paragraph" della stessa
+    larghezza (le card indicatore condividono tutte cx ~6306820 EMU): questo
+    esclude altri gruppi da 3 forme presenti nel documento (es. il diagramma
+    dei terzili A/B/C) che hanno larghezze diverse fra loro e non c'entrano.
+
+    Per ogni gruppo trovato:
+    - allarga il gap fra i riquadri e aggiunge un margine di sicurezza alla
+      loro altezza dichiarata, cosi' non si toccano piu';
+    - se il paragrafo che li ancora porta anche testo reale (es. l'intro
+      dell'Equilibrio Finanziario, che varia in lunghezza per azienda), le
+      forme vengono spostate su un paragrafo dedicato SEMPRE vuoto inserito
+      subito dopo: un paragrafo non fa scorrere le proprie righe attorno a
+      una forma ancorata a se stesso, quindi se il testo dinamico va su piu'
+      righe finisce sotto/dentro le forme invece di scorrervi attorno — le
+      forme vanno ancorate a un paragrafo che non ha mai testo proprio;
+    - riserva l'ingombro reale del gruppo con un'altezza di riga esatta sul
+      paragrafo-ancora (ora sempre vuoto). Un paragrafo ad altezza esatta e'
+      un blocco atomico per Word: se non c'e' spazio a sufficienza in fondo
+      pagina scende TUTTO alla pagina successiva invece di spaccarsi a meta';
+    - riduce lo spazio "before" riservato a mano sul paragrafo successivo
+      quando e' spropositato (calibrato sull'altezza originale dei riquadri,
+      ora ridondante dato che ci pensa la riserva appena creata) cosi' non
+      resta piu' pagina con troppo spazio vuoto in eccesso.
+    """
+    CX_MIN, CX_MAX = 6000000, 6600000  # larghezza tipica delle card indicatore (~6.9in)
+    GAP_EMU = 16 * 12700        # gap fra un riquadro e il successivo dello stesso gruppo
+    MARGINE_EMU = 14 * 12700    # margine di sicurezza aggiunto all'altezza dichiarata di ciascun riquadro
+    SOGLIA_BEFORE_HACK = 1000   # ventesimi di punto (=50pt): oltre questa soglia il "before" del
+                                 # paragrafo successivo e' quasi certamente il vecchio spaziatore
+                                 # calibrato a mano sull'altezza dei riquadri (ora ridondante)
+
+    def _run_antenato(el):
+        """Risale dalla forma ancorata al suo <w:r> contenitore, per poterlo spostare intero."""
+        nodo = el
+        while nodo is not None:
+            if nodo.tag == qn('w:r'):
+                return nodo
+            nodo = nodo.getparent()
+        return None
+
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+
+    i = 0
+    while i < len(doc.paragraphs):
+        paragrafi = doc.paragraphs
+        p = paragrafi[i]
+
+        gruppo = []
+        for drawing in p._p.findall('.//' + qn('w:drawing')):
+            anchor = drawing.find(qn('wp:anchor'))
+            if anchor is None:
+                continue
+            posv = anchor.find(qn('wp:positionV'))
+            extent = anchor.find(qn('wp:extent'))
+            if posv is None or extent is None or posv.get('relativeFrom') != 'paragraph':
+                continue
+            cx = int(extent.get('cx'))
+            if not (CX_MIN <= cx <= CX_MAX):
+                continue
+            offset_el = posv.find(qn('wp:posOffset'))
+            if offset_el is None:
+                continue
+            gruppo.append({
+                'offset_el': offset_el, 'extent_el': extent,
+                'run_el': _run_antenato(drawing),
+                'top': int(offset_el.text), 'cy': int(extent.get('cy')),
+            })
+
+        if len(gruppo) < 3:
+            i += 1
+            continue  # ci interessano solo i gruppi da 3 card indicatore (Economico/Patrimoniale/Finanziario)
+
+        gruppo.sort(key=lambda g: g['top'])
+
+        # Riimpila i riquadri con un gap piu' ampio e un margine di sicurezza sull'altezza
+        running_top = gruppo[0]['top']
+        for box in gruppo:
+            box['new_top'] = running_top
+            box['new_cy'] = box['cy'] + MARGINE_EMU
+            running_top = box['new_top'] + box['new_cy'] + GAP_EMU
+            box['offset_el'].text = str(box['new_top'])
+            box['extent_el'].set('cy', str(box['new_cy']))
+
+        # Ingombro reale del gruppo, da riservare come blocco atomico
+        fondo_gruppo_emu = gruppo[-1]['new_top'] + gruppo[-1]['new_cy']
+        altezza_riserva_ventesimi = int((fondo_gruppo_emu + 6 * 12700) / 635)
+
+        if p.text.strip():
+            # Il paragrafo-ancora porta anche testo reale (es. l'introduzione
+            # dell'Equilibrio Finanziario, che varia in lunghezza per azienda): un
+            # paragrafo non fa scorrere le proprie righe attorno a una forma ancorata
+            # a se stesso, quindi se il testo va su piu' righe finisce sotto/dentro le
+            # forme. Le spostiamo su un nuovo paragrafo dedicato, sempre vuoto, subito
+            # dopo: i paragrafi successivi vi scorreranno attorno correttamente.
+            nuovo_p = OxmlElement('w:p')
+            pPr_new = OxmlElement('w:pPr')
+            spacing_new = OxmlElement('w:spacing')
+            spacing_new.set(qn('w:before'), '0')
+            spacing_new.set(qn('w:after'), '0')
+            spacing_new.set(qn('w:line'), str(altezza_riserva_ventesimi))
+            spacing_new.set(qn('w:lineRule'), 'exact')
+            pPr_new.append(spacing_new)
+            nuovo_p.append(pPr_new)
+            p._p.addnext(nuovo_p)
+            for box in gruppo:
+                if box['run_el'] is not None:
+                    nuovo_p.append(box['run_el'])  # lxml sposta il nodo, non lo duplica
+            idx_successivo = i + 2  # dopo il nuovo paragrafo-ancora
+        else:
+            pPr = p._p.find(qn('w:pPr'))
+            if pPr is None:
+                pPr = OxmlElement('w:pPr')
+                p._p.insert(0, pPr)
+            spacing = pPr.find(qn('w:spacing'))
+            if spacing is None:
+                spacing = OxmlElement('w:spacing')
+                pPr.append(spacing)
+            spacing.set(qn('w:line'), str(altezza_riserva_ventesimi))
+            spacing.set(qn('w:lineRule'), 'exact')
+            idx_successivo = i + 1
+
+        # Il paragrafo successivo aveva talvolta un "before" enorme, calibrato a mano
+        # sull'altezza originale dei riquadri per non scriverci sopra: ora che la
+        # riserva sopra e' corretta, quel valore e' ridondante e produce solo troppo
+        # spazio vuoto in eccesso -> lo si riporta a una spaziatura normale.
+        paragrafi = doc.paragraphs
+        if idx_successivo < len(paragrafi):
+            succ_pPr = paragrafi[idx_successivo]._p.find(qn('w:pPr'))
+            if succ_pPr is not None:
+                succ_spacing = succ_pPr.find(qn('w:spacing'))
+                if succ_spacing is not None and succ_spacing.get(qn('w:before')):
+                    if int(succ_spacing.get(qn('w:before'))) > SOGLIA_BEFORE_HACK:
+                        succ_spacing.set(qn('w:before'), '120')
+
+        i += 1
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
 
 
 def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
@@ -4343,8 +4706,6 @@ def migliora_layout(output_buffer):
     # ================================================================
     # 1. Heading vuoti → Normal + page break + keepWithNext
     # ================================================================
-    first_real_heading_done = False
-
     for p in doc.paragraphs:
         style = p.style.name
         text = p.text.strip()
@@ -4364,12 +4725,9 @@ def migliora_layout(output_buffer):
             old_pb = pPr.find(qn('w:pageBreakBefore'))
             if old_pb is not None:
                 pPr.remove(old_pb)
-            if first_real_heading_done:
-                pb = OxmlElement('w:pageBreakBefore')
-                pb.set(qn('w:val'), 'true')
-                pPr.insert(0, pb)
-            else:
-                first_real_heading_done = True
+            pb = OxmlElement('w:pageBreakBefore')
+            pb.set(qn('w:val'), 'true')
+            pPr.insert(0, pb)
             kwn = pPr.find(qn('w:keepNext'))
             if kwn is None:
                 kwn = OxmlElement('w:keepNext')
@@ -4429,6 +4787,26 @@ def migliora_layout(output_buffer):
         if not rows:
             continue
 
+        # Evita che una singola riga venga spezzata tra due pagine, e che la tabella
+        # venga divisa a metà tra due pagine: ogni riga (tranne l'ultima) resta
+        # agganciata alla successiva, cosi' se non c'è spazio l'intera tabella
+        # passa alla pagina seguente invece di spezzarsi a metà.
+        for idx_row, row in enumerate(rows):
+            trPr = row.find(qn('w:trPr'))
+            if trPr is None:
+                trPr = OxmlElement('w:trPr')
+                row.insert(0, trPr)
+            if trPr.find(qn('w:cantSplit')) is None:
+                trPr.append(OxmlElement('w:cantSplit'))
+            if idx_row < len(rows) - 1:
+                for para in row.findall('.//' + qn('w:p')):
+                    pPr = para.find(qn('w:pPr'))
+                    if pPr is None:
+                        pPr = OxmlElement('w:pPr')
+                        para.insert(0, pPr)
+                    if pPr.find(qn('w:keepNext')) is None:
+                        pPr.append(OxmlElement('w:keepNext'))
+
         num_cols = 0
         for cell in rows[0].findall(qn('w:tc')):
             tcPr = cell.find(qn('w:tcPr'))
@@ -4458,8 +4836,151 @@ def migliora_layout(output_buffer):
     for p in doc.paragraphs:
         if p.style.name == 'Body Text' and p.text.strip():
              for run in p.runs:
-                if run.font.size is None or run.font.size >= Pt(12):
-                    run.font.size = Pt(11)
+                if run.text.strip() and run.font.size != Pt(10):
+                    run.font.size = Pt(10)
+             # Solo i paragrafi abbastanza lunghi da andare su 3+ righe vengono
+             # giustificati: su paragrafi corti (1-2 righe) la giustificazione
+             # tende a "stirare" vistosamente le parole dell'unica riga non finale.
+             if len(p.text.strip()) >= 200 and p.paragraph_format.alignment is None:
+                 p.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+
+    # ================================================================
+    # Normalizza gli spazi tra i contenuti: esattamente 2 paragrafi vuoti
+    # tra un blocco e l'altro, 0 prima di ogni capitolo (Heading 1, che ha
+    # gia' la sua interruzione di pagina). Copre anche i paragrafi vuoti
+    # residui lasciati dai subdoc di tabelle/grafici dopo il rendering.
+    # ================================================================
+    def _is_blank(p):
+        if p.text.strip():
+            return False
+        if p._p.findall('.//' + qn('w:drawing')):
+            return False
+        if p._p.findall('.//' + qn('w:tbl')):
+            return False
+        return True
+
+    TOC_STYLES = {'toc 1', 'toc 2', 'toc 3', 'TOC 1', 'TOC 2', 'TOC 3'}
+    paragrafi_norm = doc.paragraphs
+    n_norm = len(paragrafi_norm)
+    cover_page_end = 0
+    appendice_start = n_norm
+    exec_box_start = None
+    exec_box_end = None
+    for idx, pp in enumerate(paragrafi_norm):
+        if pp.text.strip() == 'Sommario':
+            cover_page_end = idx
+        if pp.text.strip().startswith('Formalmente costituita') and exec_box_start is None:
+            exec_box_start = idx
+        if pp.text.strip().startswith('Con questo risultato') and exec_box_start is not None and exec_box_end is None:
+            exec_box_end = idx
+        if pp.text.strip() == 'Appendice' and pp.style.name == 'Heading 1':
+            appendice_start = idx
+            break
+
+    # L'Appendice (formule) ha spaziature/rientri calibrati a mano per l'allineamento
+    # visivo delle frazioni: non va normalizzata, altrimenti si sfasa.
+    # Lo stesso vale per i 3 box "Totale Valore Produzione/Attivo/Forza Lavoro" in
+    # Executive Summary: sono testo sovrapposto a un'unica immagine di sfondo fissa.
+    i = cover_page_end + 1
+    norm_actions = []
+    while i < appendice_start:
+        if _is_blank(paragrafi_norm[i]):
+            start = i
+            j = i
+            while j < n_norm and _is_blank(paragrafi_norm[j]):
+                j += 1
+            end = j - 1
+            before_p = paragrafi_norm[start - 1] if start - 1 >= 0 else None
+            after_p = paragrafi_norm[end + 1] if end + 1 < n_norm else None
+            before_style = before_p.style.name if before_p is not None else None
+            after_style = after_p.style.name if after_p is not None else None
+            after_text = after_p.text.strip() if after_p is not None else ''
+            after_is_h1 = (after_p is not None and after_style == 'Heading 1' and after_text)
+            # I riquadri annotati (icona/box grafici con offset verticale negativo) hanno
+            # bisogno di uno spazio di sicurezza calibrato sulla loro altezza: non toccare
+            # il gap subito prima o subito dopo un paragrafo con 2+ forme ancorate.
+            before_has_multi_drawing = (
+                before_p is not None
+                and len(before_p._p.findall('.//' + qn('w:drawing'))) >= 2
+            )
+            after_has_multi_drawing = (
+                after_p is not None
+                and len(after_p._p.findall('.//' + qn('w:drawing'))) >= 2
+            )
+            in_exec_box_zone = (
+                exec_box_start is not None and exec_box_end is not None
+                and exec_box_start <= start <= exec_box_end
+            )
+
+            if before_style in TOC_STYLES or after_style in TOC_STYLES:
+                target = None
+            elif before_has_multi_drawing or after_has_multi_drawing:
+                target = None
+            elif in_exec_box_zone:
+                target = None
+            elif after_is_h1:
+                target = 0
+            else:
+                target = 2
+            norm_actions.append((start, end, target))
+            i = j
+        else:
+            i += 1
+
+    for start, end, target in reversed(norm_actions):
+        if target is None:
+            continue
+        current_len = end - start + 1
+        run_ps = [paragrafi_norm[k] for k in range(start, end + 1)]
+        if target < current_len:
+            for p_rm in run_ps[:current_len - target]:
+                p_el = p_rm._p
+                p_el.getparent().remove(p_el)
+        elif target > current_len:
+            anchor = run_ps[-1]._p if run_ps else None
+            if anchor is not None:
+                pPr_tpl = run_ps[0]._p.find(qn('w:pPr'))
+                for _ in range(target - current_len):
+                    new_p = OxmlElement('w:p')
+                    if pPr_tpl is not None:
+                        new_p.append(copy.deepcopy(pPr_tpl))
+                    anchor.addnext(new_p)
+                    anchor = new_p
+
+    # ================================================================
+    # Mantieni assieme le didascalie (Tabella/Figura) con tabelle e immagini,
+    # cosi' non restano orfane su una pagina separata dal contenuto a cui si riferiscono
+    # ================================================================
+    def _set_keep_next(paragraph):
+        pPr = paragraph._p.find(qn('w:pPr'))
+        if pPr is None:
+            pPr = OxmlElement('w:pPr')
+            paragraph._p.insert(0, pPr)
+        if pPr.find(qn('w:keepNext')) is None:
+            pPr.append(OxmlElement('w:keepNext'))
+
+    paragrafi = doc.paragraphs
+    n_par = len(paragrafi)
+    for i, p in enumerate(paragrafi):
+        testo = p.text.strip()
+        if re.match(r'^Tabella\s+\d', testo):
+            # La didascalia precede la tabella: resta assieme ai paragrafi vuoti
+            # che la separano dalla tabella (senza oltrepassarla)
+            _set_keep_next(p)
+            j = i + 1
+            while j < n_par and not paragrafi[j].text.strip():
+                _set_keep_next(paragrafi[j])
+                j += 1
+        elif re.match(r'^Figura\s+\d', testo):
+            # La didascalia segue l'immagine: risali fino al paragrafo con l'immagine
+            j = i - 1
+            while j >= 0:
+                pj = paragrafi[j]
+                _set_keep_next(pj)
+                ha_immagine = bool(pj._p.findall('.//' + qn('w:drawing')))
+                if pj.text.strip() or ha_immagine:
+                    break
+                j -= 1
   
     # Remove hyperlink character style from TOC entries
    # Remove hyperlinks from TOC by unwrapping w:hyperlink elements

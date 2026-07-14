@@ -138,12 +138,82 @@ def replace_placeholder_with_picture(slide, placeholder_text, image_stream):
         sp = shape_da_eliminare.element
         sp.getparent().remove(sp)
 
+def get_trend_style(trend_word):
+    """Icona e colore coerenti col verso del trend, usati nei box commento dei grafici andamento"""
+    if trend_word in ('in crescita', 'in miglioramento'):
+        return '▲', '16A34A'   # verde
+    if trend_word in ('in contrazione', 'in peggioramento'):
+        return '▼', 'DC2626'   # rosso
+    return '●', '64748B'       # grigio (stabile)
+
+def formatta_box_commento_grafico(slide, placeholder, icona_metrica, titolo, trend_word, testo):
+    """Trasforma il box {{commento_grafico_*}} da testo piatto e centrato in una card leggibile:
+    barra colorata in alto (coerente col trend) + icona della metrica + titolo per esteso
+    (a capo centrato se lungo) + badge trend + testo di analisi."""
+    from pptx.dml.color import RGBColor
+    from pptx.util import Pt, Emu
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    from pptx.enum.shapes import MSO_SHAPE
+
+    shape, coords = get_shape_and_coords(slide.shapes, placeholder)
+    if not shape or not coords:
+        return
+    left, top, width, height = coords
+
+    icona_trend, colore_hex = get_trend_style(trend_word)
+    colore = RGBColor.from_string(colore_hex)
+
+    # Barra accento in cima alla card, colorata in base al verso del trend
+    barra = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, Emu(45720))
+    barra.fill.solid()
+    barra.fill.fore_color.rgb = colore
+    barra.line.fill.background()
+    barra.shadow.inherit = False
+
+    tf = shape.text_frame
+    tf.clear()
+    tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+    # Icona grande della metrica: riempie lo spazio vuoto della card e la rende identificabile a colpo d'occhio
+    p_icona = tf.paragraphs[0]
+    p_icona.alignment = PP_ALIGN.CENTER
+    p_icona.space_after = Pt(10)
+    r_icona = p_icona.add_run()
+    r_icona.text = icona_metrica
+    r_icona.font.size = Pt(44)
+
+    p_titolo = tf.add_paragraph()
+    p_titolo.alignment = PP_ALIGN.CENTER
+    p_titolo.space_after = Pt(8)
+    r_titolo = p_titolo.add_run()
+    r_titolo.text = titolo.upper()
+    r_titolo.font.bold = True
+    r_titolo.font.size = Pt(18)
+    r_titolo.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
+
+    p_badge = tf.add_paragraph()
+    p_badge.alignment = PP_ALIGN.CENTER
+    p_badge.space_after = Pt(14)
+    r_badge = p_badge.add_run()
+    r_badge.text = f"{icona_trend}  {trend_word.capitalize()}"
+    r_badge.font.bold = True
+    r_badge.font.size = Pt(16)
+    r_badge.font.color.rgb = colore
+
+    p_corpo = tf.add_paragraph()
+    p_corpo.alignment = PP_ALIGN.CENTER
+    r_corpo = p_corpo.add_run()
+    r_corpo.text = testo
+    r_corpo.font.size = Pt(14)
+    r_corpo.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+
 # =================================================================
 # 🤖 MOTORE NARRATIVO PER POWERPOINT
 # =================================================================
 
 def get_short_eco(rating):
-    if rating == 'A': return "L'azienda si posiziona oltre il 2° terzile, sbaragliando la media dei competitor. Esprime una capacità superiore di generare profitti operativi."
+    if rating == 'A': return "L'azienda si posiziona oltre il 2° terzile, superando la media dei competitor. Esprime una buona capacità di generare profitti operativi."
     elif rating == 'B': return "Performance in linea con il mercato. La marginalità è adeguata, con fisiologici spazi di ottimizzazione."
     return "Valori inferiori al 1° terzile. I costi comprimono la marginalità operativa rispetto agli standard di settore, richiedendo un intervento."
 
@@ -158,13 +228,13 @@ def get_short_fin(rating):
     return "Criticità nella solvibilità a breve. Liquidità vincolata e potenziale tensione operativa sui pagamenti correnti."
 
 def get_bullet_nazionale(rat_eco, rat_patr, rat_fin):
-    b1 = "Si distingue positivamente per un'eccellente redditività operativa." if rat_eco == 'A' else ("Mantiene un posizionamento economico strutturalmente competitivo nel panel." if rat_eco == 'B' else "Mostra una debolezza nella redditività operativa rispetto al panel nazionale.")
-    b2 = "Capitalizzazione solida e totale indipendenza finanziaria dai terzi." if rat_patr == 'A' else ("Struttura delle fonti equilibrata e in linea con le medie del settore." if rat_patr == 'B' else "Mostra una fragilità patrimoniale rispetto ai top performer del settore.")
-    
+    b1 = "Si distingue per una buona redditività operativa rispetto al panel nazionale." if rat_eco == 'A' else ("Mantiene un posizionamento economico strutturalmente competitivo nel panel." if rat_eco == 'B' else "Mostra una debolezza nella redditività operativa rispetto al panel nazionale.")
+    b2 = "Capitalizzazione solida e buona indipendenza finanziaria dai terzi." if rat_patr == 'A' else ("Struttura delle fonti equilibrata e in linea con le medie del settore." if rat_patr == 'B' else "Mostra una fragilità patrimoniale rispetto ai top performer del settore.")
+
     if rat_patr == 'C':
         b3 = "Margini di miglioramento focalizzati sul contenimento dell'indebitamento."
     elif rat_fin == 'A':
-        b3 = "Eccellente capacità di generazione di cassa e liquidità immediata."
+        b3 = "Buona capacità di generazione di cassa e liquidità immediata."
     elif rat_fin == 'B':
         b3 = "Solvibilità a breve termine adeguata e gestione della cassa bilanciata."
     else:
@@ -172,9 +242,9 @@ def get_bullet_nazionale(rat_eco, rat_patr, rat_fin):
     return b1, b2, b3
 
 def get_bullet_regionale(rat_eco, rat_patr, rat_fin):
-    b1 = "Si conferma tra le società più forti del territorio sul piano industriale." if rat_eco == 'A' else ("Rappresenta una solida realtà industriale all'interno del proprio territorio." if rat_eco == 'B' else "Necessita di recuperare competitività industriale all'interno del mercato locale.")
-    b2 = "Garantisce un'elevata flessibilità finanziaria rispetto ai competitor locali." if rat_fin == 'A' else ("Garantisce ottime performance e un equilibrio finanziario nel complesso discreto." if rat_fin == 'B' else "Dinamiche di liquidità meno elastiche rispetto alla media delle imprese regionali.")
-    b3 = "Vanta una struttura patrimoniale di assoluto riferimento a livello regionale." if rat_patr == 'A' else ("Allineamento fisiologico della struttura delle fonti rispetto ai competitor locali." if rat_patr == 'B' else "Evidenzia una minore capitalizzazione relativa rispetto ai competitor regionali più solidi.")
+    b1 = "Si posiziona tra le realtà più solide del territorio sul piano industriale." if rat_eco == 'A' else ("Rappresenta una solida realtà industriale all'interno del proprio territorio." if rat_eco == 'B' else "Necessita di recuperare competitività industriale all'interno del mercato locale.")
+    b2 = "Garantisce una buona flessibilità finanziaria rispetto ai competitor locali." if rat_fin == 'A' else ("Garantisce un equilibrio finanziario nel complesso adeguato." if rat_fin == 'B' else "Dinamiche di liquidità meno elastiche rispetto alla media delle imprese regionali.")
+    b3 = "Presenta una struttura patrimoniale di riferimento a livello regionale." if rat_patr == 'A' else ("Allineamento fisiologico della struttura delle fonti rispetto ai competitor locali." if rat_patr == 'B' else "Evidenzia una minore capitalizzazione relativa rispetto ai competitor regionali più solidi.")
     return b1, b2, b3
 
 def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
@@ -182,16 +252,180 @@ def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
     ordinate = sorted(voti.items(), key=lambda x: x[1])
     migliore = ordinate[0]
     peggiore = ordinate[-1]
-    
-    forza_titolo = f"Eccellenza in ambito {migliore[0]} (Classe {migliore[1]})"
-    forza_testo = f"L'azienda vanta un posizionamento di assoluta leadership nell'equilibrio {migliore[0].lower()}, garantendo stabilità strategica e vantaggio competitivo."
-    att_titolo = f"Vulnerabilità in ambito {peggiore[0]} (Classe {peggiore[1]})"
-    att_testo = f"Si rilevano le maggiori criticità nell'area di tipo {peggiore[0].lower()}. È prioritario concentrare le strategie di intervento e risanamento su questo fronte."
-    
+
+    # NOTA: il grado (A/B/C) del "migliore" e del "peggiore" va sempre verificato:
+    # se tutte e tre le aree condividono lo stesso rating, il "migliore" relativo
+    # non è necessariamente positivo (idem per il "peggiore"). Il testo deve
+    # riflettere il rating effettivo, non solo la posizione relativa tra le tre aree.
+    if migliore[1] == 'A':
+        forza_titolo = f"Punto di forza in ambito {migliore[0]} (Classe {migliore[1]})"
+        forza_testo = f"L'azienda presenta un posizionamento superiore alla mediana di settore nell'equilibrio {migliore[0].lower()}, a supporto della stabilità strategica."
+    elif migliore[1] == 'B':
+        forza_titolo = f"Area più solida: {migliore[0]} (Classe {migliore[1]})"
+        forza_testo = f"Rispetto alle altre due aree, l'equilibrio {migliore[0].lower()} risulta il più allineato ai parametri mediani di settore."
+    else:
+        forza_titolo = f"Area relativamente meno critica: {migliore[0]} (Classe {migliore[1]})"
+        forza_testo = f"Anche l'equilibrio {migliore[0].lower()}, pur essendo il meno critico tra i tre, si colloca al di sotto dei parametri mediani di settore: il quadro complessivo richiede attenzione su tutti i fronti."
+
+    if peggiore[1] == 'C':
+        att_titolo = f"Area di attenzione: {peggiore[0]} (Classe {peggiore[1]})"
+        att_testo = f"Si rilevano le maggiori criticità nell'area {peggiore[0].lower()}. È opportuno concentrare le azioni di intervento su questo fronte."
+    elif peggiore[1] == 'B':
+        att_titolo = f"Area con margini di miglioramento: {peggiore[0]} (Classe {peggiore[1]})"
+        att_testo = f"L'area {peggiore[0].lower()} presenta margini di ottimizzazione rispetto alle altre due, pur restando in linea con i parametri di settore."
+    else:
+        att_titolo = f"Area relativamente meno favorevole: {peggiore[0]} (Classe {peggiore[1]})"
+        att_testo = f"Anche l'equilibrio {peggiore[0].lower()}, pur risultando il meno favorevole tra i tre, si mantiene superiore ai parametri mediani di settore."
+
     if peggiore[1] == 'C' and peggiore[0] == 'Patrimoniale':
-        att_titolo = "Deleveraging Strutturale Necessario (Classe C)"
-        att_testo = "L'esposizione debitoria risulta anomala rispetto al settore. Necessario un rafforzamento del capitale proprio per evitare tensioni a lungo termine."
+        att_titolo = "Deleveraging strutturale da valutare (Classe C)"
+        att_testo = "L'esposizione debitoria risulta superiore ai parametri di settore. È opportuno un rafforzamento del capitale proprio per contenere le tensioni di lungo termine."
     return forza_titolo, forza_testo, att_titolo, att_testo
+
+# =================================================================
+# 📝 COMMENTI STANDARDIZZATI PER I GRAFICI (Trend e Barre)
+# =================================================================
+
+def get_trend_diretto(val_21, val_24, inverso=False):
+    try:
+        diff = float(val_24) - float(val_21)
+        if inverso:
+            if diff > 0.5: return "in peggioramento"
+            elif diff < -0.5: return "in miglioramento"
+        else:
+            if diff > 0.5: return "in crescita"
+            elif diff < -0.5: return "in contrazione"
+    except (TypeError, ValueError):
+        pass
+    return "stabile"
+
+def get_commento_ebitda_trend(az_val, ita_val, trend=''):
+    vs = "superiore" if az_val >= ita_val else "inferiore"
+    t = f", {trend}" if trend else ""
+    return f"L'EBITDA Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+
+def get_commento_ebit_trend(az_val, ita_val, trend=''):
+    vs = "superiore" if az_val >= ita_val else "inferiore"
+    t = f", {trend}" if trend else ""
+    return f"L'EBIT Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+
+def get_commento_profit_trend(az_val, ita_val, trend=''):
+    vs = "superiore" if az_val >= ita_val else "inferiore"
+    t = f", {trend}" if trend else ""
+    return f"Il Profit Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+
+def get_commento_str1_trend(az_val, ita_val, trend=''):
+    soglia = "al di sopra della soglia di sicurezza" if az_val >= 1 else "al di sotto della soglia di sicurezza"
+    t = f", {trend}" if trend else ""
+    return f"L'Indice primario di struttura si attesta a {format_euro(az_val)}{t}, risultando {soglia} (valore target ≥ 1)."
+
+def get_commento_str2_trend(az_val, ita_val, trend=''):
+    soglia = "in equilibrio strutturale" if az_val >= 1 else "sotto la soglia di equilibrio"
+    t = f", {trend}" if trend else ""
+    return f"L'Indice secondario di struttura si attesta a {format_euro(az_val)}{t}, risultando {soglia} (valore target ≥ 1)."
+
+def get_commento_gearing_trend(az_val, ita_val, trend=''):
+    vs = "inferiore" if az_val <= ita_val else "superiore"
+    dipendenza = "contenuta" if az_val <= ita_val else "elevata"
+    t = f", {trend}" if trend else ""
+    return f"Il Gearing si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana ({format_euro(ita_val)}%) con dipendenza debitoria {dipendenza}."
+
+def get_commento_cr_trend(az_val, ita_val, trend=''):
+    soglia = "in equilibrio corrente" if az_val >= 1 else "in tensione corrente"
+    t = f", {trend}" if trend else ""
+    return f"Il Current Ratio si attesta a {format_euro(az_val)}{t}, indicando una situazione {soglia} (valore target ≥ 1)."
+
+def get_commento_qr_trend(az_val, ita_val, trend=''):
+    copertura = "senza necessità di smobilizzo delle scorte" if az_val >= 1 else "con parziale dipendenza dal magazzino"
+    t = f", {trend}" if trend else ""
+    return f"Il Quick Ratio si attesta a {format_euro(az_val)}{t}, garantendo la copertura dei debiti a breve {copertura}."
+
+def get_commento_rotazione_trend(az_val, ita_val, trend=''):
+    vs = "superiore" if az_val >= ita_val else "inferiore"
+    t = f", {trend}" if trend else ""
+    return f"La Rotazione del Capitale si attesta a {format_euro(az_val)}{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)})."
+
+def get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof, reg_ebitda, reg_ebit, reg_prof):
+    metriche = [
+        ('EBITDA Margin', az_ebitda, ita_ebitda, reg_ebitda),
+        ('EBIT Margin',   az_ebit,   ita_ebit,   reg_ebit),
+        ('Profit Margin', az_prof,   ita_prof,   reg_prof),
+    ]
+    sotto_naz = [(n, az, ita) for n, az, ita, _ in metriche if az < ita]
+    sopra_naz = [(n, az, ita) for n, az, ita, _ in metriche if az >= ita]
+    sotto_reg = sum(1 for _, az, _, reg in metriche if az < reg)
+
+    if not sotto_naz:
+        frase1 = (f"Tutti gli indicatori superano la mediana nazionale: "
+                  f"EBITDA Margin {format_euro(az_ebitda)}% (naz. {format_euro(ita_ebitda)}%), "
+                  f"EBIT Margin {format_euro(az_ebit)}% (naz. {format_euro(ita_ebit)}%), "
+                  f"Profit Margin {format_euro(az_prof)}% (naz. {format_euro(ita_prof)}%).")
+    elif not sopra_naz:
+        sotto_str = "; ".join(f"{n}: {format_euro(az)}% vs naz. {format_euro(ita)}%" for n, az, ita in sotto_naz)
+        frase1 = f"Tutti gli indicatori si collocano al di sotto della mediana nazionale — {sotto_str}."
+    else:
+        sopra_str = ", ".join(f"{n}: {format_euro(az)}%" for n, az, _ in sopra_naz)
+        sotto_str = ", ".join(f"{n}: {format_euro(az)}% (vs naz. {format_euro(ita)}%)" for n, az, ita in sotto_naz)
+        frase1 = f"{sopra_str} supera la mediana nazionale; {sotto_str} si colloca al di sotto del benchmark."
+
+    if sotto_reg == 0:
+        frase2 = "Il confronto regionale conferma il posizionamento competitivo superiore alla media territoriale su tutte le metriche."
+    elif sotto_reg == 3:
+        frase2 = "Anche rispetto alla mediana regionale tutti gli indicatori risultano inferiori, accentuando le criticità operative a livello territoriale."
+    else:
+        frase2 = "Il confronto regionale evidenzia un posizionamento differenziato rispetto ai competitor del territorio."
+
+    return f"{frase1} {frase2}"
+
+def get_commento_barre_patr(az_str1, az_str2, az_gear, ita_str1, ita_str2, ita_gear, reg_str1, reg_str2, reg_gear):
+    soglia_str1 = "≥ 1, in equilibrio" if az_str1 >= 1 else "< 1, sotto soglia"
+    soglia_str2 = "≥ 1, in equilibrio" if az_str2 >= 1 else "< 1, sotto soglia"
+    gear_vs_naz = "inferiore" if az_gear <= ita_gear else "superiore"
+    gear_vs_reg = "inferiore" if az_gear <= reg_gear else "superiore"
+    str1_vs_reg = "superiore" if az_str1 >= reg_str1 else "inferiore"
+    str2_vs_reg = "superiore" if az_str2 >= reg_str2 else "inferiore"
+
+    frase1 = (f"Ind. Struttura 1°: {format_euro(az_str1)} ({soglia_str1}); "
+              f"Ind. Struttura 2°: {format_euro(az_str2)} ({soglia_str2}); "
+              f"Gearing {format_euro(az_gear)}% — {gear_vs_naz} alla mediana nazionale ({format_euro(ita_gear)}%).")
+
+    if az_str1 >= 1 and az_str2 >= 1 and az_gear <= ita_gear:
+        frase2 = (f"Il confronto regionale conferma la solidità patrimoniale: entrambi gli indici di struttura risultano "
+                  f"{str1_vs_reg} alla media territoriale e il Gearing è {gear_vs_reg} alla mediana regionale ({format_euro(reg_gear)}%).")
+    elif az_str1 < 1 or az_str2 < 1:
+        frase2 = (f"A livello regionale gli indici di struttura risultano {str1_vs_reg} (1°) e {str2_vs_reg} (2°) "
+                  f"rispetto alla mediana territoriale; il Gearing è {gear_vs_reg} alla media regionale ({format_euro(reg_gear)}%).")
+    else:
+        frase2 = (f"La copertura degli asset risulta adeguata, ma il Gearing è {gear_vs_reg} alla mediana regionale "
+                  f"({format_euro(reg_gear)}%), evidenziando un'esposizione debitoria da monitorare nel confronto territoriale.")
+
+    return f"{frase1} {frase2}"
+
+def get_commento_barre_fin(az_cr, az_qr, az_rot, ita_cr, ita_qr, ita_rot, reg_cr, reg_qr, reg_rot):
+    cr_soglia = "≥ 1, equilibrio corrente" if az_cr >= 1 else "< 1, tensione corrente"
+    qr_soglia = "≥ 1, liquidità adeguata"  if az_qr >= 1 else "< 1, dipendenza dal magazzino"
+    rot_vs_naz = "superiore" if az_rot >= ita_rot else "inferiore"
+    cr_vs_reg  = "superiore" if az_cr  >= reg_cr  else "inferiore"
+    qr_vs_reg  = "superiore" if az_qr  >= reg_qr  else "inferiore"
+    rot_vs_reg = "superiore" if az_rot >= reg_rot else "inferiore"
+
+    frase1 = (f"Current Ratio {format_euro(az_cr)} ({cr_soglia}); "
+              f"Quick Ratio {format_euro(az_qr)} ({qr_soglia}); "
+              f"Rotazione Cap. Inv. {format_euro(az_rot)} — {rot_vs_naz} alla mediana naz. ({format_euro(ita_rot)}).")
+
+    if az_cr >= 1 and az_qr >= 1 and az_rot >= ita_rot:
+        frase2 = (f"Il confronto regionale conferma il posizionamento positivo: Current Ratio {cr_vs_reg} e "
+                  f"Quick Ratio {qr_vs_reg} alla media territoriale, con rotazione del capitale {rot_vs_reg} "
+                  f"rispetto alla mediana regionale ({format_euro(reg_rot)}).")
+    elif not (az_cr >= 1) and not (az_qr >= 1):
+        frase2 = (f"Il confronto regionale accentua le criticità di liquidità: Current Ratio {cr_vs_reg} e "
+                  f"Quick Ratio {qr_vs_reg} rispetto alla media territoriale; la rotazione risulta {rot_vs_reg} "
+                  f"alla mediana regionale ({format_euro(reg_rot)}).")
+    else:
+        frase2 = (f"A livello regionale, Current Ratio è {cr_vs_reg} e Quick Ratio è {qr_vs_reg} rispetto alla "
+                  f"mediana territoriale; la rotazione del capitale è {rot_vs_reg} alla media regionale ({format_euro(reg_rot)}).")
+
+    return f"{frase1} {frase2}"
 
 # =================================================================
 # 🚀 CORE GENERATION POWERPOINT
@@ -221,14 +455,21 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     col_regione = col_nuts[0] if col_nuts else None
 
     def punteggio_diretto(val, t1, t2):
-        if pd.isna(val): return 1
-        return 3 if val >= t2 else (2 if val >= t1 else 1)
+        if pd.isna(val): return 3  # MODIFICATO: era return 1 — NaN → terzile peggiore
+        return 1 if val >= t2 else (2 if val >= t1 else 3)  # MODIFICATO: era 3/.../1 — 1=primo terzile (best), 3=terzo terzile (worst)
 
     def punteggio_inverso(val, t1, t2):
-        if pd.isna(val): return 1
-        return 3 if val <= t1 else (2 if val <= t2 else 1)
-        
-    def assegna_lettera(punti):
+        if pd.isna(val): return 3  # MODIFICATO: era return 1 — NaN → terzile peggiore
+        return 1 if val <= t1 else (2 if val <= t2 else 3)  # MODIFICATO: era 3/.../1 — 1=primo terzile (best), 3=terzo terzile (worst)
+
+    # MODIFICATO: due funzioni distinte perché assegna_lettera è usata in due contesti:
+    # 1. assegna_lettera_area → pts_eco/fin/pat (somma 1/2/3 con 1=best, basso=buono)
+    # 2. assegna_lettera      → pts_totali/Bench_Tot (valori_lettere A=3, alto=buono, invariata)
+    def assegna_lettera_area(punti):  # NUOVO: soglia invertita, solo per somme di terzili area
+        if pd.isna(punti): return 'C'
+        return 'A' if punti <= 4 else ('B' if punti <= 7 else 'C')
+
+    def assegna_lettera(punti):  # INVARIATA rispetto all'originale: usata per Bench_Tot
         if pd.isna(punti): return 'C'
         return 'A' if punti >= 8 else ('B' if punti >= 5 else 'C')
 
@@ -255,17 +496,17 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             funz = punteggio_inverso if m in metriche_inverse else punteggio_diretto
             df_raw[f'pts_{m}'] = df_raw[m].apply(lambda x: funz(x, t1, t2))
         else:
-            df_raw[f'pts_{m}'] = 1  # Fallback
+            df_raw[f'pts_{m}'] = 3  # Fallback: colonna assente → terzo terzile (MODIFICATO: era 1)
 
     # Somma Punti per Area
     df_raw['pts_eco'] = df_raw[f'pts_{c_prof}'] + df_raw[f'pts_{c_ebitda}'] + df_raw[f'pts_{c_ebit}']
     df_raw['pts_fin'] = df_raw[f'pts_{c_rot}'] + df_raw[f'pts_{c_quick}'] + df_raw[f'pts_{c_curr}']
     df_raw['pts_pat'] = df_raw[f'pts_{c_str1}'] + df_raw[f'pts_{c_str2}'] + df_raw[f'pts_{c_gear}']
 
-    # Assegnazione Lettere Ufficiali
-    df_raw['Rating Economico'] = df_raw['pts_eco'].apply(assegna_lettera)
-    df_raw['Rating Finanziario'] = df_raw['pts_fin'].apply(assegna_lettera)
-    df_raw['Rating Patrimoniale'] = df_raw['pts_pat'].apply(assegna_lettera)
+    # Assegnazione Lettere Ufficiali — usa assegna_lettera_area (soglia invertita)
+    df_raw['Rating Economico'] = df_raw['pts_eco'].apply(assegna_lettera_area)
+    df_raw['Rating Finanziario'] = df_raw['pts_fin'].apply(assegna_lettera_area)
+    df_raw['Rating Patrimoniale'] = df_raw['pts_pat'].apply(assegna_lettera_area)
 
     # Benchmark Totale
     valori_lettere = {'A': 3, 'B': 2, 'C': 1}
@@ -284,12 +525,21 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     tot_imprese_regione = len(df_raw[df_raw[col_regione] == riga.get(col_regione)]) if col_regione else 0
     df_regione = df_raw[df_raw[col_regione] == riga.get(col_regione)] if col_regione else pd.DataFrame()
 
-    # 👑 ELEZIONE DEL MARKET LEADER "SMART"
-    if 'pts_totali' in df_raw.columns and 'Totale valore della produzione migl EUR 2024' in df_raw.columns:
-        df_leader_sort = df_raw.sort_values(by=['pts_totali', 'Totale valore della produzione migl EUR 2024'], ascending=[False, False])
-        idx_leader = df_leader_sort.index[0] if not df_leader_sort.empty else df_raw['Totale valore della produzione migl EUR 2024'].idxmax()
+    # 👑 ELEZIONE DEL MARKET LEADER: prima rating combinato AAA, poi più grande per fatturato e attivo
+    # MODIFICATO: era sort by pts_totali → ora filtra AAA first, poi ordina per dimensione
+    _col_prod = 'Totale valore della produzione migl EUR 2024'
+    _col_att  = 'Totale Attivo migl EUR 2024'
+    _pool_aaa = df_raw[
+        (df_raw['Rating Economico'] == 'A') &
+        (df_raw['Rating Finanziario'] == 'A') &
+        (df_raw['Rating Patrimoniale'] == 'A')
+    ]
+    _pool = _pool_aaa if not _pool_aaa.empty else df_raw  # fallback: tutto il campione se nessuna AAA
+    _sort_cols  = [c for c in [_col_prod, _col_att] if c in _pool.columns]
+    if _sort_cols:
+        idx_leader = _pool.sort_values(by=_sort_cols, ascending=False).index[0]
     else:
-        idx_leader = df_raw['Totale valore della produzione migl EUR 2024'].idxmax()
+        idx_leader = _pool.index[0]
         
     market_leader = str(df_raw.loc[idx_leader, col_ragione]) if pd.notna(idx_leader) and pd.notna(df_raw.loc[idx_leader, col_ragione]) else "N.D."
 
@@ -748,6 +998,47 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     ], "Equilibrio Finanziario - Anno 2024")
 
     # =================================================================
+    # 📝 COMMENTI STANDARDIZZATI PER I GRAFICI
+    # =================================================================
+    az_ebitda_21 = pd.to_numeric(riga.get('Margine EBITDA (*) % 2021', np.nan), errors='coerce')
+    az_ebit_21   = pd.to_numeric(riga.get('Margine EBIT (*) % 2021', np.nan), errors='coerce')
+    az_prof_21   = pd.to_numeric(riga.get('Margine di Profitto (*) % 2021', np.nan), errors='coerce')
+    az_str1_21   = pd.to_numeric(riga.get('Indice di Struttura 1° livello (*) 2021', np.nan), errors='coerce')
+    az_str2_21   = pd.to_numeric(riga.get('Indice di Struttura 2° livello (*) 2021', np.nan), errors='coerce')
+    az_gear_21   = pd.to_numeric(riga.get('Gearing (*) % 2021', np.nan), errors='coerce')
+    az_cr_21     = pd.to_numeric(riga.get('Current Ratio (*) 2021', np.nan), errors='coerce')
+    az_qr_21     = pd.to_numeric(riga.get('Quick Ratio (*) 2021', np.nan), errors='coerce')
+    az_rot_21    = pd.to_numeric(riga.get('Indice di Rotazione del Capitale Investito (*) 2021', np.nan), errors='coerce')
+
+    # Trend calcolati una volta sola, riusati sia nel testo che nel badge colorato del box
+    trend_eco_1, trend_eco_2, trend_eco_3 = get_trend_diretto(az_prof_21, az_prof), get_trend_diretto(az_ebit_21, az_ebit), get_trend_diretto(az_ebitda_21, az_ebitda)
+    trend_patr_1, trend_patr_2, trend_patr_3 = get_trend_diretto(az_str1_21, az_str1), get_trend_diretto(az_str2_21, az_str2), get_trend_diretto(az_gear_21, az_gear, inverso=True)
+    trend_fin_1, trend_fin_2, trend_fin_3 = get_trend_diretto(az_cr_21, az_cr), get_trend_diretto(az_qr_21, az_qr), get_trend_diretto(az_rot_21, az_rot)
+
+    # ECO — img_eco_1=Profit, img_eco_2=EBIT, img_eco_3=EBITDA
+    context['commento_barre_eco']     = get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof, reg_ebitda, reg_ebit, reg_prof)
+
+    # PATR — img_patr_1=Strut1, img_patr_2=Strut2, img_patr_3=Gearing
+    context['commento_barre_patr']     = get_commento_barre_patr(az_str1, az_str2, az_gear, ita_str1, ita_str2, ita_gear, reg_str1, reg_str2, reg_gear)
+
+    # FIN — img_fin_1=CurrentRatio, img_fin_2=QuickRatio, img_fin_3=Rotazione
+    context['commento_barre_fin']     = get_commento_barre_fin(az_cr, az_qr, az_rot, ita_cr, ita_qr, ita_rot, reg_cr, reg_qr, reg_rot)
+
+    # 🎨 Box commento dei grafici andamento (icona + titolo per esteso + trend + testo): card, non {{}} piatti.
+    # Formato tupla: (icona_metrica, titolo_per_esteso, trend, testo)
+    dati_box_commenti = {
+        'commento_grafico_eco_1': ('💰', 'Profit Margin', trend_eco_1, get_commento_profit_trend(az_prof, ita_prof, trend_eco_1)),
+        'commento_grafico_eco_2': ('📈', 'EBIT Margin', trend_eco_2, get_commento_ebit_trend(az_ebit, ita_ebit, trend_eco_2)),
+        'commento_grafico_eco_3': ('📊', 'EBITDA Margin', trend_eco_3, get_commento_ebitda_trend(az_ebitda, ita_ebitda, trend_eco_3)),
+        'commento_grafico_patr_1': ('🏛️', 'Indice di Struttura 1° Livello', trend_patr_1, get_commento_str1_trend(az_str1, ita_str1, trend_patr_1)),
+        'commento_grafico_patr_2': ('🏗️', 'Indice di Struttura 2° Livello', trend_patr_2, get_commento_str2_trend(az_str2, ita_str2, trend_patr_2)),
+        'commento_grafico_patr_3': ('⚖️', 'Gearing', trend_patr_3, get_commento_gearing_trend(az_gear, ita_gear, trend_patr_3)),
+        'commento_grafico_fin_1': ('💧', 'Current Ratio', trend_fin_1, get_commento_cr_trend(az_cr, ita_cr, trend_fin_1)),
+        'commento_grafico_fin_2': ('⚡', 'Quick Ratio', trend_fin_2, get_commento_qr_trend(az_qr, ita_qr, trend_fin_2)),
+        'commento_grafico_fin_3': ('🔄', 'Indice di Rotazione del Capitale Investito', trend_fin_3, get_commento_rotazione_trend(az_rot, ita_rot, trend_fin_3)),
+    }
+
+    # =================================================================
     # --- 5. TABELLA MARKET LEADER (SEMPLICE E PULITA) ---
     # =================================================================
     def crea_tabella_leader_colorata(dati, colonne, indici):
@@ -763,10 +1054,11 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         for (i, j), cell in table.get_celld().items():
 
             if i == 0:
-                # Header row
+                # Header row — font ridotto per intestazioni lunghe (es. "migl €")
                 cell.set_facecolor('#002060')
                 cell.set_text_props(color='white', weight='bold')
                 cell.set_edgecolor('white')
+                cell.set_fontsize(7.5)
             else:
                 cell.set_facecolor('#F8FAFC')
                 cell.set_edgecolor('#FFFFFF')
@@ -793,9 +1085,10 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         riga_leader = df_raw.loc[idx_leader]
         ml_ricavi = format_euro(riga_leader.get('Totale valore della produzione migl EUR 2024', 0), 0)
         ml_attivo = format_euro(riga_leader.get('Totale Attivo migl EUR 2024', 0), 0)
-        ml_eco = 'A' if riga_leader.get('pts_Margine EBITDA (*) % 2024', 1) == 3 else ('B' if riga_leader.get('pts_Margine EBITDA (*) % 2024', 1) == 2 else 'C')
-        ml_pat = 'A' if riga_leader.get('pts_Gearing (*) % 2024', 1) == 3 else ('B' if riga_leader.get('pts_Gearing (*) % 2024', 1) == 2 else 'C')
-        ml_fin = 'A' if riga_leader.get('pts_Current Ratio (*) 2024', 1) == 3 else ('B' if riga_leader.get('pts_Current Ratio (*) 2024', 1) == 2 else 'C')
+        # MODIFICATO: era == 3 (vecchia scala 3=best); ora 1=primo terzile=best, 3=terzo terzile=worst
+        ml_eco = 'A' if riga_leader.get('pts_Margine EBITDA (*) % 2024', 3) == 1 else ('B' if riga_leader.get('pts_Margine EBITDA (*) % 2024', 3) == 2 else 'C')
+        ml_pat = 'A' if riga_leader.get('pts_Gearing (*) % 2024', 3) == 1 else ('B' if riga_leader.get('pts_Gearing (*) % 2024', 3) == 2 else 'C')
+        ml_fin = 'A' if riga_leader.get('pts_Current Ratio (*) 2024', 3) == 1 else ('B' if riga_leader.get('pts_Current Ratio (*) 2024', 3) == 2 else 'C')
         ml_bench = f"{ml_eco}{ml_pat}{ml_fin}" # Es: "AAA"
     else:
         ml_ricavi, ml_attivo, ml_bench = "n.d.", "n.d.", "N.D."
@@ -811,7 +1104,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     az_bench = f"{rat_eco}{rat_pat}{rat_fin}" # Es: "ABA"
 
     # Costruzione Matrice Tabella (Colonna Benchmark singola e pulita)
-    colonne_tbl = ['Tot. Val. Prod.', 'Tot. Attivo', 'Benchmark']
+    colonne_tbl = ['Tot. Val. Prod. (migl €)', 'Tot. Attivo (migl €)', 'Benchmark']
     indici_tbl = [str(market_leader)[:35], str(azienda_target)[:35], 'Mediana Settore']
     
     dati_tbl = [
@@ -855,12 +1148,12 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
                 x = 0.72 * plt.np.cos(plt.np.radians(angle))
                 y = 0.72 * plt.np.sin(plt.np.radians(angle))
                 ax.text(x, y, perc, ha='center', va='center',
-                        fontsize=20, fontweight='bold', color='white')
+                        fontsize=13, fontweight='bold', color='white')
 
         ax.text(0, 0.12, totale_str, ha='center', va='center',
-                fontsize=24, fontweight='bold', color='#1E293B')
+                fontsize=16, fontweight='bold', color='#1E293B')
         ax.text(0, -0.18, "Totale\nSocietà", ha='center', va='center',
-                fontsize=16, color='#64748B', linespacing=1.4)
+                fontsize=11, color='#64748B', linespacing=1.4)
 
         lgd = None
         if wedges:
@@ -970,8 +1263,11 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         replace_placeholder_with_picture(slide, "[[TABELLA_LEADER]]", img_tabella_leader)
 
         replace_placeholder_with_picture(slide, "[[GRAFICO_DONUT]]", img_donut_geo)
-        if img_mappa_geo: 
+        if img_mappa_geo:
             replace_placeholder_with_picture(slide, "[[MAPPA_ITALIA]]", img_mappa_geo)
+
+        for chiave, (icona_metrica, titolo, trend_word, testo) in dati_box_commenti.items():
+            formatta_box_commento_grafico(slide, chiave, icona_metrica, titolo, trend_word, testo)
 
     output_ppt = io.BytesIO()
     prs.save(output_ppt)
