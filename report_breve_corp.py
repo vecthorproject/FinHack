@@ -269,10 +269,10 @@ def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
 
     if peggiore[1] == 'C':
         att_titolo = f"Area di attenzione: {peggiore[0]} (Classe {peggiore[1]})"
-        att_testo = f"Si rilevano le maggiori criticità nell'area {peggiore[0].lower()}. È opportuno concentrare le azioni di intervento su questo fronte."
+        att_testo = f"Si rilevano le maggiori criticità nell'area di tipo {peggiore[0].lower()}. È opportuno concentrare le azioni di intervento su questo fronte."
     elif peggiore[1] == 'B':
         att_titolo = f"Area con margini di miglioramento: {peggiore[0]} (Classe {peggiore[1]})"
-        att_testo = f"L'area {peggiore[0].lower()} presenta margini di ottimizzazione rispetto alle altre due, pur restando in linea con i parametri di settore."
+        att_testo = f"L'area di tipo {peggiore[0].lower()} presenta margini di ottimizzazione rispetto alle altre due, pur restando in linea con i parametri di settore."
     else:
         att_titolo = f"Area relativamente meno favorevole: {peggiore[0]} (Classe {peggiore[1]})"
         att_testo = f"Anche l'equilibrio {peggiore[0].lower()}, pur risultando il meno favorevole tra i tre, si mantiene superiore ai parametri mediani di settore."
@@ -288,61 +288,79 @@ def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
 
 def get_trend_diretto(val_21, val_24, inverso=False):
     try:
-        diff = float(val_24) - float(val_21)
+        v21, v24 = float(val_21), float(val_24)
+        diff = v24 - v21
+        # Variazione percentuale sul valore di partenza (2021), non differenza assoluta:
+        # una soglia fissa (es. 0,5) e' tarata sui margini (scala 0-100) ma appiattisce a
+        # "stabile" i ratio di liquidita'/struttura (scala 0-3), dove uno spostamento di
+        # 0,2-0,3 e' gia' un miglioramento ben visibile nel grafico andamento accanto.
+        base = abs(v21) if abs(v21) > 0.01 else abs(v24)
+        var_pct = (diff / base * 100) if base > 0.01 else 0.0
         if inverso:
-            if diff > 0.5: return "in peggioramento"
-            elif diff < -0.5: return "in miglioramento"
+            if var_pct > 10: return "in peggioramento"
+            elif var_pct < -10: return "in miglioramento"
         else:
-            if diff > 0.5: return "in crescita"
-            elif diff < -0.5: return "in contrazione"
-    except (TypeError, ValueError):
+            if var_pct > 10: return "in crescita"
+            elif var_pct < -10: return "in contrazione"
+    except (TypeError, ValueError, ZeroDivisionError):
         pass
     return "stabile"
 
-def get_commento_ebitda_trend(az_val, ita_val, trend=''):
+def _raffronto_2021(trend, val_21, unita=''):
+    """Ancora l'aggettivo di trend al dato 2021 che lo giustifica: senza il valore di
+    partenza, un "stabile" o un "in crescita" restano aggettivi isolati e possono sembrare
+    in contraddizione con il grafico andamento mostrato accanto, che i due anni li mette
+    a confronto per esteso."""
+    if not trend:
+        return ""
+    if val_21 is None or pd.isna(val_21):
+        return f", {trend}"
+    return f", {trend} (dal {format_euro(val_21)}{unita} del 2021)"
+
+def get_commento_ebitda_trend(az_val, ita_val, trend='', val_21=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21, '%')
     return f"L'EBITDA Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
-def get_commento_ebit_trend(az_val, ita_val, trend=''):
+def get_commento_ebit_trend(az_val, ita_val, trend='', val_21=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21, '%')
     return f"L'EBIT Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
-def get_commento_profit_trend(az_val, ita_val, trend=''):
+def get_commento_profit_trend(az_val, ita_val, trend='', val_21=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21, '%')
     return f"Il Profit Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
-def get_commento_str1_trend(az_val, ita_val, trend=''):
+def get_commento_str1_trend(az_val, ita_val, trend='', val_21=None):
     soglia = "al di sopra della soglia di sicurezza" if az_val >= 1 else "al di sotto della soglia di sicurezza"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21)
     return f"L'Indice primario di struttura si attesta a {format_euro(az_val)}{t}, risultando {soglia} (valore target ≥ 1)."
 
-def get_commento_str2_trend(az_val, ita_val, trend=''):
+def get_commento_str2_trend(az_val, ita_val, trend='', val_21=None):
     soglia = "in equilibrio strutturale" if az_val >= 1 else "sotto la soglia di equilibrio"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21)
     return f"L'Indice secondario di struttura si attesta a {format_euro(az_val)}{t}, risultando {soglia} (valore target ≥ 1)."
 
-def get_commento_gearing_trend(az_val, ita_val, trend=''):
+def get_commento_gearing_trend(az_val, ita_val, trend='', val_21=None):
     vs = "inferiore" if az_val <= ita_val else "superiore"
     dipendenza = "contenuta" if az_val <= ita_val else "elevata"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21, '%')
     return f"Il Gearing si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana ({format_euro(ita_val)}%) con dipendenza debitoria {dipendenza}."
 
-def get_commento_cr_trend(az_val, ita_val, trend=''):
+def get_commento_cr_trend(az_val, ita_val, trend='', val_21=None):
     soglia = "in equilibrio corrente" if az_val >= 1 else "in tensione corrente"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21)
     return f"Il Current Ratio si attesta a {format_euro(az_val)}{t}, indicando una situazione {soglia} (valore target ≥ 1)."
 
-def get_commento_qr_trend(az_val, ita_val, trend=''):
+def get_commento_qr_trend(az_val, ita_val, trend='', val_21=None):
     copertura = "senza necessità di smobilizzo delle scorte" if az_val >= 1 else "con parziale dipendenza dal magazzino"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21)
     return f"Il Quick Ratio si attesta a {format_euro(az_val)}{t}, garantendo la copertura dei debiti a breve {copertura}."
 
-def get_commento_rotazione_trend(az_val, ita_val, trend=''):
+def get_commento_rotazione_trend(az_val, ita_val, trend='', val_21=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = f", {trend}" if trend else ""
+    t = _raffronto_2021(trend, val_21)
     return f"La Rotazione del Capitale si attesta a {format_euro(az_val)}{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)})."
 
 def get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof, reg_ebitda, reg_ebit, reg_prof):
@@ -653,7 +671,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
 
     def calc_perc_istat(num, tot):
         if not ha_dati_istat or tot == 0: return "n.d."
-        return f"{(num / tot * 100):.2f}%".replace('.', ',')
+        return f"{format_euro(num / tot * 100)}%"
 
     # Prepariamo le stringhe formattate con "n.d." se i file non ci sono o non trova nulla
     tot_is = dati_istat['tot_imprese']
@@ -769,9 +787,9 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         
         # 🟢 ALGORITMO ANTI-SOVRAPPOSIZIONE
         for i in range(len(anni)):
-            txt_az = f"{v_az[i]:.2f}".replace('.', ',') + suffix
-            txt_reg = f"{v_reg[i]:.2f}".replace('.', ',') + suffix
-            txt_set = f"{v_set[i]:.2f}".replace('.', ',') + suffix
+            txt_az = format_euro(v_az[i]) + suffix
+            txt_reg = format_euro(v_reg[i]) + suffix
+            txt_set = format_euro(v_set[i]) + suffix
 
             # 1. Raggruppiamo i 3 punti dell'anno corrente
             punti = [
@@ -933,7 +951,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             
         pos_ottenuta = int(rank_series.loc[idx_target])
         tot_valide = df_group[col_name].notna().sum()
-        return f"{pos_ottenuta}/{tot_valide}"
+        return f"{format_euro(pos_ottenuta, 0)}/{format_euro(tot_valide, 0)}"
 
     # ECO
     az_ebitda, az_ebit, az_prof = riga.get('Margine EBITDA (*) % 2024', 0), riga.get('Margine EBIT (*) % 2024', 0), riga.get('Margine di Profitto (*) % 2024', 0)
@@ -1027,15 +1045,15 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # 🎨 Box commento dei grafici andamento (icona + titolo per esteso + trend + testo): card, non {{}} piatti.
     # Formato tupla: (icona_metrica, titolo_per_esteso, trend, testo)
     dati_box_commenti = {
-        'commento_grafico_eco_1': ('💰', 'Profit Margin', trend_eco_1, get_commento_profit_trend(az_prof, ita_prof, trend_eco_1)),
-        'commento_grafico_eco_2': ('📈', 'EBIT Margin', trend_eco_2, get_commento_ebit_trend(az_ebit, ita_ebit, trend_eco_2)),
-        'commento_grafico_eco_3': ('📊', 'EBITDA Margin', trend_eco_3, get_commento_ebitda_trend(az_ebitda, ita_ebitda, trend_eco_3)),
-        'commento_grafico_patr_1': ('🏛️', 'Indice di Struttura 1° Livello', trend_patr_1, get_commento_str1_trend(az_str1, ita_str1, trend_patr_1)),
-        'commento_grafico_patr_2': ('🏗️', 'Indice di Struttura 2° Livello', trend_patr_2, get_commento_str2_trend(az_str2, ita_str2, trend_patr_2)),
-        'commento_grafico_patr_3': ('⚖️', 'Gearing', trend_patr_3, get_commento_gearing_trend(az_gear, ita_gear, trend_patr_3)),
-        'commento_grafico_fin_1': ('💧', 'Current Ratio', trend_fin_1, get_commento_cr_trend(az_cr, ita_cr, trend_fin_1)),
-        'commento_grafico_fin_2': ('⚡', 'Quick Ratio', trend_fin_2, get_commento_qr_trend(az_qr, ita_qr, trend_fin_2)),
-        'commento_grafico_fin_3': ('🔄', 'Indice di Rotazione del Capitale Investito', trend_fin_3, get_commento_rotazione_trend(az_rot, ita_rot, trend_fin_3)),
+        'commento_grafico_eco_1': ('💰', 'Profit Margin', trend_eco_1, get_commento_profit_trend(az_prof, ita_prof, trend_eco_1, az_prof_21)),
+        'commento_grafico_eco_2': ('📈', 'EBIT Margin', trend_eco_2, get_commento_ebit_trend(az_ebit, ita_ebit, trend_eco_2, az_ebit_21)),
+        'commento_grafico_eco_3': ('📊', 'EBITDA Margin', trend_eco_3, get_commento_ebitda_trend(az_ebitda, ita_ebitda, trend_eco_3, az_ebitda_21)),
+        'commento_grafico_patr_1': ('🏛️', 'Indice di Struttura 1° Livello', trend_patr_1, get_commento_str1_trend(az_str1, ita_str1, trend_patr_1, az_str1_21)),
+        'commento_grafico_patr_2': ('🏗️', 'Indice di Struttura 2° Livello', trend_patr_2, get_commento_str2_trend(az_str2, ita_str2, trend_patr_2, az_str2_21)),
+        'commento_grafico_patr_3': ('⚖️', 'Gearing', trend_patr_3, get_commento_gearing_trend(az_gear, ita_gear, trend_patr_3, az_gear_21)),
+        'commento_grafico_fin_1': ('💧', 'Current Ratio', trend_fin_1, get_commento_cr_trend(az_cr, ita_cr, trend_fin_1, az_cr_21)),
+        'commento_grafico_fin_2': ('⚡', 'Quick Ratio', trend_fin_2, get_commento_qr_trend(az_qr, ita_qr, trend_fin_2, az_qr_21)),
+        'commento_grafico_fin_3': ('🔄', 'Indice di Rotazione del Capitale Investito', trend_fin_3, get_commento_rotazione_trend(az_rot, ita_rot, trend_fin_3, az_rot_21)),
     }
 
     # =================================================================
