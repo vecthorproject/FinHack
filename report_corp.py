@@ -12,6 +12,7 @@ from docxtpl import DocxTemplate
 import matplotlib.pyplot as plt
 from docxtpl import InlineImage
 from docx.shared import Mm
+from docx.shared import Cm
 import warnings
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -64,6 +65,15 @@ def format_euro(numero, decimali=2):
     if pd.isna(numero): return "n.d."
     formato = f"{{:,.{decimali}f}}".format(numero)
     return formato.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+
+def _imposta_no_wrap(cell):
+    """Impedisce l'andata a capo del testo in una cella: la colonna si allarga
+    quanto serve (assorbendo lo spazio disponibile in tabella) invece di spezzare
+    etichette lunghe (es. nomi di regione) su più righe."""
+    tcPr = cell._tc.get_or_add_tcPr()
+    no_wrap = OxmlElement('w:noWrap')
+    tcPr.append(no_wrap)
 
 
 # =================================================================
@@ -463,11 +473,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     if target_fg.lower() == fg_1_name.lower():
         # Caso A: L'azienda in analisi fa parte della Maggioranza #1
-        testo_fg = f"rappresenta la veste giuridica dominante assoluta del comparto, costituendo da sola il {format_euro(fg_1_perc)}% delle realtà censite ({f'{fg_1_num:,}'.replace(',', '.')} unità)."
-        
+        testo_fg = f"costituisce la forma giuridica prevalente, rappresentando il {format_euro(fg_1_perc)}% delle imprese ({f'{fg_1_num:,}'.replace(',', '.')} unità)."
+
         # Se esiste una seconda forma giuridica, continuiamo la frase
         if fg_2_name:
-            testo_fg = testo_fg.rstrip(".") + f", mentre la restante parte del mercato è composta in larga misura da {fg_2_name} ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità)"
+            testo_fg = testo_fg.rstrip(".") + f", mentre il restante {format_euro(fg_2_perc)}% è costituito da {fg_2_name} ({f'{fg_2_num:,}'.replace(',', '.')} unità)"
             if fg_altre_num > 0:
                 testo_fg += f" e, in minor parte, da altre configurazioni societarie miste ({format_euro(fg_altre_perc)}%, {f'{fg_altre_num:,}'.replace(',', '.')} unità)."
             else:
@@ -634,8 +644,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         context['rating_eco'] = riga_t['Rating Economico']
         context['rating_fin'] = riga_t['Rating Finanziario']
         context['rating_patr'] = riga_t['Rating Patrimoniale']
-        context['rating_tot'] = riga_t['Rating Combinato']
-        context['rating_comb'] = riga_t['Benchmark Totale']
+        context['rating_tot'] = riga_t['Benchmark Totale']
+        context['rating_comb'] = riga_t['Rating Combinato']
 
         context['dip_target'] = f"{int(dipendenti):,}".replace(',', '.') if pd.notna(dipendenti) else "n.d."
        
@@ -670,14 +680,22 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # --- 🤖 MOTORE NARRATIVO (Testi Dinamici e Tecnici in base ai Dati Reali) --- 
 
     def get_impatto_territoriale(perc, nome, ricavi_formattati):
+        # La % (ricavi dell'azienda sui ricavi complessivi dell'area) veniva
+        # citata due volte: qui subito dopo la cifra dei ricavi, e poi di nuovo
+        # in fondo come "incidenza". Un'unica menzione, vicino al dato a cui si
+        # riferisce, invece di ripeterla a fine frase.
+        premessa = f"Con ricavi pari a {ricavi_formattati} mln di EUR ({format_euro(perc)}% dei ricavi complessivi del settore nell'area geografica di riferimento)"
+        # Senza punto finale: nel template la frase è già chiusa da un punto
+        # subito dopo {{ impatto_territoriale }} (vedi "...{{ impatto_territoriale }}.");
+        # mettercelo anche qui produceva un doppio punto a fine paragrafo.
         if perc >= 5.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale grazie a un impatto pari al {format_euro(perc)}% rispetto al totale dei ricavi dell'area."
+            return f"{premessa}, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale"
         elif perc >= 1.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"{premessa}, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale"
         elif perc >= 0.1:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile realtà territoriale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"{premessa}, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile realtà territoriale"
         else:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo al tessuto economico locale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"{premessa}, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo al tessuto economico locale"
 
     def get_testo_totale(rating):
         if rating == 'A':
@@ -708,9 +726,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_testo_fin(rating):
         if rating == 'A':
-            return "L'equilibrio della struttura finanziaria di breve termine è solido. Le attività correnti coprono integralmente i debiti esigibili nell'esercizio e le risorse prontamente liquidabili assicurano una buona solvibilità immediata, senza necessità di smobilizzare le scorte."
+            return "L'equilibrio finanziario di breve termine è solido. Le attività correnti coprono integralmente i debiti esigibili nell'esercizio e le risorse prontamente liquidabili assicurano una buona solvibilità immediata, senza necessità di smobilizzare le scorte."
         elif rating == 'B':
-            return "L'equilibrio della struttura finanziaria di breve termine è sufficiente a coprire gli impieghi correnti. Tuttavia, la liquidità immediata potrebbe presentare una parziale dipendenza dalla monetizzazione delle scorte o dall'incasso dei crediti per soddisfare tutti gli impegni a breve."
+            return "L'equilibrio finanziario di breve termine è complessivamente adeguato, con attività correnti in grado di coprire le passività correnti. Tuttavia, la liquidità immediata potrebbe presentare una parziale dipendenza dalla monetizzazione delle scorte o dall'incasso dei crediti per soddisfare tutti gli impegni a breve."
         elif rating == 'C':
             return "La struttura finanziaria registra potenziali tensioni di liquidità. L'incapacità delle attività correnti o prontamente liquidabili di far fronte agevolmente alle passività correnti segnala il rischio di dover ricorrere a ulteriori fonti di finanziamento esterne."
         return "Dati finanziari non disponibili o insufficienti."
@@ -869,7 +887,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_analisi_trend_ebit(az_ebit, set_ebit):
         if az_ebit >= set_ebit: return f"Questo dato dimostra un'elevata redditività dopo aver considerato gli ammortamenti e le svalutazioni, con un valore pari al {format_euro(az_ebit)}% che supera stabilmente la mediana."
-        else: return f"Questo dato riflette una minore capacità di conseguire un risultato operativo soddisfacente in rapporto ai ricavi di vendita conseguiti, posizionandosi sotto la mediana settoriale al {format_euro(az_ebit)}%."
+        # Qui la frase parla della mediana settoriale: va mostrato set_ebit (il dato del
+        # settore), non az_ebit (il dato dell'azienda, già citato nella frase del template
+        # subito prima) — usare az_ebit ripeteva il valore aziendale spacciandolo per quello
+        # settoriale, rendendo la frase autocontraddittoria.
+        else: return f"Questo dato riflette una minore capacità di conseguire un risultato operativo soddisfacente in rapporto ai ricavi di vendita conseguiti, posizionandosi sotto la mediana settoriale al {format_euro(set_ebit)}%."
 
     def get_confronto_ebit_settore(az_ebit, set_ebit):
         if az_ebit >= set_ebit: return "L'efficienza nell'impiego operativo delle risorse aziendali è confermata dal posizionamento nettamente superiore alla mediana dell'EBIT."
@@ -960,8 +982,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "è soggetta a forte pressione temporale sui rimborsi dei capitali prestati da terzi a causa dello squilibrio d'impiego."
 
     def get_analisi_trend_struttura2(az_str2):
-        if az_str2 >= 1.0: return f"L'Indice secondario di struttura ({format_euro(az_str2)}) segnala che il capitale permanente ha finanziato interamente le immobilizzazioni, assicurando correlazione temporale."
-        else: return f"L'Indice secondario di struttura ({format_euro(az_str2)}) indica che una parte delle immobilizzazioni è stata finanziata attraverso capitale a breve termine, determinando uno squilibrio temporale."
+        # Il valore numerico è già introdotto dalla frase del template subito prima ("si stabilisce a
+        # {{ ind_str2 }} nell'ultimo esercizio"): qui non lo ripetiamo, solo l'interpretazione.
+        if az_str2 >= 1.0: return "Questo risultato segnala che il capitale permanente ha finanziato interamente le immobilizzazioni, assicurando correlazione temporale."
+        else: return "Questo risultato indica che una parte delle immobilizzazioni è stata finanziata attraverso capitale a breve termine, determinando uno squilibrio temporale."
 
     def get_confronto_settore_struttura2(az_str2, set_str2):
         if az_str2 >= set_str2: return "Tale dinamica risulta superiore alle performance di copertura strutturale dei competitor."
@@ -988,8 +1012,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "L'analisi evidenzia una marcata esposizione verso il capitale di terzi per il finanziamento aziendale."
 
     def get_andamento_storico_gearing(az_gear, set_gear):
-        if az_gear <= set_gear: return f"Il dato rivela un Gearing oneroso pari al {format_euro(az_gear)}%. Valori contenuti indicano una limitata dipendenza dall'indebitamento bancario e una maggiore solidità complessiva."
-        else: return f"Il dato palesa un Gearing elevato pari al {format_euro(az_gear)}%. Valori più alti segnalano un forte ricorso ai terzi, determinando un incremento del rischio finanziario."
+        # Il valore numerico è già introdotto dalla frase del template subito prima ("presenta un valore
+        # pari a {{ gearing }}%"): qui non lo ripetiamo, solo l'interpretazione.
+        if az_gear <= set_gear: return "Valori contenuti come questo indicano una limitata dipendenza dall'indebitamento bancario e una maggiore solidità complessiva."
+        else: return "Valori più alti come questo segnalano un forte ricorso ai terzi, determinando un incremento del rischio finanziario."
 
     def get_confronto_gearing_settore(az_gear, set_gear):
         if az_gear <= set_gear: return f"l'esposizione debitoria risulta nettamente inferiore rispetto alla mediana del comparto ({format_euro(set_gear)}%), riducendo l'indice di rischio aziendale."
@@ -1059,8 +1085,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         if az_qr >= 1.0: return "la flessibilità immediata garantisce la copertura integrale senza vendite forzate a sconto (Quick Ratio)."
         else: return "l'azienda dipenderà fisiologicamente dalla monetizzazione delle scorte per soddisfare i pagamenti a brevissimo termine (Quick Ratio)."
 
-    def get_andamento_liquidita_primaria(az_qr):
-        if az_qr >= 1.0: return "una gestione ottimizzata della liquidità primaria, potendo contare su solide riserve bancarie o crediti certi."
+    def get_andamento_liquidita_primaria(az_qr, set_qr):
+        # "Ottimizzata" solo se l'azienda batte anche la mediana di settore: usarlo
+        # già qui e poi, nella frase successiva ({{ confronto_quick_ratio_settore }}),
+        # scoprire che il Quick Ratio è sotto la mediana ("un divario da monitorare")
+        # produceva un salto di tono contraddittorio nello stesso paragrafo.
+        if az_qr >= set_qr: return "una gestione ottimizzata della liquidità primaria, potendo contare su solide riserve bancarie o crediti certi."
+        elif az_qr >= 1.0: return "una gestione della liquidità primaria nel complesso adeguata, pur con margini di miglioramento rispetto ai competitor."
         else: return "una chiara carenza monetaria immediata che espone l'equilibrio d'esercizio alla rotazione dei magazzini fisici."
 
     def get_confronto_quick_ratio_settore(az_qr, set_qr):
@@ -1147,11 +1178,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "dovrebbe strutturare un piano di rafforzamento patrimoniale e operativo, valutando iniezioni di capitale e un contenimento mirato dei costi non strategici."
 
 
-    context['descr_rating_tot'] = get_testo_totale(context['rating_comb'])
+    context['descr_rating_tot'] = get_testo_totale(context['rating_tot'])
     context['descr_rating_eco'] = get_testo_eco(context['rating_eco'])
     context['descr_rating_patr'] = get_testo_patr(context['rating_patr'])
     context['descr_rating_fin'] = get_testo_fin(context['rating_fin'])
-    context['descr_sintesi'] = get_testo_sintesi(context['rating_comb'])
+    context['descr_sintesi'] = get_testo_sintesi(context['rating_tot'])
     
     # =================================================================
     # 🟢 ESTRAZIONE VALORI NUMERICI REALI (FLOAT) E MEDIANE DI SETTORE (2024)
@@ -1218,7 +1249,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
 
     # Calcolo dei totali per la fascia di Rating dell'Azienda
-    target_glob = context['rating_comb']
+    target_glob = context['rating_tot']
     
     if target_glob in ['A', 'B', 'C'] and 'Benchmark Totale' in df_rating.columns:
         num_soc_fascia_tot = len(df_rating[df_rating['Benchmark Totale'] == target_glob])
@@ -1232,7 +1263,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         num_soc_fascia_tot, perc_soc_fascia_tot, num_eco_fascia, num_patr_fascia, num_fin_fascia = 0, 0, 0, 0, 0
 
     context['analisi_combinata'] = get_analisi_combinata(context['rating_eco'], context['rating_patr'], context['rating_fin'])
-    context['descr_fascia_appartenenza'] = get_descr_fascia_appartenenza(context['rating_comb'])
+    context['descr_fascia_appartenenza'] = get_descr_fascia_appartenenza(context['rating_tot'])
     context['num_soc_fascia_tot'] = f"{num_soc_fascia_tot:,}".replace(',', '.')
     context['perc_soc_fascia_tot'] = format_euro(perc_soc_fascia_tot)
     context['num_eco_fascia'] = f"{num_eco_fascia:,}".replace(',', '.')
@@ -1298,7 +1329,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     context['analisi_quick_ratio_soglia'] = get_analisi_quick_ratio_soglia(val_az_qr_24)
     context['implicazione_liquidita_immediata'] = get_implicazione_liquidita_immediata(val_az_qr_24)
-    context['andamento_liquidita_primaria'] = get_andamento_liquidita_primaria(val_az_qr_24)
+    context['andamento_liquidita_primaria'] = get_andamento_liquidita_primaria(val_az_qr_24, val_set_qr_24)
     context['confronto_quick_ratio_settore'] = get_confronto_quick_ratio_settore(val_az_qr_24, val_set_qr_24)
     context['copertura_debiti_breve_quick'] = get_copertura_debiti_breve_quick(val_az_qr_24)
     context['interpretazione_flussi_cassa_quick'] = get_interpretazione_flussi_cassa_quick(val_az_qr_24)
@@ -1313,12 +1344,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['gestione_tesoreria_fin'] = get_gestione_tesoreria_fin(val_az_cr_24, val_az_qr_24)
     context['priorita_strategica_fin'] = get_priorita_strategica_fin(val_az_rot_24, val_set_rot_24)
 
-    context['sintesi_profilo_integrato'] = get_sintesi_profilo_integrato(context['rating_comb'])
-    context['sintesi_posizionamento_lungo_periodo'] = get_sintesi_posizionamento_lungo_periodo(context['rating_comb'])
+    context['sintesi_profilo_integrato'] = get_sintesi_profilo_integrato(context['rating_tot'])
+    context['sintesi_posizionamento_lungo_periodo'] = get_sintesi_posizionamento_lungo_periodo(context['rating_tot'])
     context['conclusione_patrimoniale'] = get_conclusione_patrimoniale(val_az_strut1_24, val_az_gearing_24, val_set_gearing_24)
     context['conclusione_economica'] = get_conclusione_economica(val_az_ebitda_24, val_set_ebitda_24, val_az_profitto_24, val_set_profitto_24)
     context['conclusione_finanziaria_dettaglio'] = get_conclusione_finanziaria_dettaglio(val_az_cr_24, val_az_qr_24)
-    context['raccomandazione_finale'] = get_raccomandazione_finale(context['rating_comb'])
+    context['raccomandazione_finale'] = get_raccomandazione_finale(context['rating_tot'])
     context['impatto_territoriale'] = get_impatto_territoriale(perc_ricavi_target_su_macro, ragione_sociale_pulita, format_euro(ricavi_mln))
 
     # Costruzione delle Medaglie di Settore!!!
@@ -2381,7 +2412,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     t1.style = 'Table Grid' # Stile classico a griglia di Word
 
     # 1. Creiamo le Intestazioni in Grassetto
-    intestazioni = ['Regioni', 'Imprese V.A.', 'Imprese %', 'Ricavi V.A.', 'Ricavi %', 'Attivo V.A.', 'Attivo %', 'Dip. V.A.', 'Dip. %']
+    # "Impr." (non "Imprese") per coerenza con l'abbreviazione "Dip." già usata
+    # accanto: la parola intera non ci sta più nella colonna una volta allargate
+    # le colonne "V.A." numeriche, e andrebbe altrimenti a capo o in sillabazione.
+    intestazioni = ['Regioni', 'Impr. V.A.', 'Impr. %', 'Ricavi V.A.', 'Ricavi %', 'Attivo V.A.', 'Attivo %', 'Dip. V.A.', 'Dip. %']
     for i, intestazione in enumerate(intestazioni):
         t1.rows[0].cells[i].text = intestazione
         t1.rows[0].cells[i].paragraphs[0].runs[0].bold = True
@@ -2463,7 +2497,14 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         for cell in row.cells:
             for para in cell.paragraphs:
                 for run in para.runs:
-                    run.font.size = Pt(10.5)
+                    run.font.size = Pt(8.0)
+
+    # Nota: le larghezze di colonna per questa tabella (colonna "Regioni" più larga
+    # delle 8 colonne numeriche, per evitare che nomi lunghi come "TOTALE NORD OVEST"
+    # vadano a capo) vengono impostate più avanti, come post-processor sul documento
+    # finale già assemblato — impostarle qui sul subdoc non ha effetto, perché il
+    # merge del subdoc nel documento principale (fatto da docxtpl) ricalcola la
+    # griglia della tabella in modo uniforme.
 
     # Iniettiamo la tabella nel documento
     context['tabella_1_dinamica'] = sd_tab1
@@ -2487,16 +2528,23 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     for i, h in enumerate(headers_t2):
         t2.cell(1, i).text = h
         t2.cell(1, i).paragraphs[0].runs[0].bold = True
+        _imposta_no_wrap(t2.cell(1, i))  # etichette lunghe: mai andare a capo
 
     # Riga 2: Valori (es. A, B, C, ABC)
     valori_t2 = [
-        context.get('rating_eco', 'N.D.'), 
-        context.get('rating_patr', 'N.D.'), 
-        context.get('rating_fin', 'N.D.'), 
-        context.get('rating_tot', 'N.D.')
+        context.get('rating_eco', 'N.D.'),
+        context.get('rating_patr', 'N.D.'),
+        context.get('rating_fin', 'N.D.'),
+        context.get('rating_comb', 'N.D.')
     ]
     for i, v in enumerate(valori_t2):
         t2.cell(2, i).text = str(v)
+
+    for row in t2.rows:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(9.5)
 
     # Iniettiamo la tabella nel documento
     context['tabella_2_dinamica'] = sd_tab2
@@ -2690,6 +2738,18 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         row_cells[8].text = format_euro((tot_ita_C/tot_ita)*100) if tot_ita else "0,00"
         
         for cell in row_cells: cell.paragraphs[0].runs[0].bold = True
+
+    # Senza questa dimensione esplicita il testo eredita la size di default del
+    # documento (11pt, da docDefaults) invece degli 8pt di Tabella 1: due tabelle
+    # gemelle con la stessa identica struttura a 9 colonne finivano per avere
+    # dimensioni del testo diverse, e quindi esigenze di larghezza diverse a
+    # parità di colonna — causa reale per cui "100,00" andava a capo qui ma non
+    # nell'altra tabella, a larghezza di colonna nominalmente identica.
+    for row in t6.rows:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(8.0)
 
     context['tabella_6_dinamica'] = sd_tab6
 
@@ -3972,7 +4032,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     # 📏 FIX SPAZIATURA E INDENTAZIONE NARRATIVA
     # =================================================================
-    from docx.shared import Cm
+    # (Cm è già importato a livello di modulo)
 
     # 1. Spazzoliamo tutti i paragrafi del documento (ignorando l'interno delle tabelle)
     for p in doc.docx.paragraphs:
@@ -4200,7 +4260,238 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     output_word = correggi_box_kpi_executive_summary(output_word)
 
+    # =================================================================
+    # 📏 POST-PROCESSOR: Allarga la colonna "Regioni" della Tabella 1 (le
+    # etichette lunghe come "TOTALE NORD OVEST" non devono andare a capo)
+    # =================================================================
+    output_word = allarga_colonna_regioni_tabella1(output_word)
+
+    # =================================================================
+    # 🖼️ POST-PROCESSOR: Aggiunge il logo in copertina e in ultima pagina
+    # =================================================================
+    output_word = aggiungi_logo_copertina(output_word)
+
     return output_word
+
+
+def allarga_colonna_regioni_tabella1(output_buffer):
+    """
+    Le tabelle "Regioni" a 9 colonne (Tabella 1 - Ripartizione territoriale, e
+    Tabella 6 - Ripartizione Benchmark Totale) hanno la stessa struttura ed
+    entrambe portano etichette lunghe (es. "TOTALE NORD OVEST") che a larghezza
+    uniforme vanno a capo su più righe. Impostare le larghezze sul subdoc PRIMA
+    del render non funziona: docxtpl ricalcola la griglia in modo uniforme
+    quando fonde il subdoc nel documento principale. Qui interveniamo quindi
+    DOPO, sull'XML del documento già assemblato — l'ultima modifica applicata,
+    che nessun ricalcolo successivo può più sovrascrivere.
+
+    Nota: impostare solo le larghezze non basta. Le tabelle create da
+    python-docx hanno di default <w:tblLayout w:type="autofit"/>, che dice a
+    Word di ricalcolare comunque le colonne in base al contenuto/finestra,
+    ignorando i valori espliciti in w:tblGrid/w:tcW. Bisogna quindi forzare
+    tblLayout a "fixed" perché la larghezza impostata venga davvero rispettata.
+
+    Le larghezze sotto non sono stime a occhio: sono calcolate misurando con
+    PIL (font Arial/Arial Bold, stesse dimensioni usate nella tabella) la
+    larghezza reale delle stringhe più lunghe che possono comparire in queste
+    colonne, più il margine di cella di default di Word (108 twips per lato,
+    da "Normal Table" in styles.xml) e un margine di sicurezza. Un tentativo
+    precedente basato su renderizzazioni a bassa risoluzione osservate a
+    occhio aveva sottostimato le colonne "V.A." (i numeri con due decimali
+    andavano a capo su una cifra, es. "100,0" / "0"): misurare il testo
+    invece di stimarlo a vista evita di doverci ritornare una terza volta.
+    """
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+
+    # w:w per w:tcW/w:gridCol vuole il valore in twips (dxa), non in EMU: da qui la
+    # conversione esplicita .twips sull'oggetto Length restituito da Cm(...).
+    # Le 8 colonne numeriche non sono tutte uguali: quelle "V.A." (valore
+    # assoluto, indici dispari) portano numeri anche di 12-13 cifre (es.
+    # "1.120.749,20"), mentre quelle "%" (indici pari) restano sempre corte
+    # (es. "100,00"). Una larghezza uniforme per tutte e 8 sprecava spazio
+    # sulle "%" e non ne lasciava abbastanza alle "V.A.".
+    #
+    # A 9,5pt (dimensione originale di Tabella 1) le stringhe più lunghe non
+    # ci stavano nella larghezza disponibile della tabella (~17,7 cm su 9
+    # colonne) in nessuna combinazione: la somma dei minimi superava il
+    # budget di svariati millimetri. Serviva anche ridurre leggermente il
+    # font: a 8pt (vedi Pt(8.0) nella costruzione di Tabella 1 e Tabella 6)
+    # tutto rientra con un margine di sicurezza reale, non al millimetro.
+    TWIPS_COL_REGIONI = Cm(3.6).twips  # "TOTALE NORD OVEST" / "ITALIA (TOTALE)" a 8pt grassetto
+    TWIPS_COL_VA = Cm(2.2).twips       # "1.120.749,20" a 8pt
+    TWIPS_COL_PCT = Cm(1.4).twips      # "100,00" a 8pt grassetto
+
+    def larghezza_colonna(i):
+        if i == 0:
+            return TWIPS_COL_REGIONI
+        return TWIPS_COL_VA if i % 2 == 1 else TWIPS_COL_PCT
+
+    # Ricerca ricorsiva su tutto l'albero XML: queste tabelle vengono iniettate
+    # da docxtpl fondendo un subdoc, e finiscono annidate in un contenitore
+    # (w:sdt) che "doc.tables" (solo tabelle dirette in w:body) non attraversa.
+    # Niente "break": entrambe le tabelle che matchano (Tabella 1 e Tabella 6)
+    # vanno corrette, non solo la prima trovata.
+    for tbl in doc.element.body.iter(qn('w:tbl')):
+        prima_riga = tbl.find(qn('w:tr'))
+        if prima_riga is None:
+            continue
+        prima_cella = prima_riga.find(qn('w:tc'))
+        if prima_cella is None:
+            continue
+        testo_prima_cella = ''.join(t.text or '' for t in prima_cella.iter(qn('w:t')))
+        tblGrid = tbl.find(qn('w:tblGrid'))
+        n_colonne = len(tblGrid.findall(qn('w:gridCol'))) if tblGrid is not None else 0
+        if testo_prima_cella.strip() != 'Regioni' or n_colonne != 9:
+            continue
+
+        tblPr = tbl.find(qn('w:tblPr'))
+        if tblPr is not None:
+            tblLayout = tblPr.find(qn('w:tblLayout'))
+            if tblLayout is None:
+                tblLayout = OxmlElement('w:tblLayout')
+                tblPr.append(tblLayout)
+            tblLayout.set(qn('w:type'), 'fixed')
+
+        cols = tblGrid.findall(qn('w:gridCol'))
+        for i, col in enumerate(cols):
+            col.set(qn('w:w'), str(larghezza_colonna(i)))
+
+        # Riga per riga, non basta enumerare le celle nell'ordine in cui
+        # compaiono: l'intestazione di Tabella 6 unisce orizzontalmente coppie
+        # di colonne (es. "Totale Imprese" copre le colonne griglia 1 e 2), e
+        # in quel caso il <w:tc> è uno solo ma con w:gridSpan=2. Enumerare le
+        # celle senza tener conto dello gridSpan assegnava alla cella unita la
+        # larghezza di UNA sola colonna (es. la sola "V.A.") invece della
+        # somma delle colonne che realmente copre — disallineando quella
+        # cella dalla griglia sottostante e restringendo di fatto la "%" della
+        # riga dei dati. Si avanza quindi un puntatore di colonna-griglia,
+        # incrementato dello gridSpan effettivo di ogni cella.
+        for tr in tbl.findall(qn('w:tr')):
+            col_idx = 0
+            for tc in tr.findall(qn('w:tc')):
+                tcPr = tc.find(qn('w:tcPr'))
+                if tcPr is None:
+                    tcPr = OxmlElement('w:tcPr')
+                    tc.insert(0, tcPr)
+                grid_span_el = tcPr.find(qn('w:gridSpan'))
+                span = int(grid_span_el.get(qn('w:val'))) if grid_span_el is not None else 1
+
+                larghezza_cella = sum(larghezza_colonna(j) for j in range(col_idx, col_idx + span))
+
+                tcW = tcPr.find(qn('w:tcW'))
+                if tcW is None:
+                    tcW = OxmlElement('w:tcW')
+                    tcPr.append(tcW)
+                tcW.set(qn('w:type'), 'dxa')
+                tcW.set(qn('w:w'), str(larghezza_cella))
+
+                col_idx += span
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
+
+
+def aggiungi_logo_copertina(output_buffer, path_logo="logofv.png"):
+    """
+    Inserisce il logo Finance & Value in cima alla prima pagina e in ultima
+    pagina. È un'immagine fluttuante (ancorata, non in linea nel testo): non
+    aggiunge altezza al flusso dei paragrafi, quindi non tocca in alcun modo
+    la spaziatura calibrata a mano nella copertina (che centra il titolo e fa
+    cadere "Sommario" all'inizio della pagina 2 solo grazie all'ingombro dei
+    paragrafi vuoti che lo precedono — non c'è un page break esplicito).
+    """
+    if not os.path.exists(path_logo):
+        return output_buffer
+
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+    paragrafi = doc.paragraphs
+    if not paragrafi:
+        result = io.BytesIO()
+        doc.save(result)
+        result.seek(0)
+        return result
+
+    LARGHEZZA_PAGINA_EMU = 12240 * 635  # 8.5" a 635 EMU/twip, coerente col resto del template
+
+    def inserisci_floating(paragrafo, top_emu, width_cm, doc_pr_id, doc_pr_name):
+        run = paragrafo.add_run()
+        run.add_picture(path_logo, width=Cm(width_cm))
+        drawing = run._r.find(qn('w:drawing'))
+        inline = drawing.find(qn('wp:inline'))
+        extent = inline.find(qn('wp:extent'))
+        cx = int(extent.get('cx'))
+        graphic = inline.find(qn('a:graphic'))
+        inline.remove(extent)
+        inline.remove(graphic)
+        drawing.remove(inline)
+
+        left_emu = max(0, int((LARGHEZZA_PAGINA_EMU - cx) / 2))
+
+        anchor = OxmlElement('wp:anchor')
+        for attr, val in [('distT', '0'), ('distB', '0'), ('distL', '0'), ('distR', '0'),
+                          ('simplePos', '0'), ('relativeHeight', str(doc_pr_id)),
+                          ('behindDoc', '0'), ('locked', '0'), ('layoutInCell', '1'),
+                          ('allowOverlap', '1')]:
+            anchor.set(attr, val)
+
+        simple_pos = OxmlElement('wp:simplePos')
+        simple_pos.set('x', '0')
+        simple_pos.set('y', '0')
+        anchor.append(simple_pos)
+
+        pos_h = OxmlElement('wp:positionH')
+        pos_h.set('relativeFrom', 'page')
+        off_h = OxmlElement('wp:posOffset')
+        off_h.text = str(left_emu)
+        pos_h.append(off_h)
+        anchor.append(pos_h)
+
+        pos_v = OxmlElement('wp:positionV')
+        pos_v.set('relativeFrom', 'page')
+        off_v = OxmlElement('wp:posOffset')
+        off_v.text = str(int(top_emu))
+        pos_v.append(off_v)
+        anchor.append(pos_v)
+
+        anchor.append(extent)
+
+        wrap = OxmlElement('wp:wrapNone')
+        anchor.append(wrap)
+
+        doc_pr = OxmlElement('wp:docPr')
+        doc_pr.set('id', str(doc_pr_id))
+        doc_pr.set('name', doc_pr_name)
+        anchor.append(doc_pr)
+
+        cnv = OxmlElement('wp:cNvGraphicFramePr')
+        anchor.append(cnv)
+
+        anchor.append(graphic)
+
+        drawing.append(anchor)
+
+    # Logo in cima alla prima pagina (ancorato al paragrafo del titolo)
+    # Logo leggermente più piccolo e più in alto: il titolo (stile Title, ~22-24pt)
+    # inizia esattamente al margine superiore della pagina (2,68 cm), quindi un logo
+    # troppo grande o troppo in basso lo tocca. Con queste misure resta un margine
+    # pulito di circa mezzo centimetro prima del titolo.
+    inserisci_floating(paragrafi[0], top_emu=int(0.5 * 360000),
+                        width_cm=3.5, doc_pr_id=251701000, doc_pr_name="LogoCopertina")
+
+    # Logo in ultima pagina, su uno degli ultimi paragrafi vuoti (centrato verticalmente
+    # nello spazio bianco lasciato in fondo al documento)
+    idx_ultima = max(0, len(paragrafi) - 8)
+    inserisci_floating(paragrafi[idx_ultima], top_emu=int(11.0 * 360000),
+                        width_cm=4.5, doc_pr_id=251701001, doc_pr_name="LogoUltimaPagina")
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
 
 
 def correggi_box_kpi_executive_summary(output_buffer):

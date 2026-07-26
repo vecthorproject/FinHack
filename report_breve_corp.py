@@ -213,19 +213,19 @@ def formatta_box_commento_grafico(slide, placeholder, icona_metrica, titolo, tre
 # =================================================================
 
 def get_short_eco(rating):
-    if rating == 'A': return "L'azienda si posiziona oltre il 2° terzile, superando la media dei competitor. Esprime una buona capacità di generare profitti operativi."
+    if rating == 'A': return "L'azienda si posiziona nel 1° terzile, superando la media dei competitor. Esprime una buona capacità di generare profitti operativi."
     elif rating == 'B': return "Performance in linea con il mercato. La marginalità è adeguata, con fisiologici spazi di ottimizzazione."
-    return "Valori inferiori al 1° terzile. I costi comprimono la marginalità operativa rispetto agli standard di settore, richiedendo un intervento."
+    return "Valori nel 3° terzile. I costi comprimono la marginalità operativa rispetto agli standard di settore, richiedendo un intervento."
 
 def get_short_patr(rating):
-    if rating == 'A': return "Struttura solida e ben capitalizzata. Gli indici confermano un perfetto allineamento agli standard ottimali del mercato."
-    elif rating == 'B': return "Struttura equilibrata e in linea con il mercato. Adeguata la copertura degli asset a lungo termine."
-    return "Capitalizzazione limitata e forte dipendenza dal debito. Necessario un ribilanciamento urgente delle fonti di finanziamento."
+    if rating == 'A': return "Struttura solida e ben capitalizzata: l'azienda si posiziona nel 1° terzile del settore. Gli indici confermano un perfetto allineamento agli standard ottimali del mercato."
+    elif rating == 'B': return "Struttura equilibrata e in linea con il mercato (2° terzile). Adeguata la copertura degli asset a lungo termine."
+    return "Capitalizzazione limitata e forte dipendenza dal debito: valori nel 3° terzile del settore. Necessario un ribilanciamento urgente delle fonti di finanziamento."
 
 def get_short_fin(rating):
-    if rating == 'A': return "Gestione della liquidità ottimale. Generazione di cassa abbondante per coprire agevolmente gli impegni a breve."
-    elif rating == 'B': return "Gestione della liquidità bilanciata e stabile. La società dimostra una serena e adeguata capacità di coprire gli impegni a breve termine."
-    return "Criticità nella solvibilità a breve. Liquidità vincolata e potenziale tensione operativa sui pagamenti correnti."
+    if rating == 'A': return "Gestione della liquidità ottimale: l'azienda si posiziona nel 1° terzile del settore. Generazione di cassa abbondante per coprire agevolmente gli impegni a breve."
+    elif rating == 'B': return "Gestione della liquidità bilanciata e stabile (2° terzile). La società dimostra una serena e adeguata capacità di coprire gli impegni a breve termine."
+    return "Criticità nella solvibilità a breve: valori nel 3° terzile del settore. Liquidità vincolata e potenziale tensione operativa sui pagamenti correnti."
 
 def get_bullet_nazionale(rat_eco, rat_patr, rat_fin):
     b1 = "Si distingue per una buona redditività operativa rispetto al panel nazionale." if rat_eco == 'A' else ("Mantiene un posizionamento economico strutturalmente competitivo nel panel." if rat_eco == 'B' else "Mostra una debolezza nella redditività operativa rispetto al panel nazionale.")
@@ -364,86 +364,68 @@ def get_commento_rotazione_trend(az_val, ita_val, trend='', val_21=None):
     return f"La Rotazione del Capitale si attesta a {format_euro(az_val)}{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)})."
 
 def get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof, reg_ebitda, reg_ebit, reg_prof):
-    metriche = [
-        ('EBITDA Margin', az_ebitda, ita_ebitda, reg_ebitda),
-        ('EBIT Margin',   az_ebit,   ita_ebit,   reg_ebit),
-        ('Profit Margin', az_prof,   ita_prof,   reg_prof),
-    ]
-    sotto_naz = [(n, az, ita) for n, az, ita, _ in metriche if az < ita]
-    sopra_naz = [(n, az, ita) for n, az, ita, _ in metriche if az >= ita]
-    sotto_reg = sum(1 for _, az, _, reg in metriche if az < reg)
+    # Una riga compatta per indicatore (valore + confronto Italia/Regione insieme,
+    # non due frasi separate) più una sintesi che nomina esplicitamente l'indicatore
+    # fuori linea, invece di un generico "quadro misto" che non dice nulla di utile.
+    dati = (f"EBITDA Margin {format_euro(az_ebitda)}% (Italia {format_euro(ita_ebitda)}%, Regione {format_euro(reg_ebitda)}%); "
+            f"EBIT Margin {format_euro(az_ebit)}% (Italia {format_euro(ita_ebit)}%, Regione {format_euro(reg_ebit)}%); "
+            f"Profit Margin {format_euro(az_prof)}% (Italia {format_euro(ita_prof)}%, Regione {format_euro(reg_prof)}%).")
+
+    sotto_naz = []
+    if az_ebitda < ita_ebitda: sotto_naz.append("l'EBITDA Margin")
+    if az_ebit < ita_ebit: sotto_naz.append("l'EBIT Margin")
+    if az_prof < ita_prof: sotto_naz.append("il Profit Margin")
 
     if not sotto_naz:
-        frase1 = (f"Tutti gli indicatori superano la mediana nazionale: "
-                  f"EBITDA Margin {format_euro(az_ebitda)}% (naz. {format_euro(ita_ebitda)}%), "
-                  f"EBIT Margin {format_euro(az_ebit)}% (naz. {format_euro(ita_ebit)}%), "
-                  f"Profit Margin {format_euro(az_prof)}% (naz. {format_euro(ita_prof)}%).")
-    elif not sopra_naz:
-        sotto_str = "; ".join(f"{n}: {format_euro(az)}% vs naz. {format_euro(ita)}%" for n, az, ita in sotto_naz)
-        frase1 = f"Tutti gli indicatori si collocano al di sotto della mediana nazionale — {sotto_str}."
+        sintesi = "Redditività superiore alla mediana nazionale su tutti gli indicatori."
+    elif len(sotto_naz) == 3:
+        sintesi = "Redditività inferiore alla mediana nazionale su tutti gli indicatori: marginalità da ottimizzare."
     else:
-        sopra_str = ", ".join(f"{n}: {format_euro(az)}%" for n, az, _ in sopra_naz)
-        sotto_str = ", ".join(f"{n}: {format_euro(az)}% (vs naz. {format_euro(ita)}%)" for n, az, ita in sotto_naz)
-        frase1 = f"{sopra_str} supera la mediana nazionale; {sotto_str} si colloca al di sotto del benchmark."
+        nomi = " e ".join(sotto_naz)
+        verbo = "resta" if len(sotto_naz) == 1 else "restano"
+        sintesi = f"Redditività superiore alla mediana nazionale, tranne per {nomi}, che {verbo} sotto benchmark."
 
-    if sotto_reg == 0:
-        frase2 = "Il confronto regionale conferma il posizionamento competitivo superiore alla media territoriale su tutte le metriche."
-    elif sotto_reg == 3:
-        frase2 = "Anche rispetto alla mediana regionale tutti gli indicatori risultano inferiori, accentuando le criticità operative a livello territoriale."
-    else:
-        frase2 = "Il confronto regionale evidenzia un posizionamento differenziato rispetto ai competitor del territorio."
-
-    return f"{frase1} {frase2}"
+    return f"{dati} {sintesi}"
 
 def get_commento_barre_patr(az_str1, az_str2, az_gear, ita_str1, ita_str2, ita_gear, reg_str1, reg_str2, reg_gear):
-    soglia_str1 = "≥ 1, in equilibrio" if az_str1 >= 1 else "< 1, sotto soglia"
-    soglia_str2 = "≥ 1, in equilibrio" if az_str2 >= 1 else "< 1, sotto soglia"
-    gear_vs_naz = "inferiore" if az_gear <= ita_gear else "superiore"
-    gear_vs_reg = "inferiore" if az_gear <= reg_gear else "superiore"
-    str1_vs_reg = "superiore" if az_str1 >= reg_str1 else "inferiore"
-    str2_vs_reg = "superiore" if az_str2 >= reg_str2 else "inferiore"
+    dati = (f"Ind. Struttura 1° {format_euro(az_str1)} (Italia {format_euro(ita_str1)}, Regione {format_euro(reg_str1)}); "
+            f"Ind. Struttura 2° {format_euro(az_str2)} (Italia {format_euro(ita_str2)}, Regione {format_euro(reg_str2)}); "
+            f"Gearing {format_euro(az_gear)}% (Italia {format_euro(ita_gear)}%, Regione {format_euro(reg_gear)}%).")
 
-    frase1 = (f"Ind. Struttura 1°: {format_euro(az_str1)} ({soglia_str1}); "
-              f"Ind. Struttura 2°: {format_euro(az_str2)} ({soglia_str2}); "
-              f"Gearing {format_euro(az_gear)}% — {gear_vs_naz} alla mediana nazionale ({format_euro(ita_gear)}%).")
+    problemi = []
+    if az_str1 < 1: problemi.append("l'Indice di Struttura 1° sotto soglia (< 1)")
+    if az_str2 < 1: problemi.append("l'Indice di Struttura 2° sotto soglia (< 1)")
+    if az_gear > ita_gear: problemi.append("il Gearing superiore alla mediana nazionale")
 
-    if az_str1 >= 1 and az_str2 >= 1 and az_gear <= ita_gear:
-        frase2 = (f"Il confronto regionale conferma la solidità patrimoniale: entrambi gli indici di struttura risultano "
-                  f"{str1_vs_reg} alla media territoriale e il Gearing è {gear_vs_reg} alla mediana regionale ({format_euro(reg_gear)}%).")
-    elif az_str1 < 1 or az_str2 < 1:
-        frase2 = (f"A livello regionale gli indici di struttura risultano {str1_vs_reg} (1°) e {str2_vs_reg} (2°) "
-                  f"rispetto alla mediana territoriale; il Gearing è {gear_vs_reg} alla media regionale ({format_euro(reg_gear)}%).")
+    if not problemi:
+        sintesi = "Struttura patrimoniale solida: immobilizzazioni coperte e leva finanziaria contenuta."
+    elif len(problemi) == 1:
+        sintesi = f"Struttura patrimoniale nel complesso solida, con {problemi[0]}."
     else:
-        frase2 = (f"La copertura degli asset risulta adeguata, ma il Gearing è {gear_vs_reg} alla mediana regionale "
-                  f"({format_euro(reg_gear)}%), evidenziando un'esposizione debitoria da monitorare nel confronto territoriale.")
+        sintesi = "Struttura patrimoniale da monitorare: " + "; ".join(problemi) + "."
 
-    return f"{frase1} {frase2}"
+    return f"{dati} {sintesi}"
 
 def get_commento_barre_fin(az_cr, az_qr, az_rot, ita_cr, ita_qr, ita_rot, reg_cr, reg_qr, reg_rot):
-    cr_soglia = "≥ 1, equilibrio corrente" if az_cr >= 1 else "< 1, tensione corrente"
-    qr_soglia = "≥ 1, liquidità adeguata"  if az_qr >= 1 else "< 1, dipendenza dal magazzino"
-    rot_vs_naz = "superiore" if az_rot >= ita_rot else "inferiore"
-    cr_vs_reg  = "superiore" if az_cr  >= reg_cr  else "inferiore"
-    qr_vs_reg  = "superiore" if az_qr  >= reg_qr  else "inferiore"
-    rot_vs_reg = "superiore" if az_rot >= reg_rot else "inferiore"
+    dati = (f"Current Ratio {format_euro(az_cr)} (Italia {format_euro(ita_cr)}, Regione {format_euro(reg_cr)}); "
+            f"Quick Ratio {format_euro(az_qr)} (Italia {format_euro(ita_qr)}, Regione {format_euro(reg_qr)}); "
+            f"Rotazione Cap. {format_euro(az_rot)} (Italia {format_euro(ita_rot)}, Regione {format_euro(reg_rot)}).")
 
-    frase1 = (f"Current Ratio {format_euro(az_cr)} ({cr_soglia}); "
-              f"Quick Ratio {format_euro(az_qr)} ({qr_soglia}); "
-              f"Rotazione Cap. Inv. {format_euro(az_rot)} — {rot_vs_naz} alla mediana naz. ({format_euro(ita_rot)}).")
+    # Prima la Rotazione del Capitale era mostrata nei dati ma mai valutata nella sintesi:
+    # poteva risultare sotto la mediana nazionale mentre il testo diceva "tutto solido".
+    problemi = []
+    if az_cr < 1: problemi.append("il Current Ratio sotto soglia (< 1)")
+    if az_qr < 1: problemi.append("il Quick Ratio sotto soglia (< 1)")
+    if az_rot < ita_rot: problemi.append("la Rotazione del Capitale inferiore alla mediana nazionale")
 
-    if az_cr >= 1 and az_qr >= 1 and az_rot >= ita_rot:
-        frase2 = (f"Il confronto regionale conferma il posizionamento positivo: Current Ratio {cr_vs_reg} e "
-                  f"Quick Ratio {qr_vs_reg} alla media territoriale, con rotazione del capitale {rot_vs_reg} "
-                  f"rispetto alla mediana regionale ({format_euro(reg_rot)}).")
-    elif not (az_cr >= 1) and not (az_qr >= 1):
-        frase2 = (f"Il confronto regionale accentua le criticità di liquidità: Current Ratio {cr_vs_reg} e "
-                  f"Quick Ratio {qr_vs_reg} rispetto alla media territoriale; la rotazione risulta {rot_vs_reg} "
-                  f"alla mediana regionale ({format_euro(reg_rot)}).")
+    if not problemi:
+        sintesi = "Equilibrio finanziario di breve termine solido su tutti gli indicatori."
+    elif len(problemi) == 1:
+        sintesi = f"Equilibrio finanziario nel complesso solido, con {problemi[0]}."
     else:
-        frase2 = (f"A livello regionale, Current Ratio è {cr_vs_reg} e Quick Ratio è {qr_vs_reg} rispetto alla "
-                  f"mediana territoriale; la rotazione del capitale è {rot_vs_reg} alla media regionale ({format_euro(reg_rot)}).")
+        sintesi = "Equilibrio finanziario da monitorare: " + "; ".join(problemi) + "."
 
-    return f"{frase1} {frase2}"
+    return f"{dati} {sintesi}"
 
 # =================================================================
 # 🚀 CORE GENERATION POWERPOINT
