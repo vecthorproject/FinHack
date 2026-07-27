@@ -348,7 +348,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         perc_ricavi_panel = (ricavi_mgl / tot_ricavi_settore * 100) if tot_ricavi_settore > 0 and pd.notna(ricavi_mgl) else 0
         perc_attivo_panel = (attivo_mgl / tot_attivo_settore * 100) if tot_attivo_settore > 0 and pd.notna(attivo_mgl) else 0
         tot_dip_area = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Numero dipendenti 2024'].sum()
-        perc_dip_area = (dipendenti / tot_dip_area * 100) if tot_dip_area > 0 and pd.notna(dipendenti) else 0
+        # Se il numero di dipendenti dell'azienda target non e' noto (n.d.), la quota
+        # sul totale dell'area deve restare n.d. anch'essa: un fallback a 0 darebbe
+        # l'impressione (falsa) di "zero dipendenti", invece del dato mancante.
+        perc_dip_area = (dipendenti / tot_dip_area * 100) if tot_dip_area > 0 and pd.notna(dipendenti) else np.nan
         # --- NUOVI CALCOLI TERRITORIALI ---
         regione_grezza = str(riga.get(col_regione, 'N.D.'))
         regione_target_pulita = regione_grezza.split(' - ')[1] if ' - ' in regione_grezza else regione_grezza
@@ -364,12 +367,19 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         # =======================================================
         # Filtriamo il database prendendo SOLO le aziende con la stessa forma giuridica (es. solo le S.p.A.)
         df_categoria = df_orbis[df_orbis['Forma Giuridica Pulita'] == forma_giuridica]
-        
+
+        # Se l'azienda target e' l'unica nel panel con questa forma giuridica (caso
+        # tipico di forme atipiche/rare, es. enti pubblici), il confronto "quota sul
+        # totale di categoria" e' una tautologia (100% di se' stessa): non e' un dato
+        # sbagliato ma e' privo di significato comparativo, quindi lo trattiamo come
+        # non disponibile invece di mostrare un fuorviante "100,00%".
+        categoria_ha_peer = len(df_categoria) > 1
+
         tot_ricavi_categoria = df_categoria['Totale valore della produzione migl EUR 2024'].sum()
         tot_attivo_categoria = df_categoria['Totale Attivo migl EUR 2024'].sum()
-        
-        perc_ricavi_categoria = (ricavi_mgl / tot_ricavi_categoria * 100) if tot_ricavi_categoria > 0 and pd.notna(ricavi_mgl) else 0
-        perc_attivo_categoria = (attivo_mgl / tot_attivo_categoria * 100) if tot_attivo_categoria > 0 and pd.notna(attivo_mgl) else 0
+
+        perc_ricavi_categoria = (ricavi_mgl / tot_ricavi_categoria * 100) if categoria_ha_peer and tot_ricavi_categoria > 0 and pd.notna(ricavi_mgl) else np.nan
+        perc_attivo_categoria = (attivo_mgl / tot_attivo_categoria * 100) if categoria_ha_peer and tot_attivo_categoria > 0 and pd.notna(attivo_mgl) else np.nan
 
         try: quartile_ricavi_target = pd.qcut(df_orbis['Totale valore della produzione migl EUR 2024'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
         except: quartile_ricavi_target = "N.D."
