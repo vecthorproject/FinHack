@@ -2872,19 +2872,30 @@ if uploaded_file is not None:
 
     # --- SELEZIONE AUTOMATICA E INTELLIGENTE DELL'AZIENDA TARGET ---
         col_ragione_sociale = [c for c in df_orbis.columns if 'ragione' in str(c).lower()][0]
+        col_piva = next((c for c in df_orbis.columns if 'partita iva' in str(c).lower() or 'codice fiscale' in str(c).lower()), None)
+        col_bvd = next((c for c in df_orbis.columns if 'bvd' in str(c).lower()), None)
 
         st.markdown("### 🎯 Impostazione Azienda Target")
         ricerca_manuale = st.text_input(
-            "Vuoi analizzare un'azienda specifica? (Opzionale)", 
-            placeholder="Es: scrivi la Ragione Sociale... Lascia vuoto per l'auto-selezione intelligente."
+            "Vuoi analizzare un'azienda specifica? (Opzionale)",
+            placeholder="Es: Ragione Sociale, Partita IVA o Codice BvD ID... Lascia vuoto per l'auto-selezione intelligente."
         )
 
         azienda_target = None
 
-        # --- 1. TENTATIVO DI RICERCA MANUALE ---
+        # --- 1. TENTATIVO DI RICERCA MANUALE (per Ragione Sociale, Partita IVA o Codice BvD ID, per evitare omonimie) ---
         if ricerca_manuale.strip():
-            df_match = df_orbis[df_orbis[col_ragione_sociale].astype(str).str.lower().str.contains(ricerca_manuale.lower().strip(), na=False)]
-            
+            chiave_ricerca = ricerca_manuale.lower().strip()
+            maschera_match = df_orbis[col_ragione_sociale].astype(str).str.lower().str.contains(chiave_ricerca, na=False)
+            if col_piva:
+                # La colonna P.IVA viene letta da Excel come numero: gli eventuali zeri iniziali
+                # (es. "00380570166") vengono persi. Se l'utente li digita comunque, li ignoriamo.
+                chiave_piva = chiave_ricerca.lstrip('0') or chiave_ricerca
+                maschera_match |= df_orbis[col_piva].astype(str).str.lower().str.contains(chiave_piva, na=False)
+            if col_bvd:
+                maschera_match |= df_orbis[col_bvd].astype(str).str.lower().str.contains(chiave_ricerca, na=False)
+            df_match = df_orbis[maschera_match]
+
             if not df_match.empty:
                 azienda_target = df_match.iloc[0][col_ragione_sociale]
                 st.success(f"✅ **Azienda Target forzata manualmente:** {azienda_target}")
