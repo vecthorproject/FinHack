@@ -2802,11 +2802,88 @@ if uploaded_file is not None:
         righe_post_rotazione = len(df_orbis)
         scartate_rotazione = righe_iniziali - righe_post_rotazione
         
+        # --- 🆕 OPZIONE: ESENZIONE MANUALE DAL FILTRO GEARING ---
+        # Il Filtro 2 qui sotto resta invariato nella sua logica di default: questa
+        # sezione aggiunge solo delle eccezioni facoltative (una o più aziende, o
+        # l'intero campione) che non vengono scartate anche se il loro Gearing 2024
+        # risulta nullo o negativo. Se non si seleziona nulla, il comportamento è
+        # identico a prima.
+        # L'identificazione usa Ragione Sociale + P.IVA/Codice Fiscale + BvD ID
+        # (stessi criteri della ricerca manuale più sotto) per evitare ambiguità in
+        # caso di omonimie: il match applicato al filtro è però sempre sulla riga
+        # esatta (indice), non sul solo nome.
+        col_ragione_gearing = next((c for c in df_orbis.columns if 'ragione' in str(c).lower()), None)
+        col_piva_gearing = next((c for c in df_orbis.columns if 'partita iva' in str(c).lower() or 'codice fiscale' in str(c).lower()), None)
+        col_bvd_gearing = next((c for c in df_orbis.columns if 'bvd' in str(c).lower()), None)
+
+        def _formatta_piva_gearing(valore):
+            # Stesso fix già applicato nel report Word: Excel/Pandas legge la P.IVA
+            # come numero e ne "mangia" gli zeri iniziali (es. 00380570166 diventa
+            # 380570166.0). Qui la ricostruiamo per non mostrare un numero sbagliato
+            # nell'etichetta di selezione.
+            testo = str(valore).strip()
+            if testo.lower() in ['n.d.', 'nan', '']:
+                return None
+            try:
+                pulita = str(int(float(testo)))
+                return pulita.zfill(11)
+            except ValueError:
+                # Codice Fiscale alfanumerico (16 caratteri) o altri formati: invariato
+                return testo
+
+        def _etichetta_azienda_gearing(riga):
+            nome = str(riga[col_ragione_gearing]) if col_ragione_gearing and pd.notna(riga[col_ragione_gearing]) else "N.D."
+            dettagli = []
+            if col_piva_gearing and pd.notna(riga[col_piva_gearing]):
+                piva_corretta = _formatta_piva_gearing(riga[col_piva_gearing])
+                if piva_corretta:
+                    dettagli.append(f"P.IVA/CF {piva_corretta}")
+            if col_bvd_gearing and pd.notna(riga[col_bvd_gearing]):
+                dettagli.append(f"BvD ID {str(riga[col_bvd_gearing]).strip()}")
+            return f"{nome} ({', '.join(dettagli)})" if dettagli else nome
+
+        aziende_a_rischio_gearing = []   # indici di riga (chiave univoca), non nomi
+        etichette_aziende_gearing = {}
+        if col_g24 in df_orbis.columns and col_ragione_gearing:
+            maschera_a_rischio = df_orbis[col_g24].isna() | (df_orbis[col_g24] <= 0)
+            df_rischio_gearing = df_orbis.loc[maschera_a_rischio].sort_values(
+                col_ragione_gearing, key=lambda s: s.astype(str).str.lower()
+            )
+            aziende_a_rischio_gearing = df_rischio_gearing.index.tolist()
+            etichette_aziende_gearing = {idx: _etichetta_azienda_gearing(row) for idx, row in df_rischio_gearing.iterrows()}
+
+        disattiva_filtro_gearing = False
+        indici_esenti_gearing = []
+        if aziende_a_rischio_gearing:
+            with st.expander(f"⚙️ Filtro Gearing: {len(aziende_a_rischio_gearing)} aziende a rischio scarto (opzioni avanzate)"):
+                disattiva_filtro_gearing = st.toggle(
+                    "🔓 Non applicare il Filtro Gearing a nessuna azienda del campione",
+                    value=False,
+                    help="Disattiva completamente il Filtro 2 (Gearing nullo o negativo): nessuna azienda viene scartata per questo motivo.",
+                    key="disattiva_filtro_gearing"
+                )
+                if not disattiva_filtro_gearing:
+                    indici_esenti_gearing = st.multiselect(
+                        "Escludi singolarmente una o più aziende dal Filtro Gearing (restano nel campione anche con Gearing nullo/negativo)",
+                        options=aziende_a_rischio_gearing,
+                        format_func=lambda idx: etichette_aziende_gearing.get(idx, str(idx)),
+                        default=[],
+                        help="Ogni azienda è identificata da Ragione Sociale, P.IVA/Codice Fiscale e BvD ID (quando disponibili), per distinguere eventuali omonimie. Puoi digitare uno di questi dati per cercarla nell'elenco.",
+                        key="indici_esenti_gearing"
+                    )
+
         # --- FILTRO 2: GEARING ---
         if col_g24 in df_orbis.columns:
-            # Elimina chi ha Gearing nullo o negativo nel 2024
-            df_orbis = df_orbis[(df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)]
-            
+            if disattiva_filtro_gearing:
+                maschera_gearing_ok = pd.Series(True, index=df_orbis.index)
+            else:
+                # Elimina chi ha Gearing nullo o negativo nel 2024
+                maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)
+                if indici_esenti_gearing:
+                    maschera_gearing_ok |= df_orbis.index.isin(indici_esenti_gearing)
+
+            df_orbis = df_orbis[maschera_gearing_ok]
+
             # Nasconde gli zeri degli anni passati trasformandoli in 'n.d.'
             for col_g in [col_g23, col_g22, col_g21]:
                 if col_g in df_orbis.columns:

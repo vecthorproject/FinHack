@@ -105,17 +105,25 @@ def get_analisi_margine_profitto_tag(az_prof, set_prof):
 # 🟠 INDICATORI PATRIMONIALI (100% SEPARATI)
 # =================================================================
 
-def get_analisi_struttura1(az_str1):
+def get_analisi_struttura1(az_str1, set_str1):
     if az_str1 >= 1:
-        return f"• L'Indice primario di struttura ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi."
+        base = f"• L'Indice primario di struttura ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi"
     else:
-        return f"• L'Indice primario di struttura ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine."
+        base = f"• L'Indice primario di struttura ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine"
+    if az_str1 >= set_str1:
+        return f"{base}, in linea o al di sopra della mediana di settore ({format_euro(set_str1)})."
+    else:
+        return f"{base}, pur restando al di sotto della mediana di settore ({format_euro(set_str1)})."
 
-def get_analisi_struttura2(az_str2):
+def get_analisi_struttura2(az_str2, set_str2):
     if az_str2 >= 1:
-        return f"• L'Indice secondario di struttura ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati."
+        base = f"• L'Indice secondario di struttura ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati"
     else:
-        return f"• L'Indice secondario di struttura ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi."
+        base = f"• L'Indice secondario di struttura ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi"
+    if az_str2 >= set_str2:
+        return f"{base}, in linea o al di sopra della mediana di settore ({format_euro(set_str2)})."
+    else:
+        return f"{base}, pur restando al di sotto della mediana di settore ({format_euro(set_str2)})."
 
 def get_analisi_gearing_tag(az_gear, set_gear):
     if az_gear <= set_gear:
@@ -129,15 +137,23 @@ def get_analisi_gearing_tag(az_gear, set_gear):
 
 def get_analisi_current_ratio_tag(az_cr, set_cr):
     if az_cr >= 1:
-        return f"• Il Current Ratio ({format_euro(az_cr)}), superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio."
+        base = f"• Il Current Ratio ({format_euro(az_cr)}), superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio"
     else:
-        return f"• Il Current Ratio ({format_euro(az_cr)}), inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio."
+        base = f"• Il Current Ratio ({format_euro(az_cr)}), inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio"
+    if az_cr >= set_cr:
+        return f"{base}, in linea o al di sopra della mediana di settore ({format_euro(set_cr)})."
+    else:
+        return f"{base}, pur restando al di sotto della mediana di settore ({format_euro(set_cr)})."
 
 def get_analisi_quick_ratio_tag(az_qr, set_qr):
     if az_qr >= 1:
-        return f"• Il Quick Ratio ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita delle rimanenze di magazzino."
+        base = f"• Il Quick Ratio ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita delle rimanenze di magazzino"
     else:
-        return f"• Il Quick Ratio ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati."
+        base = f"• Il Quick Ratio ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati"
+    if az_qr >= set_qr:
+        return f"{base}, in linea o al di sopra della mediana di settore ({format_euro(set_qr)})."
+    else:
+        return f"{base}, pur restando al di sotto della mediana di settore ({format_euro(set_qr)})."
 
 def get_analisi_rotazione_tag(az_rot, set_rot):
     if az_rot < set_rot:
@@ -556,10 +572,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         # Variabili di default (sovrascritte dal motore sottostante)
         'rating_eco': 'N.D.', 'rating_patr': 'N.D.', 'rating_fin': 'N.D.', 'rating_tot': 'N.D.', 'rating_comb': 'N.D.',
         'rating_piu_presente': 'N.D.', 'assoc_desc_rating_lett': 'N.D.',
-        'rat1_piu_pres_num': 'N.D.', 'rat1_piu_pres_categ': 'N.D.', 
         'rat2_piu_pres_num': 'N.D.', 'rat2_piu_pres_categ': 'N.D.',
-        'rat3_piu_pres_num': 'N.D.', 'rat3_piu_pres_categ': 'N.D.', 
-        'rating_piu_pres': 'N.D.', 'rating_piu_pres_num_tot': 'N.D.',
+        'rat3_piu_pres_num': 'N.D.', 'rat3_piu_pres_categ': 'N.D.',
+        'rating_piu_pres_num_tot': 'N.D.',
         'num_max_soc': 'N.D.', 'num_soc_valide': 'N.D.', 'perc_su_istat': '100', 'max_soc_istat': 'N.D.',
         'tab_territorio': [], 'tab_bench_territorio': []
     }
@@ -762,28 +777,6 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return "Rispetto al Benchmark Economico, i dati a disposizione non consentono di esprimere una valutazione completa, come riassunto di seguito:"
 
     # =================================================================
-    # 🟢 INDICATORI ECONOMICI (Valore vs Mediana) - Formattati a Bullet Points
-    # =================================================================
-    def get_analisi_margini_operativi(az_ebitda, set_ebitda, az_ebit, set_ebit, descr_settore):
-        if az_ebitda < set_ebitda:
-            txt_ebitda = f"• Il **Margine EBITDA** ({format_euro(az_ebitda)}%) risulta inferiore alla mediana settoriale ({format_euro(set_ebitda)}%). Valori più contenuti segnalano una minore capacità di trasformare i ricavi in margine operativo lordo, denotando una minore efficienza della gestione caratteristica prima degli ammortamenti e delle svalutazioni.\n"
-        else:
-            txt_ebitda = f"• Il **Margine EBITDA** ({format_euro(az_ebitda)}%) supera la mediana settoriale ({format_euro(set_ebitda)}%). Valori più elevati indicano una maggiore capacità dell'impresa di generare reddito dalla gestione caratteristica prima di ammortamenti e svalutazioni, evidenziando una superiore efficienza operativa.\n"
-
-        if az_ebit < set_ebit:
-            txt_ebit = f"• Il **Margine EBIT** ({format_euro(az_ebit)}%) si colloca al di sotto del target mediano ({format_euro(set_ebit)}%). Tale dato segnala una minore capacità di generare reddito operativo in relazione ai ricavi conseguiti a valle dell'assorbimento dei costi e degli ammortamenti."
-        else:
-            txt_ebit = f"• Il **Margine EBIT** ({format_euro(az_ebit)}%) si posiziona al di sopra della mediana di settore ({format_euro(set_ebit)}%). Questo livello indica una maggiore capacità di conseguire un risultato operativo soddisfacente dopo aver considerato gli ammortamenti e le svalutazioni."
-
-        return f"Le risultanze relative al mercato ({descr_settore}) evidenziano che:\n{txt_ebitda}{txt_ebit}"
-
-    def get_analisi_margine_profitto(az_prof, set_prof, descr_settore):
-        if az_prof < set_prof:
-            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in utile netto, evidenziando criticità nell'assorbimento della gestione straordinaria, degli oneri finanziari o del carico fiscale."
-        else:
-            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato netto finale, confermando una gestione ottimizzata degli oneri extra-caratteristici."
-
-    # =================================================================
     # 🟠 INDICATORI PATRIMONIALI (Valore vs 1 e Gearing vs Mediana)
     # =================================================================
     def get_intro_benchmark_patr(rating):
@@ -794,25 +787,6 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         elif rating == 'C':
             return "L'analisi segnala squilibri nella correlazione temporale tra le fonti di copertura e le immobilizzazioni aziendali rispetto ai parametri di sicurezza:"
         return "L'analisi non consente di esprimere una valutazione completa sui rischi a lungo termine a causa di dati insufficienti:"
-
-    def get_analisi_indici_struttura(az_str1, set_str1, az_str2, set_str2):
-        if az_str1 >= 1:
-            txt_s1 = f"• L'**Indice primario di struttura** ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi.\n"
-        else:
-            txt_s1 = f"• L'**Indice primario di struttura** ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine.\n"
-
-        if az_str2 >= 1:
-            txt_s2 = f"• L'**Indice secondario di struttura** ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati."
-        else:
-            txt_s2 = f"• L'**Indice secondario di struttura** ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi."
-
-        return f"Analizzando la provvista allargata:\n{txt_s1}{txt_s2}"
-
-    def get_analisi_gearing(az_gear, set_gear):
-        if az_gear <= set_gear:
-            return f"\n• Il **Gearing** ({format_euro(az_gear)}%) si attesta al di sotto del parametro mediano del comparto ({format_euro(set_gear)}%). Tali valori più contenuti indicano una limitata dipendenza dell'impresa dall'indebitamento oneroso e una solida autonomia rispetto ai creditori."
-        else:
-            return f"\n• Il **Gearing** ({format_euro(az_gear)}%) supera la mediana di settore ({format_euro(set_gear)}%). Valori più elevati segnalano un maggiore ricorso al capitale di terzi per il finanziamento aziendale, determinando un incremento del rischio finanziario e una minore autonomia."
 
     # =================================================================
     # 🔵 INDICATORI FINANZIARI (Valore vs 1 e Rotazione vs Mediana)
@@ -825,24 +799,6 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         elif rating == 'C':
             return "L'analisi degli indicatori correnti segnala potenziali tensioni di liquidità e un impiego meno efficiente delle risorse rispetto alle soglie di sicurezza:"
         return "L'analisi non consente di esprimere una valutazione completa sulla gestione della liquidità:"
-
-    def get_analisi_current_ratio(az_cr, set_cr):
-        if az_cr >= 1:
-            return f"• Il **Current Ratio** ({format_euro(az_cr)}), essendo superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio.\n"
-        else:
-            return f"• Il **Current Ratio** ({format_euro(az_cr)}), risultando inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio.\n"
-
-    def get_analisi_quick_ratio(az_qr, set_qr):
-        if az_qr >= 1:
-            return f"• Il **Quick Ratio** ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita forzata delle rimanenze di magazzino.\n"
-        else:
-            return f"• Il **Quick Ratio** ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati.\n"
-
-    def get_analisi_rotazione(az_rot, set_rot, descr_settore):
-        if az_rot < set_rot:
-            return f"• L'**Indice di rotazione del capitale investito** ({format_euro(az_rot)}) risulta inferiore alla mediana del comparto ({format_euro(set_rot)}). Valori più contenuti segnalano una minore capacità del capitale investito di tradursi in ricavi, denotando un impiego meno efficiente degli asset operativi."
-        else:
-            return f"• L'**Indice di rotazione del capitale investito** ({format_euro(az_rot)}) supera la mediana settoriale ({format_euro(set_rot)}). Valori più elevati indicano una maggiore capacità dell'impresa di generare ricavi attraverso le risorse investite, evidenziando un efficiente utilizzo del capitale."
 
     def get_analisi_posizionamento_fin(az_cr, az_qr, set_cr, set_qr):
         # La frase conclusiva sotto ai 3 bullet point finanziari
@@ -1145,10 +1101,17 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         elif not solvibile and efficiente: return "una rotazione dell'attivo superiore alla mediana di settore, a fronte di margini di miglioramento sulla solvibilità di breve termine."
         else: return "debolezze su più fronti: l'indice segnala tensioni di cassa correnti unite a un'inefficienza nella rotazione operativa del capitale."
 
-    def get_motivazione_rating_fin(az_cr, az_qr):
-        if az_cr >= 1.0 and az_qr >= 1.0: return "l'azienda dispone di risorse sufficienti a coprire i debiti (Current Ratio >= 1) senza svendere rimanenze (Quick Ratio >= 1)."
-        elif az_cr >= 1.0: return "l'azienda copre i debiti a breve con le attività correnti nel loro complesso (Current Ratio >= 1), ma tale copertura dipende in parte dallo smobilizzo delle rimanenze (Quick Ratio < 1)."
-        else: return "l'azienda risente di un'incapacità parziale di estinguere le passività a breve senza attingere al magazzino."
+    def get_motivazione_rating_fin(az_cr, az_qr, az_rot, set_rot):
+        # Il rating_fin nasce dalla somma dei terzili di TRE metriche (Rotazione,
+        # Quick Ratio, Current Ratio - vedi pts_fin): la motivazione deve riflettere
+        # tutte e tre, non solo CR/QR, altrimenti può contraddire la classe assegnata
+        # quando è la Rotazione a determinarla.
+        solvibile = az_cr >= 1.0 and az_qr >= 1.0
+        efficiente = az_rot >= set_rot
+        if solvibile and efficiente: return "l'azienda dispone di risorse sufficienti a coprire i debiti (Current Ratio >= 1) senza svendere rimanenze (Quick Ratio >= 1), unendo tale solidità a una rotazione del capitale investito superiore alla mediana di settore."
+        elif solvibile and not efficiente: return "l'azienda dispone di risorse sufficienti a coprire i debiti (Current Ratio >= 1) senza svendere rimanenze (Quick Ratio >= 1), a fronte però di una rotazione del capitale investito inferiore alla mediana di settore."
+        elif not solvibile and efficiente: return "l'azienda registra una rotazione del capitale investito superiore alla mediana di settore, a fronte di un'incapacità parziale di estinguere le passività a breve senza attingere al magazzino."
+        else: return "l'azienda risente di un'incapacità parziale di estinguere le passività a breve senza attingere al magazzino, unita a una rotazione del capitale investito inferiore alla mediana di settore."
 
     def get_gestione_tesoreria_fin(az_cr, az_qr):
         if az_cr >= 1.0 and az_qr >= 1.0: return "assicura un equilibrio di breve termine solido e privo di esposizione allo smobilizzo merci."
@@ -1227,18 +1190,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     # 🎯 POPOLAMENTO REALE DEL DIZIONARIO CON CHIAMATE POSIZIONALI CORRETTE
     # =================================================================
-    context['intro_benchmark_eco'] = get_intro_benchmark_eco(context['rating_eco'])
-    context['analisi_margini_operativi'] = get_analisi_margini_operativi(val_az_ebitda_24, val_set_ebitda_24, val_az_ebit_24, val_set_ebit_24, desc_nace_pulita)
-    context['analisi_margine_profitto'] = get_analisi_margine_profitto(val_az_profitto_24, val_set_profitto_24, desc_nace_pulita)
-
     context['intro_benchmark_patr'] = get_intro_benchmark_patr(context['rating_patr'])
-    context['analisi_indici_struttura'] = get_analisi_indici_struttura(val_az_strut1_24, val_set_strut1_24, val_az_strut2_24, val_set_strut2_24)
-    context['analisi_gearing'] = get_analisi_gearing(val_az_gearing_24, val_set_gearing_24)
 
     context['intro_benchmark_fin'] = get_intro_benchmark_fin(context['rating_fin'])
-    context['analisi_rotazione'] = get_analisi_rotazione(val_az_rot_24, val_set_rot_24, desc_nace_pulita)
-    context['analisi_current_ratio'] = get_analisi_current_ratio(val_az_cr_24, val_set_cr_24)
-    context['analisi_quick_ratio'] = get_analisi_quick_ratio(val_az_qr_24, val_set_qr_24)
     context['analisi_posizionamento_fin'] = get_analisi_posizionamento_fin(val_az_cr_24, val_az_qr_24, val_set_cr_24, val_set_qr_24)
 
     # -----------------------------------------------------
@@ -1249,8 +1203,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['analisi_ebit'] = get_analisi_ebit(val_az_ebit_24, val_set_ebit_24)
     context['analisi_margine_profitto'] = get_analisi_margine_profitto_tag(val_az_profitto_24, val_set_profitto_24)
 
-    context['analisi_struttura1'] = get_analisi_struttura1(val_az_strut1_24)
-    context['analisi_struttura2'] = get_analisi_struttura2(val_az_strut2_24)
+    context['analisi_struttura1'] = get_analisi_struttura1(val_az_strut1_24, val_set_strut1_24)
+    context['analisi_struttura2'] = get_analisi_struttura2(val_az_strut2_24, val_set_strut2_24)
     context['analisi_gearing'] = get_analisi_gearing_tag(val_az_gearing_24, val_set_gearing_24)
 
     context['analisi_current_ratio'] = get_analisi_current_ratio_tag(val_az_cr_24, val_set_cr_24)
@@ -1350,7 +1304,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['rapporto_capitale_fatturato'] = get_rapporto_capitale_fatturato(val_az_rot_24, val_set_rot_24)
     context['motivazione_strutturale_rotazione'] = get_motivazione_strutturale_rotazione(val_az_rot_24, val_set_rot_24)
     context['sintesi_finale_fin'] = get_sintesi_finale_fin(val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
-    context['motivazione_rating_fin'] = get_motivazione_rating_fin(val_az_cr_24, val_az_qr_24)
+    context['motivazione_rating_fin'] = get_motivazione_rating_fin(val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
     context['gestione_tesoreria_fin'] = get_gestione_tesoreria_fin(val_az_cr_24, val_az_qr_24)
     context['priorita_strategica_fin'] = get_priorita_strategica_fin(val_az_rot_24, val_set_rot_24)
 
@@ -2274,9 +2228,6 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         rat1_nome = str(conteggi.index[0]).strip()
         rat1_num = conteggi.iloc[0]
         context['rating_piu_presente'] = rat1_nome
-        context['rating_piu_pres'] = rat1_nome
-        context['rat1_piu_pres_categ'] = rat1_nome
-        context['rat1_piu_pres_num'] = f"{rat1_num:,}".replace(',', '.')
         context['rating_piu_pres_num_tot'] = f"{rat1_num:,}".replace(',', '.')
 
         if 'A' in rat1_nome: desc = 'Positivo / Solido'
@@ -3004,7 +2955,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['tabella_8_dinamica'] = sd_tab8
 
     # 3. Funzione per generare Grafici di Trend (Linee)
-    def genera_grafico_trend(anni, val_azienda, val_settore, nome_az, titolo):
+    def genera_grafico_trend(anni, val_azienda, val_settore, nome_az, titolo, is_percentuale=True):
         fig, ax = plt.subplots(figsize=(8, 4.5))
         
         # Pulizia dati per il grafico (sostituiamo eventuali NaN con 0)
@@ -3016,7 +2967,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         ax.plot(anni, val_set_clean, marker='s', linewidth=2, markersize=7, color='#b3af8f', linestyle='--', label='Mediana Settore')
         
         ax.set_title(titolo, fontsize=12, fontweight='bold', color='#333333')
-        ax.set_ylabel('%', fontsize=10)
+        if is_percentuale:
+            ax.set_ylabel('%', fontsize=10)
         ax.legend(loc='best', frameon=False)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -3045,7 +2997,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     
     # Funzione riutilizzabile per grafici a barre comparative (Azienda vs Settore per 1 singolo anno)
-    def genera_grafico_confronto_singolo(val_az, val_set, nome_az, titolo):
+    def genera_grafico_confronto_singolo(val_az, val_set, nome_az, titolo, is_percentuale=True):
         fig, ax = plt.subplots(figsize=(8, 5.5))
         
         etichette = [nome_az, 'Mediana Settore']
@@ -3063,17 +3015,19 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         for bar in bars:
             yval = bar.get_height()
             if yval != 0:
+                suffisso = '%' if is_percentuale else ''
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
                     yval / 2,
-                    f"{yval:.2f}%".replace('.', ','),
+                    f"{yval:.2f}{suffisso}".replace('.', ','),
                     ha='center', va='center',
                     fontsize=9, fontweight='bold', color='white'
                 )
         
             
         ax.set_title(titolo, fontsize=11, fontweight='bold', color='#333333')
-        ax.set_ylabel('%', fontsize=10)
+        if is_percentuale:
+            ax.set_ylabel('%', fontsize=10)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.grid(axis='y', linestyle='--', alpha=0.5)
@@ -3295,8 +3249,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_strut1_buf = genera_grafico_trend(
-        anni, valori_azienda_strut1, valori_settore_strut1, 
-        nome_azienda, "Andamento Indice di Struttura 1° Liv."
+        anni, valori_azienda_strut1, valori_settore_strut1,
+        nome_azienda, "Andamento Indice di Struttura 1° Liv.", is_percentuale=False
     )
     context['grafico_strut1'] = InlineImage(doc, img_strut1_buf, width=Mm(155))
 
@@ -3311,7 +3265,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_strut1_24_buf = genera_grafico_confronto_singolo(
-        val_az_strut1_24, val_set_strut1_24, nome_azienda, "Indice Struttura 1° Liv. - 2024"
+        val_az_strut1_24, val_set_strut1_24, nome_azienda, "Indice Struttura 1° Liv. - 2024", is_percentuale=False
     )
     context['grafico_strut1_2024'] = InlineImage(doc, img_strut1_24_buf, width=Mm(125))
 
@@ -3367,8 +3321,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_strut2_buf = genera_grafico_trend(
-        anni, valori_azienda_strut2, valori_settore_strut2, 
-        nome_azienda, "Andamento Indice di Struttura 2° Liv."
+        anni, valori_azienda_strut2, valori_settore_strut2,
+        nome_azienda, "Andamento Indice di Struttura 2° Liv.", is_percentuale=False
     )
     context['grafico_strut2'] = InlineImage(doc, img_strut2_buf, width=Mm(155))
 
@@ -3382,7 +3336,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_strut2_24_buf = genera_grafico_confronto_singolo(
-        val_az_strut2_24, val_set_strut2_24, nome_azienda, "Indice Struttura 2° Liv. - 2024"
+        val_az_strut2_24, val_set_strut2_24, nome_azienda, "Indice Struttura 2° Liv. - 2024", is_percentuale=False
     )
     context['grafico_strut2_2024'] = InlineImage(doc, img_strut2_24_buf, width=Mm(125))
 
@@ -3509,8 +3463,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_cr_buf = genera_grafico_trend(
-        anni, valori_azienda_cr, valori_settore_cr, 
-        nome_azienda, "Andamento Current Ratio"
+        anni, valori_azienda_cr, valori_settore_cr,
+        nome_azienda, "Andamento Current Ratio", is_percentuale=False
     )
     context['grafico_cr'] = InlineImage(doc, img_cr_buf, width=Mm(155))
 
@@ -3524,7 +3478,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_cr_24_buf = genera_grafico_confronto_singolo(
-        val_az_cr_24, val_set_cr_24, nome_azienda, "Current Ratio - 2024"
+        val_az_cr_24, val_set_cr_24, nome_azienda, "Current Ratio - 2024", is_percentuale=False
     )
     context['grafico_cr_2024'] = InlineImage(doc, img_cr_24_buf, width=Mm(125))
 
@@ -3581,8 +3535,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_qr_buf = genera_grafico_trend(
-        anni, valori_azienda_qr, valori_settore_qr, 
-        nome_azienda, "Andamento Quick Ratio"
+        anni, valori_azienda_qr, valori_settore_qr,
+        nome_azienda, "Andamento Quick Ratio", is_percentuale=False
     )
     context['grafico_qr'] = InlineImage(doc, img_qr_buf, width=Mm(155))
 
@@ -3597,7 +3551,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_qr_24_buf = genera_grafico_confronto_singolo(
-        val_az_qr_24, val_set_qr_24, nome_azienda, "Quick Ratio - 2024"
+        val_az_qr_24, val_set_qr_24, nome_azienda, "Quick Ratio - 2024", is_percentuale=False
     )
     context['grafico_qr_2024'] = InlineImage(doc, img_qr_24_buf, width=Mm(125))
 
@@ -3655,8 +3609,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_rotazione_buf = genera_grafico_trend(
-        anni, valori_azienda_rotazione, valori_settore_rotazione, 
-        nome_azienda, "Andamento Rotazione Cap. Inv."
+        anni, valori_azienda_rotazione, valori_settore_rotazione,
+        nome_azienda, "Andamento Rotazione Cap. Inv.", is_percentuale=False
     )
     context['grafico_rotazione'] = InlineImage(doc, img_rotazione_buf, width=Mm(155))
 
@@ -3670,7 +3624,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_rotazione_24_buf = genera_grafico_confronto_singolo(
-        val_az_rotazione_24, val_set_rotazione_24, nome_azienda, "Rotazione Cap. Inv. - 2024"
+        val_az_rotazione_24, val_set_rotazione_24, nome_azienda, "Rotazione Cap. Inv. - 2024", is_percentuale=False
     )
     context['grafico_rotazione_2024'] = InlineImage(doc, img_rotazione_24_buf, width=Mm(125))
 
@@ -4028,35 +3982,23 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['med_ind_qr'] = format_euro(val_set_qr_24)
     context['med_ind_rot_cap'] = format_euro(val_set_rotazione_24)
 
-    # --- INDENTAZIONE AUTOMATICA DEI TESTI DISCORSIVI ---
-    chiavi_narrative = [
-        'descr_rating_tot', 'descr_rating_eco', 'descr_rating_patr', 'descr_rating_fin', 'descr_sintesi',
-        'intro_benchmark_eco', 'intro_benchmark_patr', 'intro_benchmark_fin', 'intro_margini', 'analisi_combinata',
-        'intro_divario_strutturale', 'sintesi_quadriennio_patr', 'sintesi_modello_operativo_fin',
-        'analisi_margini_operativi', 'analisi_margine_profitto', 'analisi_indici_struttura', 'analisi_gearing',
-        'analisi_rotazione', 'analisi_current_ratio', 'analisi_quick_ratio', 'analisi_posizionamento_fin',
-        'sintesi_profilo_integrato', 'sintesi_posizionamento_lungo_periodo', 'conclusione_patrimoniale',
-        'conclusione_economica', 'conclusione_finanziaria_dettaglio', 'raccomandazione_finale', 'impatto_territoriale'
-    ]
-
     # =================================================================
-    # 📏 FIX SPAZIATURA E INDENTAZIONE NARRATIVA
+    # 📏 FIX SPAZIATURA NARRATIVA
     # =================================================================
-    # (Cm è già importato a livello di modulo)
+    # NOTA: qui esisteva anche un'indentazione selettiva di 1 cm per i paragrafi
+    # contenenti alcune variabili narrative specifiche (elenco fisso di ~27 nomi).
+    # Molti blocchi di testo discorsivo sono però spezzati in più paragrafi Word
+    # consecutivi, ciascuno legato a una variabile diversa: quando solo alcune di
+    # quelle variabili comparivano nell'elenco, il rientro scattava a metà blocco
+    # e poi spariva nel paragrafo successivo, creando un margine sinistro "a
+    # scalini" all'interno dello stesso discorso. Rimossa per garantire un
+    # margine uniforme su tutto il testo discorsivo (nessun rientro selettivo).
 
     # 1. Spazzoliamo tutti i paragrafi del documento (ignorando l'interno delle tabelle)
     for p in doc.docx.paragraphs:
-        if p.text.strip(): 
-            # Interlinea 1.5
+        if p.text.strip():
+            # Interlinea singola
             p.paragraph_format.line_spacing = 1.0
-            
-            # Controlliamo se è un paragrafo che contiene le nostre variabili narrative
-            # (Se il paragrafo inizia con uno dei tag che abbiamo inserito)
-            for k in chiavi_narrative:
-                if "{{" + k + "}}" in p.text:
-                    # Indenta l'intero blocco di 1 cm a sinistra
-                    p.paragraph_format.left_indent = Cm(1.0)
-                    break
 
     # =================================================================
     # 🚑 FIX TABELLE FINALE E CENSURA TEASER
