@@ -107,9 +107,9 @@ def get_analisi_margine_profitto_tag(az_prof, set_prof):
 
 def get_analisi_struttura1(az_str1, set_str1):
     if az_str1 >= 1:
-        base = f"• L'Indice primario di struttura ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi"
+        base = f"• L'Indice primario di struttura ({format_euro(az_str1)}), superiore all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi"
     else:
-        base = f"• L'Indice primario di struttura ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine"
+        base = f"• L'Indice primario di struttura ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni deve essere finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine"
     if az_str1 >= set_str1:
         return f"{base}, in linea o al di sopra della mediana di settore ({format_euro(set_str1)})."
     else:
@@ -117,7 +117,7 @@ def get_analisi_struttura1(az_str1, set_str1):
 
 def get_analisi_struttura2(az_str2, set_str2):
     if az_str2 >= 1:
-        base = f"• L'Indice secondario di struttura ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati"
+        base = f"• L'Indice secondario di struttura ({format_euro(az_str2)}), superiore all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati"
     else:
         base = f"• L'Indice secondario di struttura ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi"
     if az_str2 >= set_str2:
@@ -137,7 +137,7 @@ def get_analisi_gearing_tag(az_gear, set_gear):
 
 def get_analisi_current_ratio_tag(az_cr, set_cr):
     if az_cr >= 1:
-        base = f"• Il Current Ratio ({format_euro(az_cr)}), superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio"
+        base = f"• Il Current Ratio ({format_euro(az_cr)}), superiore all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio"
     else:
         base = f"• Il Current Ratio ({format_euro(az_cr)}), inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio"
     if az_cr >= set_cr:
@@ -147,7 +147,7 @@ def get_analisi_current_ratio_tag(az_cr, set_cr):
 
 def get_analisi_quick_ratio_tag(az_qr, set_qr):
     if az_qr >= 1:
-        base = f"• Il Quick Ratio ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita delle rimanenze di magazzino"
+        base = f"• Il Quick Ratio ({format_euro(az_qr)}), superiore all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita delle rimanenze di magazzino"
     else:
         base = f"• Il Quick Ratio ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati"
     if az_qr >= set_qr:
@@ -785,7 +785,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         elif rating == 'B':
             return "L'analisi evidenzia un rapporto tra capitale, debiti e immobilizzazioni adeguato e in linea con i parametri mediani del mercato di riferimento:"
         elif rating == 'C':
-            return "L'analisi segnala squilibri nella correlazione temporale tra le fonti di copertura e le immobilizzazioni aziendali rispetto ai parametri di sicurezza:"
+            return "L'analisi evidenzia una struttura patrimoniale complessivamente in equilibrio, pur in presenza di elementi che suggeriscono una maggiore dipendenza dal capitale di terzi rispetto ai parametri medi del settore:"
         return "L'analisi non consente di esprimere una valutazione completa sui rischi a lungo termine a causa di dati insufficienti:"
 
     # =================================================================
@@ -828,7 +828,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         if az_ebitda >= set_ebitda:
             return "un posizionamento favorevole in termini di ottimizzazione della gestione operativa e di struttura economica da parte di"
         else:
-            return "un significativo divario prestazionale tra la mediana del comparto e l'efficienza della struttura economica di"
+            return "un divario prestazionale tra la mediana del comparto e l'efficienza della struttura economica di"
 
     # =========================================================================================
     # LE ALTRE FUNZIONI NARRATIVE PER LA PARTE DI TREND STORICO (Restano invariate o snellite)
@@ -878,8 +878,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "caratterizzata da una minore efficienza nell'utilizzo strutturale delle proprie immobilizzazioni operative"
 
     def get_analisi_trend_profitto(az_prof, set_prof):
-        if az_prof >= set_prof: return f"Questo dato, pari al {format_euro(az_prof)}%, dimostra un'elevata efficacia nella gestione dei costi accessori, degli oneri finanziari e del carico fiscale complessivo."
-        else: return f"Questo dato ({format_euro(az_prof)}%) riflette una redditività netta complessivamente più limitata, risentendo del peso degli oneri extra-caratteristici."
+        if az_prof >= set_prof: return "Questo dato dimostra un'elevata efficacia nella gestione dei costi accessori, degli oneri finanziari e del carico fiscale complessivo."
+        else: return "Questo dato riflette una redditività netta complessivamente più limitata, risentendo del peso degli oneri extra-caratteristici."
 
     def get_confronto_profitto_settore(az_prof, set_prof):
         if az_prof >= set_prof: return f"La struttura dell'impresa supera la performance mediana dei concorrenti (pari a {format_euro(set_prof)}%), distinguendosi per una forte propensione alla generazione di utile netto di periodo."
@@ -937,7 +937,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_analisi_soglia_struttura1(az_str1):
         if az_str1 >= 1.0: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, indica che il capitale proprio ha finanziato interamente le immobilizzazioni, garantendo la sicurezza degli investimenti."
-        else: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, erodendo i parametri di sicurezza."
+        else: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, segnala che una parte delle immobilizzazioni deve essere finanziata mediante capitale di terzi, erodendo i parametri di sicurezza."
 
     def get_confronto_mediana_struttura1(az_str1, set_str1):
         if az_str1 >= set_str1: return f"Il posizionamento dell'Indice risulta nettamente superiore alla mediana del comparto di riferimento (pari a {format_euro(set_str1)})."
@@ -955,7 +955,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_confronto_settore_struttura2(az_str2, set_str2):
         if az_str2 >= set_str2: return "Tale dinamica risulta superiore alle performance di copertura strutturale dei competitor."
-        else: return "Il trend sconta uno svantaggio in confronto alla correlazione temporale mediana del mercato."
+        else: return "Il trend sconta uno svantaggio in confronto alla mediana del mercato."
 
     def get_conclusione_struttura2(az_str2):
         if az_str2 >= 1.0: return "riduce sensibilmente il rischio legato a rinegoziazioni del debito per la copertura delle immobilizzazioni fisse."
@@ -1024,8 +1024,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "un modello d'esercizio che sconta parziali rallentamenti operativi e un certo livello di dipendenza dalla monetizzazione delle scorte correnti."
 
     def get_analisi_trend_current_ratio(az_cr):
-        if az_cr >= 1.0: return f"L'azienda dispone sistematicamente di attività a breve termine sufficienti a coprire integralmente i debiti esigibili, registrando un coefficiente di {format_euro(az_cr)}."
-        else: return f"Si segnala una contrazione delle attività liquidabili in rapporto alle passività esigibili (coefficiente a {format_euro(az_cr)}), segno di tensione corrente."
+        if az_cr >= 1.0: return "L'azienda dispone sistematicamente di attività a breve termine sufficienti a coprire integralmente i debiti esigibili entro i successivi dodici mesi."
+        else: return "Si segnala una contrazione delle attività liquidabili in rapporto alle passività esigibili, segno di tensione corrente."
 
     def get_reazione_contesto_liquidita(az_cr):
         if az_cr >= 1.0: return "ha garantito costanti eccedenze di cassa (Current Ratio > 1) per prevenire tensioni finanziarie d'esercizio"
@@ -1044,8 +1044,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "configura l'incapacità temporanea delle attività correnti di estinguere le scadenze (Current Ratio < 1)."
 
     def get_analisi_quick_ratio_soglia(az_qr):
-        if az_qr >= 1.0: return f"L'indice depurato dal magazzino si attesta a {format_euro(az_qr)}. Valori uguali o superiori all'unità indicano che la cassa copre gli impegni senza dover smobilizzare il magazzino."
-        else: return f"L'indice depurato dal magazzino si contrae a {format_euro(az_qr)}. Valori inferiori ad uno evidenziano una dipendenza dalla vendita delle scorte per non fallire gli impegni di breve periodo."
+        if az_qr >= 1.0: return "Valori uguali o superiori all'unità indicano che la cassa copre gli impegni senza dover smobilizzare il magazzino."
+        else: return "Valori inferiori ad uno evidenziano una dipendenza dalla vendita delle scorte per non fallire gli impegni di breve periodo."
 
     def get_implicazione_liquidita_immediata(az_qr):
         if az_qr >= 1.0: return "la flessibilità immediata garantisce la copertura integrale senza vendite forzate a sconto (Quick Ratio)."
