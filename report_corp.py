@@ -4124,7 +4124,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             context[k] = testo_normale
 
     # Ora genera il documento in totale sicurezza! (Renderizza il testo crudo)
-    doc.render(context)
+    doc.render(context, autoescape=True)
 
     # =================================================================
     # 🎨 4. COLORATORE NATIVO CHIRURGICO: Rende ROSSA SOLO la scritta premium
