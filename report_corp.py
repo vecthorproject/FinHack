@@ -942,8 +942,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "L'assetto patrimoniale sconta un divario rispetto al posizionamento mediano dei competitor in termini di capitalizzazione autonoma."
 
     def get_analisi_soglia_struttura1(az_str1):
-        if az_str1 >= 1.0: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, indica che il capitale proprio ha finanziato interamente le immobilizzazioni, garantendo la sicurezza degli investimenti."
-        else: return f"L'Indice primario di struttura, attestandosi a {format_euro(az_str1)}, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, erodendo i parametri di sicurezza."
+        if az_str1 >= 1.0: return "Il capitale proprio ha finanziato interamente le immobilizzazioni, garantendo la sicurezza degli investimenti."
+        else: return "Una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, erodendo i parametri di sicurezza."
 
     def get_confronto_mediana_struttura1(az_str1, set_str1):
         if az_str1 >= set_str1: return f"Il posizionamento dell'Indice risulta nettamente superiore alla mediana del comparto di riferimento (pari a {format_euro(set_str1)})."
@@ -954,8 +954,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "è soggetta a forte pressione temporale sui rimborsi dei capitali prestati da terzi a causa dello squilibrio d'impiego."
 
     def get_analisi_trend_struttura2(az_str2):
-        if az_str2 >= 1.0: return f"L'Indice secondario di struttura ({format_euro(az_str2)}) segnala che il capitale permanente ha finanziato interamente le immobilizzazioni, assicurando correlazione temporale."
-        else: return f"L'Indice secondario di struttura ({format_euro(az_str2)}) indica che una parte delle immobilizzazioni è stata finanziata attraverso capitale a breve termine, determinando uno squilibrio temporale."
+        if az_str2 >= 1.0: return "Il capitale permanente ha finanziato interamente le immobilizzazioni, assicurando correlazione temporale."
+        else: return "Una parte delle immobilizzazioni è stata finanziata attraverso capitale a breve termine, determinando uno squilibrio temporale."
 
     def get_confronto_settore_struttura2(az_str2, set_str2):
         if az_str2 >= set_str2: return "Tale dinamica risulta superiore alle performance di copertura strutturale dei competitor."
@@ -982,8 +982,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "L'analisi evidenzia una marcata esposizione verso il capitale di terzi per il finanziamento aziendale."
 
     def get_andamento_storico_gearing(az_gear, set_gear):
-        if az_gear <= set_gear: return f"Il dato rivela un Gearing oneroso pari al {format_euro(az_gear)}%. Valori contenuti indicano una limitata dipendenza dall'indebitamento bancario e una maggiore solidità complessiva."
-        else: return f"Il dato palesa un Gearing elevato pari al {format_euro(az_gear)}%. Valori più alti segnalano un forte ricorso ai terzi, determinando un incremento del rischio finanziario."
+        if az_gear <= set_gear: return "Valori contenuti indicano una limitata dipendenza dall'indebitamento bancario e una maggiore solidità complessiva."
+        else: return "Valori più alti segnalano un forte ricorso ai terzi, determinando un incremento del rischio finanziario."
 
     def get_confronto_gearing_settore(az_gear, set_gear):
         if az_gear <= set_gear: return f"l'esposizione debitoria risulta nettamente inferiore rispetto alla mediana del comparto ({format_euro(set_gear)}%), riducendo l'indice di rischio aziendale."
@@ -1026,8 +1026,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "un modello d'esercizio che sconta parziali rallentamenti operativi e un certo livello di dipendenza dalla monetizzazione delle scorte correnti."
 
     def get_analisi_trend_current_ratio(az_cr):
-        if az_cr >= 1.0: return f"L'azienda dispone sistematicamente di attività a breve termine sufficienti a coprire integralmente i debiti esigibili, registrando un coefficiente di {format_euro(az_cr)}."
-        else: return f"Si segnala una contrazione delle attività liquidabili in rapporto alle passività esigibili (coefficiente a {format_euro(az_cr)}), segno di tensione corrente."
+        if az_cr >= 1.0: return "L'azienda dispone sistematicamente di attività a breve termine sufficienti a coprire integralmente i debiti esigibili."
+        else: return "Si segnala una contrazione delle attività liquidabili in rapporto alle passività esigibili, segno di tensione corrente."
 
     def get_reazione_contesto_liquidita(az_cr):
         if az_cr >= 1.0: return "ha garantito costanti eccedenze di cassa (Current Ratio > 1) per prevenire tensioni finanziarie d'esercizio"
@@ -1046,8 +1046,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "configura l'incapacità temporanea delle attività correnti di estinguere le scadenze (Current Ratio < 1)."
 
     def get_analisi_quick_ratio_soglia(az_qr):
-        if az_qr >= 1.0: return f"L'indice depurato dal magazzino si attesta a {format_euro(az_qr)}. Valori uguali o superiori all'unità indicano che la cassa copre gli impegni senza dover smobilizzare il magazzino."
-        else: return f"L'indice depurato dal magazzino si contrae a {format_euro(az_qr)}. Valori inferiori ad uno evidenziano una dipendenza dalla vendita delle scorte per non fallire gli impegni di breve periodo."
+        if az_qr >= 1.0: return "Valori uguali o superiori all'unità indicano che la cassa copre gli impegni senza dover smobilizzare il magazzino."
+        else: return "Valori inferiori ad uno evidenziano una dipendenza dalla vendita delle scorte per non fallire gli impegni di breve periodo."
 
     def get_implicazione_liquidita_immediata(az_qr):
         if az_qr >= 1.0: return "la flessibilità immediata garantisce la copertura integrale senza vendite forzate a sconto (Quick Ratio)."
@@ -2928,7 +2928,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['tabella_8_dinamica'] = sd_tab8
 
     # 3. Funzione per generare Grafici di Trend (Linee)
-    def genera_grafico_trend(anni, val_azienda, val_settore, nome_az, titolo):
+    def genera_grafico_trend(anni, val_azienda, val_settore, nome_az, titolo, percentuale=True):
         fig, ax = plt.subplots(figsize=(8, 4.5))
         
         # Pulizia dati per il grafico (sostituiamo eventuali NaN con 0)
@@ -2940,7 +2940,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         ax.plot(anni, val_set_clean, marker='s', linewidth=2, markersize=7, color='#b3af8f', linestyle='--', label='Mediana Settore')
         
         ax.set_title(titolo, fontsize=12, fontweight='bold', color='#333333')
-        ax.set_ylabel('%', fontsize=10)
+        ax.set_ylabel('%' if percentuale else '', fontsize=10)
         ax.legend(loc='best', frameon=False)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -2969,35 +2969,36 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     
     # Funzione riutilizzabile per grafici a barre comparative (Azienda vs Settore per 1 singolo anno)
-    def genera_grafico_confronto_singolo(val_az, val_set, nome_az, titolo):
+    def genera_grafico_confronto_singolo(val_az, val_set, nome_az, titolo, percentuale=True):
         fig, ax = plt.subplots(figsize=(8, 5.5))
-        
+
         etichette = [nome_az, 'Mediana Settore']
-        
+
         # Pulizia da eventuali NaN
         v_az_clean = val_az if pd.notna(val_az) else 0
         v_set_clean = val_set if pd.notna(val_set) else 0
         valori = [v_az_clean, v_set_clean]
-        
+
         colori = ['#2b3a67', '#b3af8f']
-        
+
         # Disegno delle barre
         bars = ax.bar(etichette, valori, color=colori, edgecolor='white', width=0.5)
 
+        suffisso = '%' if percentuale else ''
         for bar in bars:
             yval = bar.get_height()
             if yval != 0:
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
                     yval / 2,
-                    f"{yval:.2f}%".replace('.', ','),
+                    f"{yval:.2f}{suffisso}".replace('.', ','),
                     ha='center', va='center',
                     fontsize=9, fontweight='bold', color='white'
                 )
-        
-            
+
+
         ax.set_title(titolo, fontsize=11, fontweight='bold', color='#333333')
-        ax.set_ylabel('%', fontsize=10)
+        ax.set_ylabel(suffisso if percentuale else '', fontsize=10)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.grid(axis='y', linestyle='--', alpha=0.5)
@@ -3219,8 +3220,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_strut1_buf = genera_grafico_trend(
-        anni, valori_azienda_strut1, valori_settore_strut1, 
-        nome_azienda, "Andamento Indice di Struttura 1° Liv."
+        anni, valori_azienda_strut1, valori_settore_strut1,
+        nome_azienda, "Andamento Indice di Struttura 1° Liv.", percentuale=False
     )
     context['grafico_strut1'] = InlineImage(doc, img_strut1_buf, width=Mm(155))
 
@@ -3235,7 +3236,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_strut1_24_buf = genera_grafico_confronto_singolo(
-        val_az_strut1_24, val_set_strut1_24, nome_azienda, "Indice Struttura 1° Liv. - 2024"
+        val_az_strut1_24, val_set_strut1_24, nome_azienda, "Indice Struttura 1° Liv. - 2024", percentuale=False
     )
     context['grafico_strut1_2024'] = InlineImage(doc, img_strut1_24_buf, width=Mm(125))
 
@@ -3291,8 +3292,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_strut2_buf = genera_grafico_trend(
-        anni, valori_azienda_strut2, valori_settore_strut2, 
-        nome_azienda, "Andamento Indice di Struttura 2° Liv."
+        anni, valori_azienda_strut2, valori_settore_strut2,
+        nome_azienda, "Andamento Indice di Struttura 2° Liv.", percentuale=False
     )
     context['grafico_strut2'] = InlineImage(doc, img_strut2_buf, width=Mm(155))
 
@@ -3306,7 +3307,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_strut2_24_buf = genera_grafico_confronto_singolo(
-        val_az_strut2_24, val_set_strut2_24, nome_azienda, "Indice Struttura 2° Liv. - 2024"
+        val_az_strut2_24, val_set_strut2_24, nome_azienda, "Indice Struttura 2° Liv. - 2024", percentuale=False
     )
     context['grafico_strut2_2024'] = InlineImage(doc, img_strut2_24_buf, width=Mm(125))
 
@@ -3433,8 +3434,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_cr_buf = genera_grafico_trend(
-        anni, valori_azienda_cr, valori_settore_cr, 
-        nome_azienda, "Andamento Current Ratio"
+        anni, valori_azienda_cr, valori_settore_cr,
+        nome_azienda, "Andamento Current Ratio", percentuale=False
     )
     context['grafico_cr'] = InlineImage(doc, img_cr_buf, width=Mm(155))
 
@@ -3448,7 +3449,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_cr_24_buf = genera_grafico_confronto_singolo(
-        val_az_cr_24, val_set_cr_24, nome_azienda, "Current Ratio - 2024"
+        val_az_cr_24, val_set_cr_24, nome_azienda, "Current Ratio - 2024", percentuale=False
     )
     context['grafico_cr_2024'] = InlineImage(doc, img_cr_24_buf, width=Mm(125))
 
@@ -3505,8 +3506,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_qr_buf = genera_grafico_trend(
-        anni, valori_azienda_qr, valori_settore_qr, 
-        nome_azienda, "Andamento Quick Ratio"
+        anni, valori_azienda_qr, valori_settore_qr,
+        nome_azienda, "Andamento Quick Ratio", percentuale=False
     )
     context['grafico_qr'] = InlineImage(doc, img_qr_buf, width=Mm(155))
 
@@ -3521,7 +3522,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_qr_24_buf = genera_grafico_confronto_singolo(
-        val_az_qr_24, val_set_qr_24, nome_azienda, "Quick Ratio - 2024"
+        val_az_qr_24, val_set_qr_24, nome_azienda, "Quick Ratio - 2024", percentuale=False
     )
     context['grafico_qr_2024'] = InlineImage(doc, img_qr_24_buf, width=Mm(125))
 
@@ -3579,8 +3580,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 3. Generazione Immagine e Iniezione nel Word
     img_rotazione_buf = genera_grafico_trend(
-        anni, valori_azienda_rotazione, valori_settore_rotazione, 
-        nome_azienda, "Andamento Rotazione Cap. Inv."
+        anni, valori_azienda_rotazione, valori_settore_rotazione,
+        nome_azienda, "Andamento Rotazione Cap. Inv.", percentuale=False
     )
     context['grafico_rotazione'] = InlineImage(doc, img_rotazione_buf, width=Mm(155))
 
@@ -3594,7 +3595,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_rotazione_24_buf = genera_grafico_confronto_singolo(
-        val_az_rotazione_24, val_set_rotazione_24, nome_azienda, "Rotazione Cap. Inv. - 2024"
+        val_az_rotazione_24, val_set_rotazione_24, nome_azienda, "Rotazione Cap. Inv. - 2024", percentuale=False
     )
     context['grafico_rotazione_2024'] = InlineImage(doc, img_rotazione_24_buf, width=Mm(125))
 
