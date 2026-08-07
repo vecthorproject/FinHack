@@ -1,6 +1,7 @@
 import io
 import uuid
 import copy
+import zipfile
 import pandas as pd
 import numpy as np
 import docx
@@ -4200,6 +4201,14 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     output_word = correggi_box_kpi_executive_summary(output_word)
 
+    # =================================================================
+    # 🎨 POST-PROCESSOR: Colora le frecce dei Benchmark (Economico/
+    # Patrimoniale/Finanziario) in base alla classe A/B/C
+    # =================================================================
+    output_word = colora_frecce_benchmark(
+        output_word, context['rating_eco'], context['rating_patr'], context['rating_fin']
+    )
+
     return output_word
 
 
@@ -5024,5 +5033,61 @@ def migliora_layout(output_buffer):
                         jc.set(qn('w:val'), 'right')
     result = io.BytesIO()
     doc.save(result)
+    result.seek(0)
+    return result
+
+
+def colora_frecce_benchmark(output_buffer, rating_eco, rating_patr, rating_fin):
+    """
+    Colora le 3 frecce grafiche dei Benchmark (Economico, Patrimoniale,
+    Finanziario) in base alla classe A/B/C assegnata, al posto del colore
+    statico presente nel template. Ogni freccia e' in realta' una coppia di
+    forme sovrapposte con identica geometria custom (il profilo "a freccia"):
+    una con colore variabile (quella da colorare) e una fissa blu scuro
+    (accento di sfondo, invariata). Le frecce si riconoscono cercando quella
+    geometria (identificata dalla coordinata distintiva della punta) e si
+    escludono le forme con il colore fisso di sfondo; l'ordine in cui
+    compaiono nel documento e' sempre Economico, Patrimoniale, Finanziario.
+    """
+    COLORI_CLASSE = {'A': 'C5E0B4', 'B': 'FFE699', 'C': 'F2B9A2'}  # verde / giallo-ambra / rosso, gia' nella palette del template
+    COLORE_DEFAULT = 'D9D9D9'  # grigio neutro se la classe non e' A/B/C
+    FIRMA_GEOMETRIA = "1549399"  # coordinata distintiva della punta del profilo a freccia
+    COLORE_FISSO_SFONDO = "172C51"
+
+    output_buffer.seek(0)
+    with zipfile.ZipFile(output_buffer, 'r') as zin:
+        infolist = zin.infolist()
+        contenuti = {item.filename: zin.read(item.filename) for item in infolist}
+
+    data = contenuti["word/document.xml"].decode('utf-8')
+
+    frecce = []
+    for m in re.finditer(re.escape(FIRMA_GEOMETRIA), data):
+        pos = m.start()
+        wsp_start = data.rfind("<wps:wsp>", 0, pos)
+        wsp_end = data.find("</wps:wsp>", pos) + len("</wps:wsp>")
+        shape = data[wsp_start:wsp_end]
+        if len(shape) < 2000 and COLORE_FISSO_SFONDO not in shape:
+            frecce.append((wsp_start, wsp_end))
+
+    frecce.sort()  # ordine documento = Economico, Patrimoniale, Finanziario
+    classi = [rating_eco, rating_patr, rating_fin]
+
+    for (s, e), classe in sorted(zip(frecce, classi), key=lambda x: x[0][0], reverse=True):
+        shape = data[s:e]
+        colore = COLORI_CLASSE.get(str(classe).strip().upper(), COLORE_DEFAULT)
+        shape_new = re.sub(
+            r'(<a:solidFill><a:srgbClr val=")[0-9A-Fa-f]{6}("/></a:solidFill>)',
+            rf'\g<1>{colore}\g<2>',
+            shape, count=1
+        )
+        data = data[:s] + shape_new + data[e:]
+
+    contenuti["word/document.xml"] = data.encode('utf-8')
+
+    result = io.BytesIO()
+    with zipfile.ZipFile(result, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for item in infolist:
+            zout.writestr(item, contenuti[item.filename])
     result.seek(0)
     return result
