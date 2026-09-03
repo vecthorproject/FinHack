@@ -11,6 +11,10 @@ import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
 from report_corp import genera_report_word
 from report_breve_corp import genera_presentazione_ppt
+from identificazione_azienda import (
+    maschera_target, riga_target, risolvi_ricerca, chiave_da_riga,
+    etichetta_azienda, trova_colonne_identita,
+)
 
 # ==========================================
 # IMPOSTAZIONI PAGINA WEB E GRAFICA (CSS)
@@ -112,7 +116,7 @@ st.info("💡 **ISTRUZIONI:** Carica un export in formato `.xlsx`. Assicurati di
 # 1. FUNZIONI DEI CAPITOLI (Moduli)
 # ==========================================
 
-def elabora_capitolo_1(df_filtered, azienda_target):
+def elabora_capitolo_1(df_filtered, azienda_target, chiave_target=None):
     # ==========================================
     # GANCI INIZIALI
     # ==========================================
@@ -136,7 +140,7 @@ def elabora_capitolo_1(df_filtered, azienda_target):
     df_cap1 = df.dropna(subset=['Forma Giuridica Pulita'])
 
     # 🟢 ESTRATTO TARGET: Individua la forma giuridica specifica e macro dell'azienda target
-    df_target_check = df_cap1[df_cap1['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_target_check = riga_target(df_cap1, chiave_target, azienda_target)
     target_fg_pulita = df_target_check.iloc[0]['Forma Giuridica Pulita'] if not df_target_check.empty else None
     target_fg_macro = df_target_check.iloc[0]['Macro Forma Giuridica'] if not df_target_check.empty else None
 
@@ -200,7 +204,7 @@ def elabora_capitolo_1(df_filtered, azienda_target):
     # GANCIO DI MEZZO (Scrive in RAM invece che su disco)
     # ==========================================
     # Estrazione riga isolata dell'azienda target
-    df_target_cap1 = df_cap1[df_cap1['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_target_cap1 = riga_target(df_cap1, chiave_target, azienda_target)
     if not df_target_cap1.empty:
         forma_p = df_target_cap1.iloc[0]['Forma Giuridica Pulita']
         macro_p = df_target_cap1.iloc[0]['Macro Forma Giuridica']
@@ -312,7 +316,7 @@ def elabora_capitolo_1(df_filtered, azienda_target):
 
 
 
-def elabora_capitolo_2(df_filtered, azienda_target):
+def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     import io
     import pandas as pd
 
@@ -380,7 +384,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
     pivot_reg['Imprese'] = pivot_reg['Imprese'].fillna(0).astype(int)
 
     # 🟢 ESTRATTO TARGET: Trova la regione (NUTS2) e la macroregione dell'azienda bersaglio
-    df_az_geo_check = df_base[df_base['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_az_geo_check = riga_target(df_base, chiave_target, azienda_target)
     target_regione_nome = df_az_geo_check.iloc[0]['Nome Regione'] if not df_az_geo_check.empty else None
     target_macro_nome = df_az_geo_check.iloc[0]['Macroregione'] if not df_az_geo_check.empty else None
 
@@ -627,7 +631,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
     # GANCI FINALI
     # ==========================================
     # Isolamento dati geografici e dimensionali dell'azienda target
-    df_az_geo = df_base[df_base['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_az_geo = riga_target(df_base, chiave_target, azienda_target)
     ws_target_geo = workbook.add_worksheet('Target_Posizionamento_Geo')
 
     ws_target_geo.set_column('A:A', 40)
@@ -664,7 +668,7 @@ def elabora_capitolo_2(df_filtered, azienda_target):
     return output_buffer
 
 
-def elabora_capitolo_3(df_filtered, azienda_target):
+def elabora_capitolo_3(df_filtered, azienda_target, chiave_target=None):
     import io
     import pandas as pd
     import numpy as np
@@ -673,7 +677,7 @@ def elabora_capitolo_3(df_filtered, azienda_target):
     import re
 
     # Funzione interna che hai creato tu, adattata per girare qui dentro
-    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target):
+    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target, chiave_target=None):
         # 1. Filtro Colonne per la sezione corrente
         base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower() or 'nuts2' in str(c).lower() or 'nuts3' in str(c).lower()]
         metric_cols = [c for c in df_raw.columns if keyword_ricerca in str(c).lower()]
@@ -697,6 +701,9 @@ def elabora_capitolo_3(df_filtered, azienda_target):
         fmt_target_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
         fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
 
+        # Maschera calcolata una sola volta sulla chiave univoca dell'azienda
+        maschera_riga_target = maschera_target(df, chiave_target, azienda_target).to_numpy()
+
         for i, col in enumerate(df.columns):
             worksheet_data.write(0, i, col, formati['header'])
             col_data = df[col].dropna()
@@ -705,7 +712,7 @@ def elabora_capitolo_3(df_filtered, azienda_target):
 
             for row in range(1, num_rows + 1):
                 val = df.iat[row-1, i]
-                is_target = azienda_target.lower().strip() in str(df.iat[row-1, col_ragione_idx]).lower().strip()
+                is_target = bool(maschera_riga_target[row-1])
 
                 f_text = fmt_target_text if is_target else formati['data_text']
                 f_num = fmt_target_num if is_target else formati['data_num']
@@ -823,7 +830,7 @@ def elabora_capitolo_3(df_filtered, azienda_target):
         for i, year in enumerate(all_years):
             worksheet_stats.write(r_right, col_right + 1 + i, year, formati['header'])
 
-        df_azienda = df[df[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        df_azienda = riga_target(df, chiave_target, azienda_target)
         fmt_az_label = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'font_color': '#002060', 'border': 1, 'align': 'left'})
         fmt_az_num = workbook.add_format({'bg_color': '#F2F4F8', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'bold': True})
 
@@ -996,7 +1003,8 @@ def elabora_capitolo_3(df_filtered, azienda_target):
         chart_title='Andamento Mediano Margini',
         y_axis_name='Percentuale (%)',
         rename_dict={} ,
-        azienda_target=azienda_target
+        azienda_target=azienda_target,
+        chiave_target=chiave_target
     )
 
     costruisci_sezione_analisi(
@@ -1007,7 +1015,8 @@ def elabora_capitolo_3(df_filtered, azienda_target):
         chart_title='Andamento Mediano Ricavi',
         y_axis_name='Migliaia di Euro (€)',
         rename_dict={'produzione': 'Ricavi'} ,
-        azienda_target=azienda_target
+        azienda_target=azienda_target,
+        chiave_target=chiave_target
     )
 
     writer.close()
@@ -1016,7 +1025,7 @@ def elabora_capitolo_3(df_filtered, azienda_target):
     return output_buffer
 
 
-def elabora_capitolo_4(df_filtered, azienda_target):
+def elabora_capitolo_4(df_filtered, azienda_target, chiave_target=None):
     import io
     import pandas as pd
     import numpy as np
@@ -1024,7 +1033,7 @@ def elabora_capitolo_4(df_filtered, azienda_target):
     from xlsxwriter.utility import xl_rowcol_to_cell
     import re
 
-    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target):
+    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target, chiave_target=None):
         # 1. Filtro Colonne
         base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower() or 'nuts2' in str(c).lower() or 'nuts3' in str(c).lower()]
         
@@ -1052,6 +1061,9 @@ def elabora_capitolo_4(df_filtered, azienda_target):
         fmt_target_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
         fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
 
+        # Maschera calcolata una sola volta sulla chiave univoca dell'azienda
+        maschera_riga_target = maschera_target(df, chiave_target, azienda_target).to_numpy()
+
         for i, col in enumerate(df.columns):
             worksheet_data.write(0, i, col, formati['header'])
             col_data = df[col].dropna()
@@ -1060,7 +1072,7 @@ def elabora_capitolo_4(df_filtered, azienda_target):
 
             for row in range(1, num_rows + 1):
                 val = df.iat[row-1, i]
-                is_target = azienda_target.lower().strip() in str(df.iat[row-1, col_ragione_idx]).lower().strip()
+                is_target = bool(maschera_riga_target[row-1])
 
                 f_text = fmt_target_text if is_target else formati['data_text']
                 f_num = fmt_target_num if is_target else formati['data_num']
@@ -1176,7 +1188,7 @@ def elabora_capitolo_4(df_filtered, azienda_target):
         for i, year in enumerate(all_years):
             worksheet_stats.write(r_right, col_right + 1 + i, year, formati['header'])
 
-        df_azienda = df[df[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        df_azienda = riga_target(df, chiave_target, azienda_target)
         fmt_az_label = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'font_color': '#002060', 'border': 1, 'align': 'left'})
         fmt_az_num = workbook.add_format({'bg_color': '#F2F4F8', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'bold': True})
 
@@ -1358,7 +1370,8 @@ def elabora_capitolo_4(df_filtered, azienda_target):
             'struttura 2° livello': 'Indice Struttura 2° Liv.',
             'gearing': 'Gearing'
         },
-        azienda_target=azienda_target
+        azienda_target=azienda_target,
+        chiave_target=chiave_target
     )
 
     writer.close()
@@ -1367,7 +1380,7 @@ def elabora_capitolo_4(df_filtered, azienda_target):
     return output_buffer
 
 
-def elabora_capitolo_5(df_filtered, azienda_target):
+def elabora_capitolo_5(df_filtered, azienda_target, chiave_target=None):
     import io
     import pandas as pd
     import numpy as np
@@ -1375,7 +1388,7 @@ def elabora_capitolo_5(df_filtered, azienda_target):
     from xlsxwriter.utility import xl_rowcol_to_cell
     import re
 
-    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target):
+    def costruisci_sezione_analisi(writer, workbook, df_raw, formati, keyword_ricerca, sheet_data, sheet_stats, chart_title, y_axis_name, rename_dict, azienda_target, chiave_target=None):
         base_cols = [c for c in df_raw.columns if 'ragione' in str(c).lower() or 'bvd' in str(c).lower() or 'nuts2' in str(c).lower() or 'nuts3' in str(c).lower()]
         
         if isinstance(keyword_ricerca, list):
@@ -1401,6 +1414,9 @@ def elabora_capitolo_5(df_filtered, azienda_target):
         fmt_target_text = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})
         fmt_target_num = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'valign': 'vcenter', 'bold': True})
 
+        # Maschera calcolata una sola volta sulla chiave univoca dell'azienda
+        maschera_riga_target = maschera_target(df, chiave_target, azienda_target).to_numpy()
+
         for i, col in enumerate(df.columns):
             worksheet_data.write(0, i, col, formati['header'])
             col_data = df[col].dropna()
@@ -1409,7 +1425,7 @@ def elabora_capitolo_5(df_filtered, azienda_target):
 
             for row in range(1, num_rows + 1):
                 val = df.iat[row-1, i]
-                is_target = azienda_target.lower().strip() in str(df.iat[row-1, col_ragione_idx]).lower().strip()
+                is_target = bool(maschera_riga_target[row-1])
 
                 f_text = fmt_target_text if is_target else formati['data_text']
                 f_num = fmt_target_num if is_target else formati['data_num']
@@ -1523,7 +1539,7 @@ def elabora_capitolo_5(df_filtered, azienda_target):
         for i, year in enumerate(all_years):
             worksheet_stats.write(r_right, col_right + 1 + i, year, formati['header'])
 
-        df_azienda = df[df[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        df_azienda = riga_target(df, chiave_target, azienda_target)
         fmt_az_label = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'font_color': '#002060', 'border': 1, 'align': 'left'})
         fmt_az_num = workbook.add_format({'bg_color': '#F2F4F8', 'border': 1, 'num_format': '#,##0.00', 'align': 'right', 'bold': True})
 
@@ -1702,7 +1718,8 @@ def elabora_capitolo_5(df_filtered, azienda_target):
             'quick ratio': 'Quick Ratio',
             'rotazione del capitale investito': 'Indice Rotazione Cap.Inv.'
         },
-        azienda_target=azienda_target
+        azienda_target=azienda_target,
+        chiave_target=chiave_target
     )
 
     writer.close()
@@ -1711,7 +1728,7 @@ def elabora_capitolo_5(df_filtered, azienda_target):
     return output_buffer
 
 
-def elabora_capitolo_6(df_filtered, azienda_target):
+def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
     import io
     import pandas as pd
     import numpy as np
@@ -1829,10 +1846,12 @@ def elabora_capitolo_6(df_filtered, azienda_target):
 
     idx_target_salvata = None # Ci servirà per rintracciare la riga esatta e clonarla sopra
 
+    maschera_out_target = maschera_target(df_out, chiave_target, azienda_target).to_numpy()
+
     for row_num, row_data in enumerate(df_out.values):
         row_ex = row_num + 2
         # Verifica se la riga corrente appartiene all'azienda target
-        is_target_row = azienda_target.lower().strip() in str(row_data[0]).lower().strip()
+        is_target_row = bool(maschera_out_target[row_num])
 
         if is_target_row:
             idx_target_salvata = row_ex # Salva l'indice di riga excel attuale
@@ -1992,7 +2011,7 @@ def elabora_capitolo_6(df_filtered, azienda_target):
     worksheet_terr.set_column('B:I', 15)
 
     # 🟢 ESTRATTO TARGET CAP 6: Trova Regione e Macroregione
-    df_az_geo_check = df[df['Ragione Sociale'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_az_geo_check = riga_target(df, chiave_target, azienda_target)
     target_reg_cap6 = df_az_geo_check.iloc[0]['Regione'] if not df_az_geo_check.empty else None
     target_mac_cap6 = df_az_geo_check.iloc[0]['Macro-Regione'] if not df_az_geo_check.empty else None
 
@@ -2111,7 +2130,7 @@ def elabora_capitolo_6(df_filtered, azienda_target):
 
 # INDICI DI COMPOSIZIONE
 
-def elabora_capitolo_7_5(df_input, azienda_target):
+def elabora_capitolo_7_5(df_input, azienda_target, chiave_target=None):
     import io
     import pandas as pd
     import xlsxwriter
@@ -2138,7 +2157,7 @@ def elabora_capitolo_7_5(df_input, azienda_target):
         if col_name in df_base.columns:
             df_base[col_name] = pd.to_numeric(df_base[col_name], errors='coerce').fillna(1)
 
-    df_base['is_target'] = df_base['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)
+    df_base['is_target'] = maschera_target(df_base, chiave_target, azienda_target)
     df_base = df_base.sort_values(by='is_target', ascending=False).reset_index(drop=True)
     df_base = df_base.drop(columns=['is_target'])
 
@@ -2177,11 +2196,13 @@ def elabora_capitolo_7_5(df_input, azienda_target):
     for anno in all_years: ws_dati.write(0, col_idx, f'% TOTALE {anno}', fmt_header); col_idx += 1
 
     row_cursor_dati = 1
+    maschera_base_target = maschera_target(df_base, chiave_target, azienda_target)
+
     for idx, row in df_base.iterrows():
         rag_soc = str(row.get('Ragione socialeCaratteri latini', ''))
         bvd_id = str(row.get('Numero BvD ID', ''))
 
-        is_target = azienda_target.lower().strip() in rag_soc.lower()
+        is_target = bool(maschera_base_target.loc[idx])
         f_t = fmt_bold_text if is_target else fmt_text
         f_raw = fmt_data_raw_tgt if is_target else fmt_data_raw
         f_pct = fmt_data_pct_tgt if is_target else fmt_data_pct
@@ -2249,7 +2270,7 @@ def elabora_capitolo_7_5(df_input, azienda_target):
         ws_stats.write(0, c_idx, anno, fmt_header)
 
     row_cursor = 2
-    df_target_only = df_base[df_base['Ragione socialeCaratteri latini'].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_target_only = riga_target(df_base, chiave_target, azienda_target)
     posizioni_grafici = {}
 
     for comp, col_prefix in componenti_nomi.items():
@@ -2362,7 +2383,7 @@ def elabora_capitolo_7_5(df_input, azienda_target):
 
 
 
-def elabora_capitolo_7(df_filtered, azienda_target):
+def elabora_capitolo_7(df_filtered, azienda_target, chiave_target=None):
     import io
     import pandas as pd
     import numpy as np
@@ -2524,7 +2545,7 @@ def elabora_capitolo_7(df_filtered, azienda_target):
         dataframe[f'RANK_{base_name}_REG'] = dataframe.groupby(col_regione, observed=False)[col_kpi].rank(ascending=asc_order, method='min')
 
     # *** NUOVO: pre-calcolo target e sottoinsieme regionale per le mediane regionali ***
-    df_target_row = df_master[df_master[col_ragione_sociale].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    df_target_row = riga_target(df_master, chiave_target, azienda_target)
     regione_target = df_target_row.iloc[0][col_regione] if not df_target_row.empty else None
     df_regione_master = df_master[df_master[col_regione] == regione_target] if regione_target is not None else pd.DataFrame()
     nome_reg_pulita = str(regione_target).split(' - ')[-1] if regione_target else 'Regione N.D.'
@@ -2644,9 +2665,10 @@ def elabora_capitolo_7(df_filtered, azienda_target):
                 fill_target_yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
                 font_target_bold = Font(bold=True)
 
+                nome_target_esatto = str(azienda_target).strip().lower()
                 for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
                     # La prima colonna (A) contiene sempre la Ragione Sociale dell'azienda
-                    if row[0].value and azienda_target.lower().strip() in str(row[0].value).lower().strip():
+                    if row[0].value and str(row[0].value).strip().lower() == nome_target_esatto:
                         for cell in row:
                             cell.fill = fill_target_yellow
                             cell.font = font_target_bold
@@ -2710,6 +2732,7 @@ if uploaded_file is not None:
         foglio_strategia_trovato = [s for s in fogli_disponibili if s.lower().strip() in nomi_foglio_strategia or any(k in s.lower() for k in ['strategy', 'sommario'])]
         
         settore_estratto = "Settore Non Rilevato"
+        passi_orbis = []   # 1f: catena di filtri realmente applicata da ORBIS
         
         if foglio_strategia_trovato:
             try:
@@ -2729,8 +2752,25 @@ if uploaded_file is not None:
                             if len(celle_lunghe) >= 2:
                                 settore_estratto = celle_lunghe[1]
                                 break
+                # 🔧 BUG 1f — la Nota Metodologica del report dichiarava 2 soli filtri di
+                # selezione (fatturato minimo e normativa OIC), mentre la strategia di
+                # ricerca registrata qui ne applica una dozzina. Li estraiamo per poterli
+                # raccontare davvero nel report.
+                for _, riga_passo in df_strat.iterrows():
+                    prima_cella = str(riga_passo.iloc[0]).strip() if pd.notna(riga_passo.iloc[0]) else ''
+                    m_passo = re.match(r'^(\d+)\.\s*(.+)$', prima_cella)
+                    if not m_passo:
+                        continue
+                    valori_passo = [str(v).strip() for v in riga_passo.iloc[1:].dropna().tolist()]
+                    passi_orbis.append({
+                        'numero': int(m_passo.group(1)),
+                        'criterio': m_passo.group(2).strip(),
+                        'dettaglio': valori_passo[0] if valori_passo else '',
+                        'risultato': valori_passo[-1] if valori_passo else '',
+                    })
             except Exception:
                 settore_estratto = "Errore durante la lettura del sommario"
+                passi_orbis = []
         
         # Correzione accenti (es. Forlì, Società) sul testo appena estratto
         fix_accenti = {'Ã¬': 'ì', 'Ã¨': 'è', 'Ã©': 'é', 'Ã²': 'ò', 'Ã¹': 'ù', 'Ã ': 'à', 'Ã': 'à'}
@@ -2738,6 +2778,7 @@ if uploaded_file is not None:
             settore_estratto = settore_estratto.replace(rotto, giusto)
             
         st.session_state['settore_estratto'] = settore_estratto
+        st.session_state['passi_orbis'] = passi_orbis
 
         # Lettura del foglio corretto (i risultati veri e propri)
         df_orbis = pd.read_excel(xls, sheet_name=target_sheet)
@@ -2802,60 +2843,43 @@ if uploaded_file is not None:
         righe_post_rotazione = len(df_orbis)
         scartate_rotazione = righe_iniziali - righe_post_rotazione
         
-        # --- 🆕 OPZIONE: ESENZIONE MANUALE DAL FILTRO GEARING ---
-        # Il Filtro 2 qui sotto resta invariato nella sua logica di default: questa
-        # sezione aggiunge solo delle eccezioni facoltative (una o più aziende, o
-        # l'intero campione) che non vengono scartate anche se il loro Gearing 2024
-        # risulta nullo o negativo. Se non si seleziona nulla, il comportamento è
-        # identico a prima.
-        # L'identificazione usa Ragione Sociale + P.IVA/Codice Fiscale + BvD ID
-        # (stessi criteri della ricerca manuale più sotto) per evitare ambiguità in
-        # caso di omonimie: il match applicato al filtro è però sempre sulla riga
-        # esatta (indice), non sul solo nome.
-        col_ragione_gearing = next((c for c in df_orbis.columns if 'ragione' in str(c).lower()), None)
-        col_piva_gearing = next((c for c in df_orbis.columns if 'partita iva' in str(c).lower() or 'codice fiscale' in str(c).lower()), None)
-        col_bvd_gearing = next((c for c in df_orbis.columns if 'bvd' in str(c).lower()), None)
-
-        def _formatta_piva_gearing(valore):
-            # Stesso fix già applicato nel report Word: Excel/Pandas legge la P.IVA
-            # come numero e ne "mangia" gli zeri iniziali (es. 00380570166 diventa
-            # 380570166.0). Qui la ricostruiamo per non mostrare un numero sbagliato
-            # nell'etichetta di selezione.
-            testo = str(valore).strip()
-            if testo.lower() in ['n.d.', 'nan', '']:
-                return None
-            try:
-                pulita = str(int(float(testo)))
-                return pulita.zfill(11)
-            except ValueError:
-                # Codice Fiscale alfanumerico (16 caratteri) o altri formati: invariato
-                return testo
-
-        def _etichetta_azienda_gearing(riga):
-            nome = str(riga[col_ragione_gearing]) if col_ragione_gearing and pd.notna(riga[col_ragione_gearing]) else "N.D."
-            dettagli = []
-            if col_piva_gearing and pd.notna(riga[col_piva_gearing]):
-                piva_corretta = _formatta_piva_gearing(riga[col_piva_gearing])
-                if piva_corretta:
-                    dettagli.append(f"P.IVA/CF {piva_corretta}")
-            if col_bvd_gearing and pd.notna(riga[col_bvd_gearing]):
-                dettagli.append(f"BvD ID {str(riga[col_bvd_gearing]).strip()}")
-            return f"{nome} ({', '.join(dettagli)})" if dettagli else nome
+        # --- ⚙️ FILTRO GEARING: OPZIONI AVANZATE ---
+        # Comportamento di default (storico): il Gearing 2024 pari a zero viene trattato
+        # come dato non disponibile e l'impresa esce dal campione; gli zeri degli anni
+        # precedenti vengono nascosti come 'n.d.'.
+        #
+        # ⚠️ NOTA (bug 1g del riesame): nei dati ORBIS quei valori sono TUTTI esattamente 0
+        # (nessun NaN, nessun negativo) e le serie storiche mostrano discese graduali fino
+        # a zero, quindi molti di essi sono imprese realmente senza debito finanziario.
+        # Escluderle toglie dal campione il 30-36% delle aziende — proprio le meno
+        # indebitate — e alza la mediana settoriale del Gearing da 8,86% a 39,39% sul NACE
+        # 41.20 e da 10,35% a 32,16% sul 25.99. Il toggle qui sotto permette di tenerle
+        # dentro quando serve una mediana di indebitamento non distorta.
+        col_ragione_gearing, col_piva_gearing, col_bvd_gearing = trova_colonne_identita(df_orbis)
 
         aziende_a_rischio_gearing = []   # indici di riga (chiave univoca), non nomi
         etichette_aziende_gearing = {}
+        n_gearing_nullo = 0
         if col_g24 in df_orbis.columns and col_ragione_gearing:
             maschera_a_rischio = df_orbis[col_g24].isna() | (df_orbis[col_g24] <= 0)
+            n_gearing_nullo = int((df_orbis[col_g24] == 0).sum())
             df_rischio_gearing = df_orbis.loc[maschera_a_rischio].sort_values(
                 col_ragione_gearing, key=lambda s: s.astype(str).str.lower()
             )
             aziende_a_rischio_gearing = df_rischio_gearing.index.tolist()
-            etichette_aziende_gearing = {idx: _etichetta_azienda_gearing(row) for idx, row in df_rischio_gearing.iterrows()}
+            etichette_aziende_gearing = {
+                idx: etichetta_azienda(row, df_orbis) for idx, row in df_rischio_gearing.iterrows()
+            }
 
         disattiva_filtro_gearing = False
+        tratta_zero_come_nd = True   # default: comportamento storico
         indici_esenti_gearing = []
         if aziende_a_rischio_gearing:
-            with st.expander(f"⚙️ Filtro Gearing: {len(aziende_a_rischio_gearing)} aziende a rischio scarto (opzioni avanzate)"):
+            etichetta_expander = (
+                f"⚙️ Filtro Gearing: {len(aziende_a_rischio_gearing)} aziende a rischio scarto"
+                f" (di cui {n_gearing_nullo} con Gearing 2024 pari a zero) — opzioni avanzate"
+            )
+            with st.expander(etichetta_expander):
                 disattiva_filtro_gearing = st.toggle(
                     "🔓 Non applicare il Filtro Gearing a nessuna azienda del campione",
                     value=False,
@@ -2863,6 +2887,17 @@ if uploaded_file is not None:
                     key="disattiva_filtro_gearing"
                 )
                 if not disattiva_filtro_gearing:
+                    tratta_zero_come_nd = st.toggle(
+                        f"0️⃣ Tratta il Gearing pari a zero come dato non disponibile "
+                        f"({n_gearing_nullo} aziende scartate)",
+                        value=True,
+                        help="ATTIVO (default storico): le imprese con Gearing 2024 = 0 escono dal campione "
+                             "e gli zeri degli anni 2021-2023 diventano 'n.d.'.\n\n"
+                             "DISATTIVATO: lo zero viene letto come 'nessun debito finanziario', quindi un "
+                             "valore reale. Le imprese restano nel campione e la mediana settoriale del "
+                             "Gearing scende sensibilmente (sui file di prova da ~39% a ~9% e da ~32% a ~10%).",
+                        key="tratta_zero_come_nd"
+                    )
                     indici_esenti_gearing = st.multiselect(
                         "Escludi singolarmente una o più aziende dal Filtro Gearing (restano nel campione anche con Gearing nullo/negativo)",
                         options=aziende_a_rischio_gearing,
@@ -2877,18 +2912,24 @@ if uploaded_file is not None:
             if disattiva_filtro_gearing:
                 maschera_gearing_ok = pd.Series(True, index=df_orbis.index)
             else:
-                # Elimina chi ha Gearing nullo o negativo nel 2024
-                maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)
+                if tratta_zero_come_nd:
+                    # Elimina chi ha Gearing nullo o negativo nel 2024
+                    maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)
+                else:
+                    # Lo zero e' un valore reale ("nessun debito finanziario"): si scartano
+                    # solo i mancanti e i negativi (patrimonio netto negativo).
+                    maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] >= 0)
                 if indici_esenti_gearing:
                     maschera_gearing_ok |= df_orbis.index.isin(indici_esenti_gearing)
 
             df_orbis = df_orbis[maschera_gearing_ok]
 
-            # Nasconde gli zeri degli anni passati trasformandoli in 'n.d.'
-            for col_g in [col_g23, col_g22, col_g21]:
-                if col_g in df_orbis.columns:
-                    df_orbis[col_g] = df_orbis[col_g].replace(0, np.nan)
-        
+            if tratta_zero_come_nd and not disattiva_filtro_gearing:
+                # Nasconde gli zeri degli anni passati trasformandoli in 'n.d.'
+                for col_g in [col_g23, col_g22, col_g21]:
+                    if col_g in df_orbis.columns:
+                        df_orbis[col_g] = df_orbis[col_g].replace(0, np.nan)
+
         righe_finali = len(df_orbis)
         scartate_gearing = righe_post_rotazione - righe_finali
         
@@ -2959,25 +3000,33 @@ if uploaded_file is not None:
         )
 
         azienda_target = None
+        # 🔑 chiave_target e' l'identita' UNIVOCA dell'azienda (BvD ID + P.IVA) che
+        # accompagna la ragione sociale in tutta la pipeline. Prima veniva propagato il
+        # solo nome e ogni consumatore rifaceva un match "contains": con oltre 180
+        # ragioni sociali che contengono "COSTRUZIONI GENERALI S.R.L." bastava che
+        # un'omonima comparisse prima nel foglio per generare l'intero report sui dati
+        # dell'azienda sbagliata.
+        chiave_target = None
 
         # --- 1. TENTATIVO DI RICERCA MANUALE (per Ragione Sociale, Partita IVA o Codice BvD ID, per evitare omonimie) ---
         if ricerca_manuale.strip():
-            chiave_ricerca = ricerca_manuale.lower().strip()
-            maschera_match = df_orbis[col_ragione_sociale].astype(str).str.lower().str.contains(chiave_ricerca, na=False)
-            if col_piva:
-                # La colonna P.IVA viene letta da Excel come numero: gli eventuali zeri iniziali
-                # (es. "00380570166") vengono persi. Se l'utente li digita comunque, li ignoriamo.
-                chiave_piva = chiave_ricerca.lstrip('0') or chiave_ricerca
-                maschera_match |= df_orbis[col_piva].astype(str).str.lower().str.contains(chiave_piva, na=False)
-            if col_bvd:
-                maschera_match |= df_orbis[col_bvd].astype(str).str.lower().str.contains(chiave_ricerca, na=False)
-            df_match = df_orbis[maschera_match]
+            idx_match, chiave_match, n_match = risolvi_ricerca(df_orbis, ricerca_manuale)
 
-            if not df_match.empty:
-                azienda_target = df_match.iloc[0][col_ragione_sociale]
-                st.success(f"✅ **Azienda Target forzata manualmente:** {azienda_target}")
+            if idx_match is not None:
+                azienda_target = df_orbis.loc[idx_match, col_ragione_sociale]
+                chiave_target = chiave_match
+                st.success(
+                    f"✅ **Azienda Target forzata manualmente:** "
+                    f"{etichetta_azienda(df_orbis.loc[idx_match], df_orbis)}"
+                )
+                if n_match > 1:
+                    st.warning(
+                        f"⚠️ La ricerca '{ricerca_manuale}' corrisponde a {n_match} aziende: "
+                        f"è stata selezionata la prima. Per essere certi di analizzare "
+                        f"l'azienda giusta, cercala per **P.IVA** o per **BvD ID**."
+                    )
             else:
-                st.warning(f"⚠️ Nessuna azienda trovata contenente '{ricerca_manuale}'. Procedo con la selezione automatica.")
+                st.warning(f"⚠️ Nessuna azienda trovata per '{ricerca_manuale}'. Procedo con la selezione automatica.")
 
         # --- 2. SELEZIONE AUTOMATICA (Se l'utente non ha scritto nulla o non l'ha trovata) ---
         if azienda_target is None:
@@ -3023,10 +3072,15 @@ if uploaded_file is not None:
             
             indice_genuino = max(1, len(df_puliti) // 7) 
             
-            azienda_target = df_puliti.iloc[indice_genuino][col_ragione_sociale]
+            riga_scelta = df_puliti.iloc[indice_genuino]
+            azienda_target = riga_scelta[col_ragione_sociale]
+            chiave_target = chiave_da_riga(riga_scelta, df_orbis)
             
             # Messaggio a schermo opzionale per farti vedere chi ha scelto
-            st.info(f"🤖 **Azienda Target Auto-Selezionata:** {azienda_target} (Rappresentativa del settore)")
+            st.info(
+                f"🤖 **Azienda Target Auto-Selezionata:** "
+                f"{etichetta_azienda(riga_scelta, df_orbis)} (Rappresentativa del settore)"
+            )
 
     # ==========================================
     # DASHBOARD DATI CARICATI
@@ -3086,7 +3140,7 @@ if uploaded_file is not None:
         st.write("Genera l'analisi aggregata per S.p.A. e S.r.l.")
         if st.button("Genera Capitolo 1", type="primary", key="btn_cap1"):
             with st.spinner("Creazione tabelle in corso..."):
-                excel_cap1 = elabora_capitolo_1(df_orbis, azienda_target)
+                excel_cap1 = elabora_capitolo_1(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '1. Forma Giuridica'",
                     data=excel_cap1,
@@ -3100,7 +3154,7 @@ if uploaded_file is not None:
         st.write("Genera il report aggregato per NUTS2 (Regioni e Macroregioni) con grafici a torta e istogrammi.")
         if st.button("Genera Capitolo 2", type="primary", key="btn_cap2"):
             with st.spinner("Creazione tabelle e grafici territoriali..."):
-                excel_cap2 = elabora_capitolo_2(df_orbis, azienda_target)
+                excel_cap2 = elabora_capitolo_2(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '2. Ripartizione Territoriale'",
                     data=excel_cap2,
@@ -3114,7 +3168,7 @@ if uploaded_file is not None:
         st.write("Genera analisi approfondite su Margini (Profitto, EBITDA, EBIT) e Ricavi.")
         if st.button("Genera Capitolo 3", type="primary", key="btn_cap3"):
             with st.spinner("Calcolo indici economici..."):
-                excel_cap3 = elabora_capitolo_3(df_orbis, azienda_target)
+                excel_cap3 = elabora_capitolo_3(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '3. Equilibrio Economico'",
                     data=excel_cap3,
@@ -3128,7 +3182,7 @@ if uploaded_file is not None:
         st.write("Genera analisi sugli indici di Struttura e Gearing.")
         if st.button("Genera Capitolo 4", type="primary", key="btn_cap4"):
             with st.spinner("Calcolo metriche patrimoniali..."):
-                excel_cap4 = elabora_capitolo_4(df_orbis, azienda_target)
+                excel_cap4 = elabora_capitolo_4(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '4. Equilibrio Patrimoniale'",
                     data=excel_cap4,
@@ -3142,7 +3196,7 @@ if uploaded_file is not None:
         st.write("Genera analisi sugli indici di liquidità (Current, Quick) e rotazione.")
         if st.button("Genera Capitolo 5", type="primary", key="btn_cap5"):
             with st.spinner("Calcolo metriche finanziarie..."):
-                excel_cap5 = elabora_capitolo_5(df_orbis, azienda_target)
+                excel_cap5 = elabora_capitolo_5(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '5. Equilibrio Finanziario'",
                     data=excel_cap5,
@@ -3156,7 +3210,7 @@ if uploaded_file is not None:
         st.write("Genera il cruscotto finale con calcolo terzili, assegnazione rating A-B-C e pivot territoriali.")
         if st.button("Genera Capitolo 6", type="primary", key="btn_cap6"):
             with st.spinner("Calcolo benchmark e assegnazione rating..."):
-                excel_cap6 = elabora_capitolo_6(df_orbis, azienda_target)
+                excel_cap6 = elabora_capitolo_6(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '6. Benchmark'",
                     data=excel_cap6,
@@ -3170,7 +3224,7 @@ if uploaded_file is not None:
         st.write("Elabora le classifiche nazionali e regionali. Scaricherai un archivio ZIP contenente 3 file Excel.")
         if st.button("Genera Capitolo 7 (Pack ZIP)", type="primary", key="btn_cap7"):
             with st.spinner("Creazione ranking e compressione file..."):
-                zip_cap7 = elabora_capitolo_7(df_orbis, azienda_target)
+                zip_cap7 = elabora_capitolo_7(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '7. Pacchetto Ranking' (ZIP)",
                     data=zip_cap7,
@@ -3186,7 +3240,7 @@ if uploaded_file is not None:
         st.write("Analisi della composizione percentuale delle singole voci di costo e di utile sul fatturato complessivo.")
         if st.button("Genera Capitolo 7.5", type="primary", key="btn_cap7_5"):
             with st.spinner("Calcolo indici e generazione torte di composizione..."):
-                excel_cap7_5 = elabora_capitolo_7_5(df_orbis, azienda_target)
+                excel_cap7_5 = elabora_capitolo_7_5(df_orbis, azienda_target, chiave_target)
                 st.download_button(
                     label="📥 Scarica '7.5 Indici di Composizione'",
                     data=excel_cap7_5,
@@ -3214,14 +3268,14 @@ if uploaded_file is not None:
                     master_zip.writestr("Info_Settore_Ricerca.txt", contenuto_txt)
 
                     # Eseguiamo e salviamo i primi 6 capitoli (il codice rimane invariato sotto)
-                    master_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis, azienda_target).read())
-                    master_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis, azienda_target).read())
-                    master_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis, azienda_target).read())
-                    master_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis, azienda_target).read())
-                    master_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis, azienda_target).read())
-                    master_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis, azienda_target).read())
-                    master_zip.writestr("7.5_Indici_Composizione.xlsx", elabora_capitolo_7_5(df_orbis, azienda_target).read())
-                    cap7_zip_buffer = elabora_capitolo_7(df_orbis, azienda_target)
+                    master_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis, azienda_target, chiave_target).read())
+                    master_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis, azienda_target, chiave_target).read())
+                    master_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis, azienda_target, chiave_target).read())
+                    master_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis, azienda_target, chiave_target).read())
+                    master_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis, azienda_target, chiave_target).read())
+                    master_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis, azienda_target, chiave_target).read())
+                    master_zip.writestr("7.5_Indici_Composizione.xlsx", elabora_capitolo_7_5(df_orbis, azienda_target, chiave_target).read())
+                    cap7_zip_buffer = elabora_capitolo_7(df_orbis, azienda_target, chiave_target)
                     with zipfile.ZipFile(cap7_zip_buffer, "r") as cap7_zip:
                         for nome_file in cap7_zip.namelist():
                             master_zip.writestr(nome_file, cap7_zip.read(nome_file))
@@ -3281,19 +3335,33 @@ if uploaded_file is not None:
                         try:
                             virtual_zip_buffer = io.BytesIO()
                             with zipfile.ZipFile(virtual_zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as virtual_zip:
-                                virtual_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis, azienda_target).read())
-                                virtual_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis, azienda_target).read())
-                                virtual_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis, azienda_target).read())
-                                virtual_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis, azienda_target).read())
-                                virtual_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis, azienda_target).read())
-                                virtual_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis, azienda_target).read())
+                                virtual_zip.writestr("1_Forma_Giuridica.xlsx", elabora_capitolo_1(df_orbis, azienda_target, chiave_target).read())
+                                virtual_zip.writestr("2_Ripartizione_Territoriale.xlsx", elabora_capitolo_2(df_orbis, azienda_target, chiave_target).read())
+                                virtual_zip.writestr("3_Equilibrio_Economico.xlsx", elabora_capitolo_3(df_orbis, azienda_target, chiave_target).read())
+                                virtual_zip.writestr("4_Equilibrio_Patrimoniale.xlsx", elabora_capitolo_4(df_orbis, azienda_target, chiave_target).read())
+                                virtual_zip.writestr("5_Equilibrio_Finanziario.xlsx", elabora_capitolo_5(df_orbis, azienda_target, chiave_target).read())
+                                virtual_zip.writestr("6_Benchmark.xlsx", elabora_capitolo_6(df_orbis, azienda_target, chiave_target).read())
                             virtual_zip_buffer.seek(0)
                             
                             from report_corp import genera_report_word
                             settore = st.session_state.get('settore_estratto', 'N.D.')
                             universo = st.session_state.get('universo_orbis', 'N/D')
                             
-                            word_finito = genera_report_word(virtual_zip_buffer, percorso_template, azienda_target, df_orbis, settore, universo, modalita_teaser=attiva_watermark)
+                            # 1f: la Nota Metodologica racconta la catena di filtri reale,
+                            # non i due criteri scritti a mano nel template.
+                            info_filtri = {
+                                'passi_orbis': st.session_state.get('passi_orbis', []),
+                                'estratte': righe_iniziali,
+                                'scartate_dati': scartate_rotazione,
+                                'scartate_gearing': scartate_gearing,
+                                'finali': righe_finali,
+                            }
+
+                            word_finito = genera_report_word(
+                                virtual_zip_buffer, percorso_template, azienda_target, df_orbis,
+                                settore, universo, modalita_teaser=attiva_watermark,
+                                chiave_target=chiave_target, info_filtri=info_filtri
+                            )
                             
                             # PULIZIA NOME FILE
                             codici_file = re.findall(r'(\d{3,4})\s*-', str(settore))
@@ -3373,7 +3441,10 @@ if uploaded_file is not None:
                                 settore_pulito = re.sub(r'[^a-zA-Z0-9]', '_', str(settore)[:15]).strip('_')
                             
                             # Esecuzione script PowerPoint
-                            ppt_finito = genera_presentazione_ppt(percorso_template_ppt, azienda_target, df_orbis, settore, universo)
+                            ppt_finito = genera_presentazione_ppt(
+                                percorso_template_ppt, azienda_target, df_orbis, settore, universo,
+                                chiave_target=chiave_target
+                            )
                             
                             st.success("Presentazione generata con successo! 🎉")
                             st.download_button(

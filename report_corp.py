@@ -8,6 +8,8 @@ import docx
 import os
 import re
 from docxtpl import DocxTemplate
+from identificazione_azienda import maschera_target, riga_target
+from testo_italiano import con_articolo, articolo_numero
 import matplotlib.pyplot as plt
 from docxtpl import InlineImage
 import warnings
@@ -16,6 +18,7 @@ from docx.oxml.ns import qn
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt, Mm
+from docx.text.paragraph import Paragraph
 import tempfile
 import matplotlib.image as mpimg
 import matplotlib.patches as patches
@@ -66,8 +69,121 @@ def format_euro(numero, decimali=2):
 # 🟢 INDICATORI ECONOMICI (100% SEPARATI)
 # =================================================================
 
+def costruisci_catena_filtri(info_filtri):
+    """
+    🔧 BUG 1f — la Nota Metodologica dichiarava 2 soli filtri di selezione.
+
+    In realta' la strategia ORBIS registrata nel foglio "Sommario ricerca" ne applica
+    una decina (pratica contabile, anni con bilanci disponibili, forma giuridica,
+    anno di costituzione, immobilizzazioni, patrimonio netto, passivita' correnti,
+    rotazione del capitale...) e a valle la procedura di elaborazione scarta altre
+    imprese. Qui la catena reale viene descritta a partire dai numeri effettivi.
+    """
+    if not info_filtri:
+        return ""
+
+    frasi = []
+
+    passi = info_filtri.get('passi_orbis') or []
+    # Stato, area geografica, NACE, soglia di fatturato e pratica contabile sono gia'
+    # raccontati nel testo che precede: qui si elencano solo i criteri restanti.
+    gia_descritti = ('stato', 'area geografica', 'nace', 'valore della produzione',
+                     'pratica contabile', 'ateco')
+    residui = [
+        p for p in passi
+        if not any(k in str(p.get('criterio', '')).lower() for k in gia_descritti)
+    ]
+    estratte = info_filtri.get('estratte')
+
+    if residui:
+        etichette = []
+        for p in residui:
+            # Le etichette ORBIS sono nomi di campo: si citano cosi' come sono.
+            nome = str(p.get('criterio', '')).strip().rstrip(':').strip()
+            if nome:
+                etichette.append(nome)
+        elenco = (", ".join(etichette[:-1]) + f" e {etichette[-1]}") if len(etichette) > 1 else "".join(etichette)
+        frase = (
+            f"Alla selezione per codice NACE la strategia di ricerca documentata nel foglio "
+            f"\u00abSommario ricerca\u00bb dell'estrazione applica in sequenza altri "
+            f"{len(residui)} criteri ({elenco})"
+        )
+        if estratte:
+            frase += f", che portano l'estrazione a {f'{estratte:,}'.replace(',', '.')} societ\u00e0"
+        frasi.append(frase + ".")
+    elif estratte:
+        frasi.append(
+            f"L'estrazione risultante dalla strategia di ricerca ORBIS conta "
+            f"{f'{estratte:,}'.replace(',', '.')} societ\u00e0."
+        )
+
+    scarti = []
+    n_dati = info_filtri.get('scartate_dati') or 0
+    n_gearing = info_filtri.get('scartate_gearing') or 0
+    if n_dati:
+        scarti.append(
+            f"{f'{n_dati:,}'.replace(',', '.')} imprese prive dei valori di bilancio "
+            f"necessari al calcolo delle nove variabili o con indice di rotazione del "
+            f"capitale investito non positivo"
+        )
+    if n_gearing:
+        scarti.append(
+            f"{f'{n_gearing:,}'.replace(',', '.')} imprese il cui Gearing 2024 non "
+            f"risulta valorizzato"
+        )
+    if scarti:
+        elenco_scarti = (" e ".join(scarti) if len(scarti) < 3
+                         else ", ".join(scarti[:-1]) + f" e {scarti[-1]}")
+        frasi.append(
+            "Su questa base la procedura di elaborazione ha escluso ulteriormente "
+            + elenco_scarti + "."
+        )
+
+    return " ".join(frasi)
+
+
+# Soglia oltre la quale l'asimmetria di Bowley viene dichiarata nel testo.
+SOGLIA_BOWLEY = 0.10
+
+
+def asimmetria_bowley(serie):
+    """
+    Asimmetria quartilica di Bowley: (Q3 + Q1 - 2*Q2) / (Q3 - Q1).
+
+    Sostituisce il coefficiente basato sul momento terzo (pandas .skew()), che su
+    queste distribuzioni e' dominato dagli outlier: sul NACE 41.20 il Margine EBITDA
+    2024 ha media 13,66 e mediana 10,43 (asimmetria chiaramente POSITIVA) ma .skew()
+    restituisce -2,93, per via di poche imprese con margini a tre cifre negative.
+    Bowley usa solo i quartili ed e' quindi immune a quelle code.
+    """
+    s = pd.to_numeric(serie, errors='coerce').dropna()
+    if len(s) < 4:
+        return 0.0
+    q1, q2, q3 = s.quantile(0.25), s.quantile(0.50), s.quantile(0.75)
+    if q3 - q1 <= 0:
+        return 0.0
+    return float((q3 + q1 - 2 * q2) / (q3 - q1))
+
+
+def relazione_media_mediana(serie):
+    """Descrive il rapporto media/mediana leggendolo direttamente dai dati."""
+    s = pd.to_numeric(serie, errors='coerce').dropna()
+    if s.empty:
+        return "N.D."
+    media, mediana = s.mean(), s.median()
+    scarto = abs(media - mediana)
+    riferimento = abs(mediana) if abs(mediana) > 1e-9 else 1.0
+    if scarto / riferimento < 0.05:
+        return "dal generale allineamento tra i valori di media e mediana"
+    if media > mediana:
+        return "dall'evidente scostamento tra la media (maggiore) e la mediana"
+    return "dall'evidente scostamento tra la media (minore) e la mediana"
+
+
 def get_intro_margini(descr_settore):
-    return f"Le risultanze relative al tessuto competitivo del mercato ({descr_settore}) evidenziano che:"
+    # Segue sempre i due punti di get_intro_benchmark_eco (vedi context['intro_margini']):
+    # in italiano, dopo i due punti che proseguono lo stesso periodo si prosegue in minuscolo.
+    return f"le risultanze relative al tessuto competitivo del mercato ({descr_settore}) evidenziano che:"
 
 def get_analisi_ebitda(az_ebitda, set_ebitda):
     if az_ebitda < set_ebitda:
@@ -83,9 +199,9 @@ def get_analisi_ebit(az_ebit, set_ebit):
 
 def get_analisi_margine_profitto_tag(az_prof, set_prof):
     if az_prof < set_prof:
-        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in utile netto, evidenziando criticità nell'assorbimento della gestione straordinaria, degli oneri finanziari o del carico fiscale."
+        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in risultato ante imposte, evidenziando criticità nell'assorbimento della gestione straordinaria e degli oneri finanziari."
     else:
-        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato netto finale, confermando un'efficace gestione degli oneri extra-caratteristici."
+        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato ante imposte, confermando un'efficace gestione degli oneri extra-caratteristici."
 
 # =================================================================
 # 🟠 INDICATORI PATRIMONIALI (100% SEPARATI)
@@ -136,8 +252,136 @@ def get_analisi_rotazione_tag(az_rot, set_rot):
 # ☢️ LA LAVATRICE NUCLEARE (Ricostruisce l'XML di Word da zero)
 # =====================================================================
 
+def _sostituisci_testo_paragrafo(p, pattern, sostituzione, max_iter=20):
+    """
+    Sostituzione regex sul testo di un paragrafo che attraversa piu' run.
+
+    Word spezza le frasi in run arbitrari ("Figura" / " " / "5.Confronto"), quindi una
+    sostituzione run per run non vede mai la frase intera. Qui si lavora sul testo
+    ricomposto e si riscrive solo la porzione interessata, lasciando intatta la
+    formattazione del resto del paragrafo.
+    """
+    runs = p.runs
+    if not runs:
+        return 0
+    testi = [r.text or '' for r in runs]
+    fatte = 0
+    regex = re.compile(pattern)
+    da = 0
+    for _ in range(max_iter):
+        completo = ''.join(testi)
+        m = regex.search(completo, da)
+        if not m:
+            break
+        nuovo = sostituzione(m) if callable(sostituzione) else m.expand(sostituzione)
+        if nuovo == m.group(0):
+            # Sostituzione a vuoto (tipico delle regole condizionali): si prosegue
+            # oltre, invece di ritrovare all'infinito lo stesso punto.
+            da = m.end()
+            continue
+        inizio, fine = m.span()
+        cursore, scritto = 0, False
+        for i, t in enumerate(testi):
+            r_inizio, r_fine = cursore, cursore + len(t)
+            cursore = r_fine
+            if r_fine <= inizio or r_inizio >= fine:
+                continue
+            taglio_a = max(inizio, r_inizio) - r_inizio
+            taglio_b = min(fine, r_fine) - r_inizio
+            if not scritto:
+                testi[i] = t[:taglio_a] + nuovo + t[taglio_b:]
+                scritto = True
+            else:
+                testi[i] = t[:taglio_a] + t[taglio_b:]
+        if not scritto:
+            break
+        da = inizio + len(nuovo)
+        fatte += 1
+    if fatte:
+        for r, t in zip(runs, testi):
+            r.text = t
+    return fatte
+
+
+# Correzioni di testo applicate al template a ogni generazione: restano nel codice
+# (e non nel .docx binario) cosi' da sopravvivere a un nuovo export del template.
+CORREZIONI_TEMPLATE = [
+    # 1i — manca lo spazio dopo il numero di figura ("Figura 5.Confronto")
+    (r'(Figura\s+\d+\.)(?=\S)', r'\1 '),
+    # 1i — manca lo spazio prima del trattino ("Cap.Inv.\u2013 Andamento")
+    (r'\.(?=\u2013 )', '. '),
+    # 1h — la sigla del Benchmark Totale veniva usata come classe delle singole aree
+    (re.escape('Nello specifico, la classe "{{ rating_tot }}" conta {{ num_eco_fascia }} '
+               'imprese nella parte Economica, {{ num_patr_fascia }} nella parte '
+               'Patrimoniale e {{ num_fin_fascia }} nella parte Finanziaria'),
+     'Nello specifico, nella parte Economica la classe "{{ rating_eco }}" conta '
+     '{{ num_eco_fascia }} imprese, nella parte Patrimoniale la classe '
+     '"{{ rating_patr }}" ne conta {{ num_patr_fascia }} e nella parte Finanziaria '
+     'la classe "{{ rating_fin }}" ne conta {{ num_fin_fascia }}'),
+    # 1a — il Margine di Profitto e' ante imposte (verificato sui dati): gli oneri
+    # fiscali non lo toccano, a valle dell'EBIT pesano oneri finanziari e straordinari
+    (re.escape("l'incidenza degli oneri finanziari e fiscali"),
+     "l'incidenza degli oneri finanziari e della gestione extra-operativa"),
+    # Il Margine di Profitto e' ante imposte: la definizione in Appendice e il rimando
+    # nel corpo lo descrivevano come "utile netto"
+    (re.escape("Indicatore di redditività che esprime la percentuale di utile netto rispetto "
+               "ai ricavi aziendali, misurando quanta parte dei ricavi si trasforma in "
+               "profitto al termine dell'intero processo di gestione."),
+     "Indicatore di redditività che esprime la percentuale di utile ante imposte rispetto "
+     "ai ricavi aziendali, misurando quanta parte dei ricavi si trasforma in profitto al "
+     "termine della gestione operativa, finanziaria e straordinaria."),
+    (re.escape('Il margine di profitto netto, confrontato con il settore'),
+     'Il margine di profitto, confrontato con il settore'),
+    # L'articolo elidibile davanti a una percentuale variabile produce "pari al 8,26%"
+    (re.escape('(pari al {{ perc_su_istat }}%'), '(pari a {{ perc_su_istat }}%'),
+    # 1f — la Nota Metodologica citava 2 filtri su una catena molto piu' lunga
+    (re.escape('Sulla base di ciò, è stato creato il campione finale di '
+               '{{ num_soc_valide }} imprese'),
+     '{{ catena_filtri }} Il campione finale conta {{ num_soc_valide }} imprese'),
+]
+
+
+def correggi_testi_template(doc_temp):
+    """Applica CORREZIONI_TEMPLATE a tutti i paragrafi, tabelle e caselle di testo."""
+    def paragrafi_ovunque():
+        for p in doc_temp.paragraphs:
+            yield p
+        for table in doc_temp.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        yield p
+        # Le caselle di testo (w:txbxContent) non compaiono in doc.paragraphs ne'
+        # in doc.tables, ma nel template contengono testo visibile: senza questo
+        # giro le correzioni non le raggiungono.
+        for txbx in doc_temp.element.body.iter(qn('w:txbxContent')):
+            for p_el in txbx.findall(qn('w:p')):
+                yield Paragraph(p_el, doc_temp)
+
+    totale = 0
+    for p in paragrafi_ovunque():
+        for pattern, sostituzione in CORREZIONI_TEMPLATE:
+            totale += _sostituisci_testo_paragrafo(p, pattern, sostituzione)
+
+    # 1j — la Nota Metodologica ricomincia da "Tabella 1" una seconda serie
+    # indipendente da quella 1-16 del corpo, rendendo ambiguo ogni rimando.
+    # Nessun riferimento incrociato punta a questa seconda serie, quindi la si
+    # rinomina "Tabella M1..MN" per distinguerla senza rompere i rimandi.
+    inizio_nota = None
+    for i, p in enumerate(doc_temp.paragraphs):
+        if p.style.name == 'Heading 1' and p.text.strip().lower().startswith('nota metodologica'):
+            inizio_nota = i
+            break
+    if inizio_nota is not None:
+        for p in doc_temp.paragraphs[inizio_nota:]:
+            totale += _sostituisci_testo_paragrafo(p, r'^(Tabella\s+)(\d+\.)', r'\1M\2')
+
+    return totale
+
+
 def lavatrice_nucleare(template_path):
     doc_temp = docx.Document(template_path)
+    correggi_testi_template(doc_temp)
     
     def ripara_paragrafo(p):
         testo = p.text
@@ -183,7 +427,8 @@ def lavatrice_nucleare(template_path):
 # =====================================================================
 # MOTORE DI CALCOLO E IMPAGINAZIONE
 # =====================================================================
-def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, settore_nace, num_max_soc_orbis, modalita_teaser=False):
+def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, settore_nace, num_max_soc_orbis,
+                       modalita_teaser=False, chiave_target=None, info_filtri=None):
     
     # 🛡️ ANTIDOTO: Disintegra i caratteri invisibili di Excel che corrompono Word
     caratteri_proibiti = dict.fromkeys(range(0, 32))
@@ -295,7 +540,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     fg_altre_num = sum(fg_counts.iloc[2:]) if len(fg_counts) > 2 else 0
     fg_altre_perc = (fg_altre_num / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
 
-    df_target = df_orbis[df_orbis[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), regex=False, na=False)]
+    # 🔑 L'azienda si aggancia SEMPRE per chiave univoca (BvD ID / P.IVA), mai per nome:
+    # nel campione convivono decine di ragioni sociali che si contengono a vicenda e un
+    # 'contains' sul nome pesca la prima riga che capita (vedi identificazione_azienda.py).
+    df_target = riga_target(df_orbis, chiave_target, azienda_target)
     
     def get_val_and_rank(col_name, is_lower_better=False):
         if col_name not in df_orbis.columns or df_target.empty: return "n.d.", "n.d.", "n.d."
@@ -459,22 +707,22 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     if target_fg.lower() == fg_1_name.lower():
         # Caso A: L'azienda in analisi fa parte della Maggioranza #1
-        testo_fg = f"rappresenta la veste giuridica dominante assoluta del comparto, costituendo da sola il {format_euro(fg_1_perc)}% delle realtà censite ({f'{fg_1_num:,}'.replace(',', '.')} unità)."
+        testo_fg = f"rappresenta la veste giuridica nettamente prevalente del comparto, costituendo da sola {con_articolo(format_euro(fg_1_perc))}% delle realtà censite ({f'{fg_1_num:,}'.replace(',', '.')} unità)."
         
         # Se esiste una seconda forma giuridica, continuiamo la frase
         if fg_2_name:
-            testo_fg = testo_fg.rstrip(".") + f", mentre la restante parte del mercato è composta in larga misura da {fg_2_name} ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità)"
+            testo_fg = testo_fg.rstrip(".") + f", mentre le {fg_2_name} rappresentano una quota residuale del comparto ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità)"
             if fg_altre_num > 0:
                 testo_fg += f" e, in minor parte, da altre configurazioni societarie miste ({format_euro(fg_altre_perc)}%, {f'{fg_altre_num:,}'.replace(',', '.')} unità)."
             else:
                 testo_fg += "."
     else:
         # Caso B: L'azienda in analisi NON è la Maggioranza #1
-        testo_fg = f"si inserisce in un comparto caratterizzato in larga parte da {fg_1_name}, struttura che controlla il {format_euro(fg_1_perc)}% delle componenti societarie ({f'{fg_1_num:,}'.replace(',', '.')} unità). "
+        testo_fg = f"si inserisce in un comparto caratterizzato in larga parte da {fg_1_name}, struttura che controlla {con_articolo(format_euro(fg_1_perc))}% delle componenti societarie ({f'{fg_1_num:,}'.replace(',', '.')} unità). "
         
         if fg_2_name and target_fg.lower() == fg_2_name.lower():
             # Il target è esattamente il #2
-            testo_fg += f"A seguire si posiziona proprio la veste legale dell'azienda in analisi ({target_fg}), che rappresenta il {format_euro(fg_2_perc)}% del panel ({f'{fg_2_num:,}'.replace(',', '.')} unità)"
+            testo_fg += f"A seguire si posiziona proprio la veste legale dell'azienda in analisi ({target_fg}), che rappresenta {con_articolo(format_euro(fg_2_perc))}% del panel ({f'{fg_2_num:,}'.replace(',', '.')} unità)"
             if fg_altre_num > 0:
                 testo_fg += f", affiancata in minor misura da altre configurazioni societarie miste ({format_euro(fg_altre_perc)}%, {f'{fg_altre_num:,}'.replace(',', '.')} unità)."
             else:
@@ -484,7 +732,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             testo_fg += f"A seguire troviamo una forte presenza di {fg_2_name} ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità), mentre la veste societaria dell'azienda in analisi si colloca nel restante {format_euro(fg_altre_perc)}% del mercato, insieme ad altre configurazioni minoritarie."
         else:
             # Fail-safe nel caso ci fossero anomalie strane
-            testo_fg += f"L'azienda in analisi si inserisce in questo contesto con una quota del {format_euro(perc_fg_target)}%."
+            testo_fg += f"L'azienda in analisi si inserisce in questo contesto con una quota {con_articolo(format_euro(perc_fg_target), 'di')}%."
 
     # ----------------------------------------------------
     # COSTRUZIONE DEL DIZIONARIO (Dati per il Word)
@@ -536,6 +784,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         'rat3_piu_pres_num': 'N.D.', 'rat3_piu_pres_categ': 'N.D.', 
         'rating_piu_pres': 'N.D.', 'rating_piu_pres_num_tot': 'N.D.',
         'num_max_soc': 'N.D.', 'num_soc_valide': 'N.D.', 'perc_su_istat': '100', 'max_soc_istat': 'N.D.',
+        'catena_filtri': '',
         'tab_territorio': [], 'tab_bench_territorio': []
     }
 
@@ -622,7 +871,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     
     # Preleviamo la riga esatta dell'azienda target
-    df_target_rating = df_rating[df_rating[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), regex=False, na=False)]
+    df_target_rating = riga_target(df_rating, chiave_target, azienda_target)
 
     if not df_target_rating.empty:
         riga_t = df_target_rating.iloc[0]
@@ -666,13 +915,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_impatto_territoriale(perc, nome, ricavi_formattati):
         if perc >= 5.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale grazie a un impatto pari al {format_euro(perc)}% rispetto al totale dei ricavi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale grazie a un impatto pari {con_articolo(format_euro(perc), 'a')}% rispetto al totale dei ricavi dell'area."
         elif perc >= 1.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale con un'incidenza pari {con_articolo(format_euro(perc), 'a')}% rispetto ai ricavi complessivi dell'area."
         elif perc >= 0.1:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile realtà territoriale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile realtà territoriale con un'incidenza pari {con_articolo(format_euro(perc), 'a')}% rispetto ai ricavi complessivi dell'area."
         else:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo al tessuto economico locale con un'incidenza pari al {format_euro(perc)}% rispetto ai ricavi complessivi dell'area."
+            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo al tessuto economico locale con un'incidenza pari {con_articolo(format_euro(perc), 'a')}% rispetto ai ricavi complessivi dell'area."
 
     def get_testo_totale(rating):
         if rating == 'A':
@@ -685,7 +934,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_testo_eco(rating):
         if rating == 'A':
-            return "I margini operativi (EBITDA ed EBIT) e il margine di profitto si collocano stabilmente al di sopra dei parametri mediani di settore. L'impresa mostra una buona efficienza nel generare reddito dalla gestione caratteristica e nel trasformare i ricavi in risultato netto."
+            return "I margini operativi (EBITDA ed EBIT) e il margine di profitto si collocano stabilmente al di sopra dei parametri mediani di settore. L'impresa mostra una buona efficienza nel generare reddito dalla gestione caratteristica e nel trasformare i ricavi in risultato ante imposte."
         elif rating == 'B':
             return "La redditività operativa e netta risulta adeguata alle dinamiche di settore. L'azienda presenta una buona capacità di generare reddito operativo, seppur con spazi di ottimizzazione nell'assorbimento dei costi di gestione e degli oneri accessori per incrementare l'efficienza della struttura economica."
         elif rating == 'C':
@@ -746,9 +995,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_analisi_margine_profitto(az_prof, set_prof, descr_settore):
         if az_prof < set_prof:
-            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in utile netto, evidenziando criticità nell'assorbimento della gestione straordinaria, degli oneri finanziari o del carico fiscale."
+            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in risultato ante imposte, evidenziando criticità nell'assorbimento della gestione straordinaria e degli oneri finanziari."
         else:
-            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato netto finale, confermando una gestione ottimizzata degli oneri extra-caratteristici."
+            return f"\n• Il **Margine di Profitto** ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato ante imposte, confermando una gestione ottimizzata degli oneri extra-caratteristici."
 
     # =================================================================
     # 🟠 INDICATORI PATRIMONIALI (Valore vs 1 e Gearing vs Mediana)
@@ -814,11 +1063,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     def get_analisi_posizionamento_fin(az_cr, az_qr, set_cr, set_qr):
         # La frase conclusiva sotto ai 3 bullet point finanziari
         if az_cr >= set_cr and az_qr >= set_qr:
-            return "Il posizionamento finale nelle griglie distributive consolida un profilo di elevata affidabilità finanziaria, registrando indicatori correnti sistematicamente allineati o superiori ai parametri dei competitor caratteristici."
+            return "il posizionamento finale nelle griglie distributive consolida un profilo di elevata affidabilità finanziaria, registrando indicatori correnti sistematicamente allineati o superiori ai parametri dei competitor caratteristici."
         elif az_cr < set_cr and az_qr < set_qr:
-            return "Il posizionamento finale colloca la società nelle fasce contratte della distribuzione settoriale. Gli indicatori riflettono la necessità di velocizzare la rotazione degli asset circolanti per alleviare il potenziale rischio di insolvenza nel breve periodo."
+            return "il posizionamento finale colloca la società nelle fasce contratte della distribuzione settoriale. Gli indicatori riflettono la necessità di velocizzare la rotazione degli asset circolanti per alleviare il potenziale rischio di insolvenza nel breve periodo."
         else:
-            return "Il posizionamento finale riflette risultanze asimmetriche nel panel di settore. Sebbene la solvibilità generale risulti presidiata in linea con i valori mediani, permangono mirati elementi di sfasamento monetario sul ciclo di liquidazione immediata delle rimanenze."
+            return "il posizionamento finale riflette risultanze asimmetriche nel panel di settore. Sebbene la solvibilità generale risulti presidiata in linea con i valori mediani, permangono mirati elementi di sfasamento monetario sul ciclo di liquidazione immediata delle rimanenze."
 
     def get_analisi_combinata(eco, patr, fin):
         dict_eco = {'A': "un'ottima marginalità operativa", 'B': "una redditività caratteristica in linea col mercato", 'C': "una debole capacità di trasformare i ricavi in margini"}
@@ -831,7 +1080,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_descr_fascia_appartenenza(rating):
         if rating == 'A': return "la solidità reddituale, patrimoniale e finanziaria"
-        elif rating == 'B': return "l'adeguatezza agli indici di stabilità settoriale"
+        elif rating == 'B': return "l'adeguatezza agli indici di stabilità"
         elif rating == 'C': return "la fascia che necessita di consolidamento per le tensioni su margini e liquidità"
         return "una porzione non classificabile"
 
@@ -846,9 +1095,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =========================================================================================
     def get_analisi_trend_ebitda(az_ebitda, set_ebitda):
         if az_ebitda >= set_ebitda:
-            return f"ha registrato performance favorevoli, con un valore al 2024 pari al {format_euro(az_ebitda)}%. Questo risultato dimostra una maggiore capacità della struttura economica di generare reddito dalla gestione caratteristica, superando la mediana del settore ({format_euro(set_ebitda)}%)."
+            return f"ha registrato performance favorevoli, con un valore al 2024 pari {con_articolo(format_euro(az_ebitda), 'a')}%. Questo risultato dimostra una maggiore capacità della struttura economica di generare reddito dalla gestione caratteristica, superando la mediana del settore ({format_euro(set_ebitda)}%)."
         else:
-            return f"ha registrato evidenti segnali di contrazione, con un valore al 2024 pari al {format_euro(az_ebitda)}%. Questo risultato si colloca al di sotto della mediana settoriale ({format_euro(set_ebitda)}%), segnalando una minore efficienza nell'assorbimento dei costi correnti."
+            return f"ha registrato evidenti segnali di contrazione, con un valore al 2024 pari {con_articolo(format_euro(az_ebitda), 'a')}%. Questo risultato si colloca al di sotto della mediana settoriale ({format_euro(set_ebitda)}%), segnalando una minore efficienza nell'assorbimento dei costi correnti."
 
     def get_asimmetria_ebitda(az_ebitda, set_ebitda):
         if az_ebitda >= set_ebitda: return "una spiccata forza del Margine EBITDA dell'azienda rispetto ai parametri mediani di settore."
@@ -863,8 +1112,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "segnala una minore efficienza nell'assorbimento dei costi industriali interni, comprimendo il potenziale residuo del Margine EBITDA"
 
     def get_analisi_trend_ebit(az_ebit, set_ebit):
-        if az_ebit >= set_ebit: return f"Questo dato dimostra un'elevata redditività dopo aver considerato gli ammortamenti e le svalutazioni, con un valore pari al {format_euro(az_ebit)}% che supera stabilmente la mediana."
-        else: return f"Questo dato riflette una minore capacità di conseguire un risultato operativo soddisfacente in rapporto ai ricavi di vendita conseguiti, posizionandosi sotto la mediana settoriale al {format_euro(az_ebit)}%."
+        if az_ebit >= set_ebit: return f"Questo dato dimostra un'elevata redditività dopo aver considerato gli ammortamenti e le svalutazioni, con un valore pari {con_articolo(format_euro(az_ebit), 'a')}% che supera stabilmente la mediana."
+        else: return f"Questo dato riflette una minore capacità di conseguire un risultato operativo soddisfacente in rapporto ai ricavi di vendita conseguiti, posizionandosi sotto la mediana settoriale, pari a {format_euro(set_ebit)}%."
 
     def get_confronto_ebit_settore(az_ebit, set_ebit):
         if az_ebit >= set_ebit: return "L'efficienza nell'impiego operativo delle risorse aziendali è confermata dal posizionamento nettamente superiore alla mediana dell'EBIT."
@@ -885,32 +1134,38 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "caratterizzata da una minore efficienza nell'utilizzo strutturale delle proprie immobilizzazioni operative"
 
     def get_analisi_trend_profitto(az_prof, set_prof):
-        if az_prof >= set_prof: return f"Questo dato, pari al {format_euro(az_prof)}%, dimostra un'elevata efficacia nella gestione dei costi accessori, degli oneri finanziari e del carico fiscale complessivo."
-        else: return f"Questo dato ({format_euro(az_prof)}%) riflette una redditività netta complessivamente più limitata, risentendo del peso degli oneri extra-caratteristici."
+        if az_prof >= set_prof: return f"Questo dato, pari {con_articolo(format_euro(az_prof), 'a')}%, dimostra un'elevata efficacia nella gestione dei costi accessori e degli oneri finanziari."
+        else: return f"Questo dato ({format_euro(az_prof)}%) riflette una redditività complessivamente più limitata, risentendo del peso degli oneri extra-caratteristici."
 
     def get_confronto_profitto_settore(az_prof, set_prof):
-        if az_prof >= set_prof: return f"La struttura dell'impresa supera la performance mediana dei concorrenti (pari a {format_euro(set_prof)}%), distinguendosi per una forte propensione alla generazione di utile netto di periodo."
-        else: return f"La capacità di convertire i ricavi in risultato netto si colloca al di sotto della performance mediana espressa dal settore ({format_euro(set_prof)}%)."
+        if az_prof >= set_prof: return f"La struttura dell'impresa supera la performance mediana dei concorrenti (pari a {format_euro(set_prof)}%), distinguendosi per una forte propensione alla generazione di utile ante imposte di periodo."
+        else: return f"La capacità di convertire i ricavi in risultato ante imposte si colloca al di sotto della performance mediana espressa dal settore ({format_euro(set_prof)}%)."
 
     def get_prospettiva_redditivita_futura(az_prof, set_prof):
-        if az_prof >= set_prof: return "dimostra di poter sostenere le dinamiche gestionali future grazie all'ottimizzazione del proprio ciclo dell'utile netto."
-        else: return "deve focalizzarsi sul recupero dell'efficienza sui costi complessivi per migliorare la trasformazione del fatturato in utile netto."
+        if az_prof >= set_prof: return "dimostra di poter sostenere le dinamiche gestionali future grazie all'ottimizzazione del proprio ciclo dell'utile ante imposte."
+        else: return "deve focalizzarsi sul recupero dell'efficienza sui costi complessivi per migliorare la trasformazione del fatturato in utile ante imposte."
 
     def get_posizionamento_margine_profitto_fine(az_prof, set_prof):
-        if az_prof >= set_prof: return "su livelli superiori alla mediana di settore, confermando una buona capacità di trasformare i ricavi in risultato netto"
+        if az_prof >= set_prof: return "su livelli superiori alla mediana di settore, confermando una buona capacità di trasformare i ricavi in risultato ante imposte"
         else: return "su livelli compressi che limitano la redditività finale in confronto al comparto"
 
     def get_sintesi_bilancio_finale(az_prof, set_prof):
         if az_prof >= set_prof: return "una più elevata efficacia nella gestione dei costi lungo tutta la catena del valore aziendale"
-        else: return "il forte peso delle gestioni accessorie, degli oneri del debito o del carico fiscale rispetto alla ricchezza economica operativa generata"
+        else: return "il forte peso delle gestioni accessorie e degli oneri del debito rispetto alla ricchezza economica operativa generata"
 
     def get_impatto_gestione_caratteristica(az_ebitda, set_ebitda):
         if az_ebitda >= set_ebitda: return "pienamente efficiente rispetto ai costi diretti correnti"
         else: return "debole, disperdendo gran parte del valore operativo in costi di produzione e spese d'esercizio"
 
     def get_impatto_oneri_accessori(az_ebit, az_prof):
-        if (az_ebit - az_prof) > 4.0: return "assorbe le residue disponibilità operative, contraendo la marginalità netta a causa del peso della gestione extra-operativa"
-        else: return "impatta in modo proporzionato, consentendo di registrare un utile finale in linea con i target attesi"
+        # La soglia assoluta di 4 punti non poteva mai scattare per le aziende con EBIT
+        # basso (con EBIT 2,47% l'erosione massima possibile e' 2,47 punti): il paragrafo
+        # si chiudeva in tono positivo anche quando gli oneri si mangiavano meta' del
+        # risultato operativo. Ora conta anche l'erosione in quota sull'EBIT.
+        erosione = az_ebit - az_prof
+        erosione_rilevante = erosione > 4.0 or (az_ebit > 0 and erosione > az_ebit * 0.35)
+        if erosione_rilevante: return "assorbe le residue disponibilità operative, contraendo la marginalità a causa del peso della gestione extra-operativa"
+        else: return "impatta in modo contenuto, preservando gran parte del risultato operativo fino al risultato ante imposte"
 
     def get_interpretazione_risultato_eco(az_ebitda, set_ebitda, az_prof, set_prof):
         if az_ebitda >= set_ebitda and az_prof >= set_prof: return "conferma in maniera analitica la piena solidità del modello e la gestione ottimale dei costi lungo tutta la catena del valore."
@@ -926,7 +1181,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "subisce un forte assorbimento dei ricavi a causa di una rigida incidenza dei costi di gestione operativa correnti"
 
     def get_implicazione_finale_eco(az_prof, set_prof):
-        if az_prof >= set_prof: return "Mantenendo tale assetto organizzativo, l'impresa garantisce una solida autonomia nel lungo periodo grazie alla propria capacità di trasformazione dei ricavi in utile netto."
+        if az_prof >= set_prof: return "Mantenendo tale assetto organizzativo, l'impresa garantisce una solida autonomia nel lungo periodo grazie alla propria capacità di trasformazione dei ricavi in utile ante imposte."
         else: return "La società necessita di interventi mirati per ottimizzare l'incidenza dei costi operativi e extra-caratteristici, al fine di recuperare redditività complessiva e autonomia economica."
 
     def get_sintesi_quadriennio_patr(az_str1, az_str2):
@@ -988,7 +1243,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_confronto_gearing_settore(az_gear, set_gear):
         if az_gear <= set_gear: return f"l'esposizione debitoria risulta nettamente inferiore rispetto alla mediana del comparto ({format_euro(set_gear)}%), riducendo l'indice di rischio aziendale."
-        else: return f"l'esposizione debitoria risulta del {format_euro(az_gear)}%, sensibilmente superiore rispetto al valore mediano di settore ({format_euro(set_gear)}%), incrementando il rischio d'insolvenza."
+        else: return f"l'esposizione debitoria risulta {con_articolo(format_euro(az_gear), 'di')}%, sensibilmente superiore rispetto al valore mediano di settore ({format_euro(set_gear)}%), incrementando il rischio d'insolvenza."
 
     def get_reazione_contesto_gearing(az_gear, set_gear):
         if az_gear <= set_gear: return "garantisce all'impresa una buona autonomia dai vincoli creditizi, riducendo l'indebitamento oneroso"
@@ -1124,17 +1379,17 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "esposta a un maggiore rischio di tensione di liquidità e di erosione dei margini, in presenza di una leva finanziaria elevata."
 
     def get_conclusione_patrimoniale(az_str1, az_gear, set_gear):
-        if az_str1 >= 1.0 and az_gear <= set_gear: return "La copertura tramite mezzi propri e il Gearing contenuto riducono l'esposizione dell'azienda a eventuali restrizioni del credito bancario."
-        else: return "È prioritario avviare azioni volte a riequilibrare il capitale, riducendo l'esposizione al debito per mitigare il rischio tassi."
+        if az_str1 >= 1.0 and az_gear <= set_gear: return "la copertura tramite mezzi propri e il Gearing contenuto riducono l'esposizione dell'azienda a eventuali restrizioni del credito bancario."
+        else: return "è prioritario avviare azioni volte a riequilibrare il capitale, riducendo l'esposizione al debito per mitigare il rischio tassi."
 
     def get_conclusione_economica(az_ebitda, set_ebitda, az_prof, set_prof):
-        if az_ebitda >= set_ebitda and az_prof >= set_prof: return "Confermano la capacità di generare reddito lordo dalla gestione caratteristica e di ottimizzare gli oneri fino all'utile netto finale."
-        else: return "Indicano l'opportunità di rivedere l'incidenza dei costi operativi e di ridurre il peso del carico fiscale o degli oneri finanziari."
+        if az_ebitda >= set_ebitda and az_prof >= set_prof: return "confermano la capacità di generare reddito lordo dalla gestione caratteristica e di ottimizzare gli oneri fino al risultato ante imposte."
+        else: return "indicano l'opportunità di rivedere l'incidenza dei costi operativi e di ridurre il peso degli oneri finanziari."
 
     def get_conclusione_finanziaria_dettaglio(az_cr, az_qr):
-        if az_cr >= 1.0 and az_qr >= 1.0: return "Conferma coperture di cassa senza tensioni evidenti e non subordinate allo svuotamento dei magazzini."
-        elif az_cr >= 1.0: return "Conferma la copertura dei debiti a breve nel complesso, pur con una componente di dipendenza dallo smobilizzo dei magazzini."
-        else: return "Rivela fragilità strutturali nel circolante netto, a conferma dell'opportunità di incassare o dismettere scorte in tempi più contratti."
+        if az_cr >= 1.0 and az_qr >= 1.0: return "conferma coperture di cassa senza tensioni evidenti e non subordinate allo svuotamento dei magazzini."
+        elif az_cr >= 1.0: return "conferma la copertura dei debiti a breve nel complesso, pur con una componente di dipendenza dallo smobilizzo dei magazzini."
+        else: return "rivela fragilità strutturali nel circolante netto, a conferma dell'opportunità di incassare o dismettere scorte in tempi più contratti."
 
     def get_raccomandazione_finale(rating_comb):
         if rating_comb == 'A': return "dispone di un buon margine per accedere a nuovo credito per investimenti o espansione settoriale."
@@ -1152,16 +1407,16 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # 🟢 ESTRAZIONE VALORI NUMERICI REALI (FLOAT) E MEDIANE DI SETTORE (2024)
     # =================================================================
     if not df_target.empty:
-        riga_target = df_target.iloc[0]
-        val_az_ebitda_24 = pd.to_numeric(riga_target.get('Margine EBITDA (*) % 2024'), errors='coerce')
-        val_az_ebit_24 = pd.to_numeric(riga_target.get('Margine EBIT (*) % 2024'), errors='coerce')
-        val_az_profitto_24 = pd.to_numeric(riga_target.get('Margine di Profitto (*) % 2024'), errors='coerce')
-        val_az_strut1_24 = pd.to_numeric(riga_target.get('Indice di Struttura 1° livello (*) 2024'), errors='coerce')
-        val_az_strut2_24 = pd.to_numeric(riga_target.get('Indice di Struttura 2° livello (*) 2024'), errors='coerce')
-        val_az_gearing_24 = pd.to_numeric(riga_target.get('Gearing (*) % 2024'), errors='coerce')
-        val_az_cr_24 = pd.to_numeric(riga_target.get('Current Ratio (*) 2024'), errors='coerce')
-        val_az_qr_24 = pd.to_numeric(riga_target.get('Quick Ratio (*) 2024'), errors='coerce')
-        val_az_rot_24 = pd.to_numeric(riga_target.get('Indice di Rotazione del Capitale Investito (*) 2024'), errors='coerce')
+        riga_az_target = df_target.iloc[0]
+        val_az_ebitda_24 = pd.to_numeric(riga_az_target.get('Margine EBITDA (*) % 2024'), errors='coerce')
+        val_az_ebit_24 = pd.to_numeric(riga_az_target.get('Margine EBIT (*) % 2024'), errors='coerce')
+        val_az_profitto_24 = pd.to_numeric(riga_az_target.get('Margine di Profitto (*) % 2024'), errors='coerce')
+        val_az_strut1_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 1° livello (*) 2024'), errors='coerce')
+        val_az_strut2_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 2° livello (*) 2024'), errors='coerce')
+        val_az_gearing_24 = pd.to_numeric(riga_az_target.get('Gearing (*) % 2024'), errors='coerce')
+        val_az_cr_24 = pd.to_numeric(riga_az_target.get('Current Ratio (*) 2024'), errors='coerce')
+        val_az_qr_24 = pd.to_numeric(riga_az_target.get('Quick Ratio (*) 2024'), errors='coerce')
+        val_az_rot_24 = pd.to_numeric(riga_az_target.get('Indice di Rotazione del Capitale Investito (*) 2024'), errors='coerce')
     else:
         val_az_ebitda_24 = val_az_ebit_24 = val_az_profitto_24 = 0
         val_az_strut1_24 = val_az_strut2_24 = val_az_gearing_24 = 0
@@ -1220,9 +1475,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         tot_valide_bench = len(df_rating[df_rating['Benchmark Totale'].isin(['A', 'B', 'C'])])
         perc_soc_fascia_tot = (num_soc_fascia_tot / tot_valide_bench * 100) if tot_valide_bench > 0 else 0
         
-        num_eco_fascia = len(df_rating[df_rating['Rating Economico'] == target_glob])
-        num_patr_fascia = len(df_rating[df_rating['Rating Patrimoniale'] == target_glob])
-        num_fin_fascia = len(df_rating[df_rating['Rating Finanziario'] == target_glob])
+        # Ogni area va contata sulla PROPRIA classe: target_glob e' la lettera del
+        # Benchmark Totale e, quando una componente sta in una classe diversa dalle
+        # altre due, restituiva il numero di imprese della classe sbagliata.
+        num_eco_fascia = len(df_rating[df_rating['Rating Economico'] == context['rating_eco']])
+        num_patr_fascia = len(df_rating[df_rating['Rating Patrimoniale'] == context['rating_patr']])
+        num_fin_fascia = len(df_rating[df_rating['Rating Finanziario'] == context['rating_fin']])
     else:
         num_soc_fascia_tot, perc_soc_fascia_tot, num_eco_fascia, num_patr_fascia, num_fin_fascia = 0, 0, 0, 0, 0
 
@@ -1327,6 +1585,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     totale_valide = len(df_rating)
     
     context['num_soc_valide'] = f"{len(df_rating):,}".replace(',', '.')
+    context['catena_filtri'] = costruisci_catena_filtri(info_filtri)
     context['num_max_soc'] = str(num_max_soc_orbis) # <--- Prende il 25.232 da Finhack!
 
     # 2. Dizionario ISTAT interno (tutti i settori)
@@ -2280,19 +2539,19 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     col_ebitda = 'Margine EBITDA (*) % 2024'
     if col_ebitda in df_orbis.columns:
-        skew_val = df_orbis[col_ebitda].skew()
+        skew_val = asimmetria_bowley(df_orbis[col_ebitda])
         kurt_val = df_orbis[col_ebitda].kurt() # In Pandas > 0 è leptocurtica
 
         # Analisi Asimmetria
-        if skew_val > 0.3:
+        if skew_val > SOGLIA_BOWLEY:
             context['tipo_asimmetria'] = "un'asimmetria positiva"
-            context['rel_media_mediana'] = "dall'evidente scostamento tra la media (maggiore) e la mediana"
-        elif skew_val < -0.3:
+        elif skew_val < -SOGLIA_BOWLEY:
             context['tipo_asimmetria'] = "un'asimmetria negativa"
-            context['rel_media_mediana'] = "dall'evidente scostamento tra la media (minore) e la mediana"
         else:
             context['tipo_asimmetria'] = "una sostanziale simmetria"
-            context['rel_media_mediana'] = "dal generale allineamento tra i valori di media e mediana"
+        # Il rapporto media/mediana va letto sui dati, non dedotto dal segno
+        # dell'asimmetria: sono due informazioni distinte e possono divergere.
+        context['rel_media_mediana'] = relazione_media_mediana(df_orbis[col_ebitda])
 
         # Analisi Curtosi
         if kurt_val > 0.5:
@@ -2312,13 +2571,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     col_strut = 'Indice di Struttura 1° livello (*) 2024'
     if col_strut in df_orbis.columns:
-        skew_patr = df_orbis[col_strut].skew()
+        skew_patr = asimmetria_bowley(df_orbis[col_strut])
         kurt_patr = df_orbis[col_strut].kurt()
 
         # Analisi Asimmetria Patrimoniale
-        if skew_patr > 0.3:
+        if skew_patr > SOGLIA_BOWLEY:
             context['tipo_asimmetria_patr'] = "asimmetriche, in questo caso positive,"
-        elif skew_patr < -0.3:
+        elif skew_patr < -SOGLIA_BOWLEY:
             context['tipo_asimmetria_patr'] = "asimmetriche, in questo caso negative,"
         else:
             context['tipo_asimmetria_patr'] = "sostanzialmente simmetriche"
@@ -2340,13 +2599,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     col_fin = 'Current Ratio (*) 2024'
     if col_fin in df_orbis.columns:
-        skew_fin = df_orbis[col_fin].skew()
+        skew_fin = asimmetria_bowley(df_orbis[col_fin])
         kurt_fin = df_orbis[col_fin].kurt()
 
         # Analisi Asimmetria Finanziaria
-        if skew_fin > 0.3:
+        if skew_fin > SOGLIA_BOWLEY:
             context['tipo_asimmetria_fin'] = "un'asimmetria positiva"
-        elif skew_fin < -0.3:
+        elif skew_fin < -SOGLIA_BOWLEY:
             context['tipo_asimmetria_fin'] = "un'asimmetria negativa"
         else:
             context['tipo_asimmetria_fin'] = "una sostanziale simmetria"
@@ -4116,6 +4375,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     doc.render(context, autoescape=True)
 
     # =================================================================
+    # 🔧 Ripara le tabelle inserite da docxtpl dentro un nodo di testo
+    # =================================================================
+    estrai_blocchi_dai_run(doc.docx)
+
+    # =================================================================
     # 🎨 4. COLORATORE NATIVO CHIRURGICO: Rende ROSSA SOLO la scritta premium
     # =================================================================
     if modalita_teaser:
@@ -4209,7 +4473,149 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         output_word, context['rating_eco'], context['rating_patr'], context['rating_fin']
     )
 
+    # =================================================================
+    # 🔧 POST-PROCESSOR: garantisce un paragrafo dopo ogni tabella
+    # =================================================================
+    output_word = garantisci_separatori_tabelle(output_word)
+
+    # =================================================================
+    # ✍️ POST-PROCESSOR: concorda gli articoli con le percentuali
+    # =================================================================
+    output_word = correggi_articoli_percentuali(output_word)
+
     return output_word
+
+
+def estrai_blocchi_dai_run(documento):
+    """
+    🔧 BUG 0b — le tabelle non venivano renderizzate.
+
+    docxtpl sostituisce il segnaposto {{ tabella_x }} con l'XML del subdoc, ma il
+    segnaposto vive dentro un nodo di testo <w:t>: il markup <w:tbl> finiva percio'
+    DENTRO il <w:t>, struttura non valida per lo schema OOXML. Word la scarta in fase
+    di riparazione automatica e in anteprima PDF le tabelle spariscono (41 su 44).
+
+    Qui i blocchi (<w:tbl> e <w:p>) vengono estratti dal nodo di testo e reinseriti
+    come fratelli del paragrafo ospite, che resta al suo posto vuoto: cosi' la
+    spaziatura del template non cambia e ogni tabella e' sempre seguita da un
+    paragrafo, come Word richiede.
+    """
+    body = documento.element.body
+    tag_p, tag_tbl, tag_t = qn('w:p'), qn('w:tbl'), qn('w:t')
+    spostati = 0
+
+    for t in list(body.iter(tag_t)):
+        blocchi = [figlio for figlio in t if figlio.tag in (tag_p, tag_tbl)]
+        if not blocchi:
+            continue
+
+        # Risale dal <w:t> al paragrafo che lo contiene
+        paragrafo = t.getparent()
+        while paragrafo is not None and paragrafo.tag != tag_p:
+            paragrafo = paragrafo.getparent()
+        if paragrafo is None or paragrafo.getparent() is None:
+            continue
+
+        ancora = paragrafo
+        for blocco in blocchi:
+            # Il testo che segue il blocco dentro il <w:t> (tail) andrebbe perso con
+            # remove(): lo si riporta nel nodo di testo prima di spostare il blocco.
+            coda = blocco.tail
+            precedente = blocco.getprevious()
+            if coda:
+                if precedente is not None:
+                    precedente.tail = (precedente.tail or '') + coda
+                else:
+                    t.text = (t.text or '') + coda
+            blocco.tail = None
+            t.remove(blocco)
+            ancora.addnext(blocco)
+            ancora = blocco
+            spostati += 1
+
+        # Se l'ultimo blocco estratto e' una tabella serve un paragrafo dopo di essa
+        if ancora.tag == tag_tbl:
+            ancora.addnext(OxmlElement('w:p'))
+
+    return spostati
+
+
+# Preposizioni articolate ammesse davanti a una percentuale, per ciascuna forma
+# dell'articolo semplice restituita da articolo_numero().
+_PREPOSIZIONI_ARTICOLATE = {
+    'il':  {'il': 'il',  'lo': 'lo',    "l'": "l'"},
+    'al':  {'il': 'al',  'lo': 'allo',  "l'": "all'"},
+    'del': {'il': 'del', 'lo': 'dello', "l'": "dell'"},
+    'nel': {'il': 'nel', 'lo': 'nello', "l'": "nell'"},
+    'dal': {'il': 'dal', 'lo': 'dallo', "l'": "dall'"},
+    'sul': {'il': 'sul', 'lo': 'sullo', "l'": "sull'"},
+}
+
+_RE_ARTICOLO_PERCENTUALE = r"\b(il|al|del|nel|dal|sul)\s+(\d[\d.]*(?:,\d+)?)\s*%"
+
+
+def _correggi_articolo(match):
+    preposizione, numero = match.group(1), match.group(2)
+    corretto = _PREPOSIZIONI_ARTICOLATE[preposizione][articolo_numero(numero)]
+    separatore = '' if corretto.endswith("'") else ' '
+    return f"{corretto}{separatore}{numero}%"
+
+
+def correggi_articoli_percentuali(output_buffer):
+    """
+    Concorda l'articolo con la percentuale che segue ("allo 0,26%", "all'8,26%",
+    "all'11,94%" invece di "al ...").
+
+    Il testo composto dal codice usa gia' con_articolo(); questa passata copre il
+    testo scritto direttamente nel template, dove l'articolo e' fisso mentre il
+    valore che lo segue e' un segnaposto e cambia a ogni report.
+    """
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+
+    def paragrafi_ovunque():
+        for p in doc.paragraphs:
+            yield p
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        yield p
+        for txbx in doc.element.body.iter(qn('w:txbxContent')):
+            for p_el in txbx.findall(qn('w:p')):
+                yield Paragraph(p_el, doc)
+
+    for p in paragrafi_ovunque():
+        _sostituisci_testo_paragrafo(p, _RE_ARTICOLO_PERCENTUALE, _correggi_articolo)
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
+
+
+def garantisci_separatori_tabelle(output_buffer):
+    """
+    Word fonde in un'unica tabella due <w:tbl> adiacenti e non accetta una tabella
+    come ultimo elemento del corpo: dopo la normalizzazione degli spazi vuoti puo'
+    capitare entrambe le cose, quindi qui si reinserisce il paragrafo mancante.
+    """
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+    body = doc.element.body
+    tag_tbl, tag_sect = qn('w:tbl'), qn('w:sectPr')
+
+    for tbl in list(body.findall(tag_tbl)):
+        successivo = tbl.getnext()
+        # Word fonde due tabelle adiacenti e non accetta una tabella come ultimo
+        # elemento del corpo (nemmeno subito prima del <w:sectPr> finale).
+        if successivo is None or successivo.tag in (tag_tbl, tag_sect):
+            tbl.addnext(OxmlElement('w:p'))
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
 
 
 def correggi_box_kpi_executive_summary(output_buffer):
@@ -4587,11 +4993,15 @@ def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
             'al ', 'alla ', 'agli ', 'affronta', 'appare',
             'sono ', 'ha ', 'garantendo', 'riflettendo',
             'evidenziando', 'e la ', 'e il ', 'e i ',
-            'risulti ', 'rappresenta', 'conferma', 'indica '
-            '- ', 'Anno ', 'mediano ', '2021', '2022', '2023', '2024'
+            'risulti ', 'rappresenta', 'conferma', 'indica ',
+            '- ', 'Anno ', 'mediano ', '2021', '2022', '2023', '2024',
             'N.D. 20', 'N.D. 2021', 'N.D. 2022'
         ]
-        return any(text.lower().startswith(c) for c in continuators)
+        # Confronto CASE-SENSITIVE: con .lower() un periodo nuovo che inizia per
+        # maiuscola ("Una volta applicate le variabili...") veniva scambiato per il
+        # seguito della frase precedente e attaccato dopo i due punti. Le voci
+        # minuscole della lista sono comunque gia' coperte dal test text[0].islower().
+        return any(text.startswith(c) for c in continuators)
 
     output_buffer.seek(0)
     doc = docx.Document(output_buffer)
@@ -4719,6 +5129,13 @@ def migliora_layout(output_buffer):
         style = p.style.name
         text = p.text.strip()
         pPr = p._p.find(qn('w:pPr'))
+
+        # I titoli non vanno mai giustificati: su due righe la giustificazione
+        # allarga la prima riga con spazi innaturali tra le parole.
+        if style.startswith('Heading') and pPr is not None:
+            jc_titolo = pPr.find(qn('w:jc'))
+            if jc_titolo is not None:
+                pPr.remove(jc_titolo)
 
         if style in ['Heading 1', 'Heading 2', 'Heading 3'] and not text:
             try:
@@ -4972,7 +5389,7 @@ def migliora_layout(output_buffer):
     n_par = len(paragrafi)
     for i, p in enumerate(paragrafi):
         testo = p.text.strip()
-        if re.match(r'^Tabella\s+\d', testo):
+        if re.match(r'^Tabella\s+M?\d', testo):
             # La didascalia precede la tabella: resta assieme ai paragrafi vuoti
             # che la separano dalla tabella (senza oltrepassarla)
             _set_keep_next(p)

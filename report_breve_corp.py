@@ -7,6 +7,8 @@ import geopandas as gpd
 import re 
 import warnings 
 from pptx import Presentation 
+from identificazione_azienda import riga_target
+from testo_italiano import con_articolo
 from pptx.util import Inches, Pt, Cm
 import matplotlib.patheffects as pe
 
@@ -139,11 +141,25 @@ def replace_placeholder_with_picture(slide, placeholder_text, image_stream):
         sp.getparent().remove(sp)
 
 def get_trend_style(trend_word):
-    """Icona e colore coerenti col verso del trend, usati nei box commento dei grafici andamento"""
-    if trend_word in ('in crescita', 'in miglioramento'):
-        return '▲', '16A34A'   # verde
-    if trend_word in ('in contrazione', 'in peggioramento'):
-        return '▼', 'DC2626'   # rosso
+    """
+    Freccia e colore dei box commento dei grafici andamento.
+
+    🔧 BUG 4b — la freccia segue SEMPRE il verso del numero (convenzione unica per tutti
+    e nove gli indicatori), il colore segue il significato economico. Il Gearing e' l'unico
+    indicatore letto "al contrario" (piu' basso = meglio): prima riceveva ▲ "in
+    miglioramento" anche quando il valore era sceso dal 160,82% al 68,83%, in contrasto con
+    tutti gli altri indicatori della stessa slide. "in miglioramento"/"in peggioramento"
+    sono prodotti solo da get_trend_e_base(..., inverso=True), quindi il verso del numero
+    e' deducibile dalla parola stessa.
+    """
+    if trend_word == 'in crescita':
+        return '▲', '16A34A'   # numero salito, lettura positiva
+    if trend_word == 'in peggioramento':
+        return '▲', 'DC2626'   # numero salito, lettura negativa (indicatore inverso)
+    if trend_word == 'in contrazione':
+        return '▼', 'DC2626'   # numero sceso, lettura negativa
+    if trend_word == 'in miglioramento':
+        return '▼', '16A34A'   # numero sceso, lettura positiva (indicatore inverso)
     if trend_word == 'n.d.':
         return '○', '94A3B8'   # grigio chiaro, distinto dal "stabile" verificato
     return '●', '64748B'       # grigio (stabile)
@@ -339,17 +355,17 @@ def _raffronto_base(trend, anno_base, val_base, unita=''):
 def get_commento_ebitda_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
     t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"L'EBITDA Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+    return f"L'EBITDA Margin si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
 def get_commento_ebit_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
     t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"L'EBIT Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+    return f"L'EBIT Margin si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
 def get_commento_profit_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
     vs = "superiore" if az_val >= ita_val else "inferiore"
     t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"Il Profit Margin si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+    return f"Il Profit Margin si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
 def get_commento_str1_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
     soglia = "al di sopra della soglia di sicurezza" if az_val >= 1 else "al di sotto della soglia di sicurezza"
@@ -365,7 +381,7 @@ def get_commento_gearing_trend(az_val, ita_val, trend='', anno_base=None, val_ba
     vs = "inferiore" if az_val <= ita_val else "superiore"
     dipendenza = "contenuta" if az_val <= ita_val else "elevata"
     t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"Il Gearing si attesta al {format_euro(az_val)}%{t}, risultando {vs} alla mediana ({format_euro(ita_val)}%) con dipendenza debitoria {dipendenza}."
+    return f"Il Gearing si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana ({format_euro(ita_val)}%) con dipendenza debitoria {dipendenza}."
 
 def get_commento_cr_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
     soglia = "in equilibrio corrente" if az_val >= 1 else "in tensione corrente"
@@ -450,7 +466,7 @@ def get_commento_barre_fin(az_cr, az_qr, az_rot, ita_cr, ita_qr, ita_rot, reg_cr
 # 🚀 CORE GENERATION POWERPOINT
 # =================================================================
 
-def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_nace, num_max_soc_orbis):
+def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_nace, num_max_soc_orbis, chiave_target=None):
     df_raw = df_orbis.copy()
     
     # 🟢 FIX 2: PULIZIA INIZIALE ESTESA A TUTTI GLI ANNI E A TUTTE LE METRICHE
@@ -535,7 +551,9 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     df_raw['Bench_Tot'] = df_raw['pts_totali'].apply(assegna_lettera)
 
     # --- 2. ESTRAZIONE DATI AZIENDA E TERRITORIO ---
-    df_target = df_raw[df_raw[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+    # 🔑 Aggancio per chiave univoca (BvD ID / P.IVA), mai per ragione sociale:
+    # nel campione convivono decine di nomi che si contengono a vicenda.
+    df_target = riga_target(df_raw, chiave_target, azienda_target)
     if df_target.empty:
         raise ValueError("Azienda target non trovata nel campione analizzato.")
     riga = df_target.iloc[0]
@@ -544,21 +562,20 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     tot_imprese_regione = len(df_raw[df_raw[col_regione] == riga.get(col_regione)]) if col_regione else 0
     df_regione = df_raw[df_raw[col_regione] == riga.get(col_regione)] if col_regione else pd.DataFrame()
 
-    # 👑 ELEZIONE DEL MARKET LEADER: prima rating combinato AAA, poi più grande per fatturato e attivo
-    # MODIFICATO: era sort by pts_totali → ora filtra AAA first, poi ordina per dimensione
+    # 👑 ELEZIONE DEL MARKET LEADER: la prima del settore per Valore della Produzione.
+    # 🔧 BUG 4a — prima si filtrava il campione sulle sole aziende con rating AAA e si
+    # ordinava dentro quel sottoinsieme: l'azienda indicata come "Market Leader" non era
+    # affatto la piu' grande del comparto (nel NACE 41.20 era la 31ª per Valore della
+    # Produzione e la 148ª per Totale Attivo su 11.259 imprese). La leadership di mercato
+    # e' una questione di dimensione, non di rating: si ordina su tutto il campione, con il
+    # Totale Attivo come criterio di spareggio a parita' di Valore della Produzione.
     _col_prod = 'Totale valore della produzione migl EUR 2024'
     _col_att  = 'Totale Attivo migl EUR 2024'
-    _pool_aaa = df_raw[
-        (df_raw['Rating Economico'] == 'A') &
-        (df_raw['Rating Finanziario'] == 'A') &
-        (df_raw['Rating Patrimoniale'] == 'A')
-    ]
-    _pool = _pool_aaa if not _pool_aaa.empty else df_raw  # fallback: tutto il campione se nessuna AAA
-    _sort_cols  = [c for c in [_col_prod, _col_att] if c in _pool.columns]
+    _sort_cols = [c for c in [_col_prod, _col_att] if c in df_raw.columns]
     if _sort_cols:
-        idx_leader = _pool.sort_values(by=_sort_cols, ascending=False).index[0]
+        idx_leader = df_raw.sort_values(by=_sort_cols, ascending=False, na_position='last').index[0]
     else:
-        idx_leader = _pool.index[0]
+        idx_leader = df_raw.index[0]
         
     market_leader = str(df_raw.loc[idx_leader, col_ragione]) if pd.notna(idx_leader) and pd.notna(df_raw.loc[idx_leader, col_ragione]) else "N.D."
 
@@ -941,12 +958,12 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         rank_series = df_group[col_name].rank(ascending=asc_order, method='min')
         
         # Troviamo la riga esatta dell'azienda target
-        riga_target = df_group[df_group[col_ragione].astype(str).str.lower().str.contains(azienda_target.lower().strip(), na=False)]
+        riga_az = riga_target(df_group, chiave_target, azienda_target)
         
-        if riga_target.empty or pd.isna(riga_target.iloc[0].name):
+        if riga_az.empty or pd.isna(riga_az.iloc[0].name):
             return "n.d."
             
-        idx_target = riga_target.iloc[0].name
+        idx_target = riga_az.iloc[0].name
         if pd.isna(rank_series.loc[idx_target]):
             return "n.d."
             
