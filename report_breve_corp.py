@@ -8,7 +8,6 @@ import re
 import warnings 
 from pptx import Presentation 
 from identificazione_azienda import riga_target
-from testo_italiano import con_articolo
 from pptx.util import Inches, Pt, Cm
 import matplotlib.patheffects as pe
 
@@ -24,6 +23,62 @@ def format_euro(numero, decimali=2):
         return formato.replace(',', 'X').replace('.', ',').replace('X', '.')
     except (ValueError, TypeError):
         return "n.d."
+
+
+# =================================================================
+# ✍️ ARTICOLO CONCORDATO CON LA PERCENTUALE CHE SEGUE
+# =================================================================
+# In italiano l'articolo davanti a un numero dipende da come il numero si legge,
+# non da come si scrive: "lo 0,26%", "l'8,26%", "l'11,94%" ma "il 5,43%" e
+# "il 159,50%". Nei testi l'articolo era fisso, quindi sbagliava ogni volta che
+# il valore iniziava per 0, 8 o 11.
+
+# (preposizione, articolo semplice) -> forma contratta
+_PREPOSIZIONI_ARTICOLATE = {
+    'il':  {'il': 'il',  'lo': 'lo',    "l'": "l'"},
+    'al':  {'il': 'al',  'lo': 'allo',  "l'": "all'"},
+    'del': {'il': 'del', 'lo': 'dello', "l'": "dell'"},
+    'nel': {'il': 'nel', 'lo': 'nello', "l'": "nell'"},
+    'dal': {'il': 'dal', 'lo': 'dallo', "l'": "dall'"},
+    'sul': {'il': 'sul', 'lo': 'sullo', "l'": "sull'"},
+}
+
+
+def articolo_numero(valore_formattato):
+    """
+    Articolo determinativo corretto per un numero gia' formattato all'italiana.
+
+    Conta solo la prima cifra della parte intera, perche' e' quella che determina
+    il suono iniziale: 0 -> "zero" (lo), 1 e 11 -> "uno"/"undici" (l'), 8/80/800
+    -> "otto"/"ottanta"/"ottocento" (l'). Il controllo su 1 e 11 e' di uguaglianza
+    e non di prefisso: 18 si legge "diciotto" e 110 "centodieci", consonantici.
+    """
+    intero = str(valore_formattato).split(',')[0].replace('.', '').lstrip('-+').strip()
+    if not intero.isdigit():
+        return 'il'
+    numero = int(intero)
+    if numero == 0:
+        return 'lo'
+    if numero in (1, 11) or intero[0] == '8':
+        return "l'"
+    return 'il'
+
+
+def con_articolo(valore_formattato, preposizione=None):
+    """
+    Antepone al numero l'articolo giusto, eventualmente fuso con una preposizione:
+
+        con_articolo("0,26")         -> "lo 0,26"
+        con_articolo("0,26", 'a')    -> "allo 0,26"
+        con_articolo("8,26", 'a')    -> "all'8,26"
+        con_articolo("159,50", 'di') -> "del 159,50"
+    """
+    articolo = articolo_numero(valore_formattato)
+    if preposizione:
+        articolo = _PREPOSIZIONI_ARTICOLATE[{'a': 'al', 'di': 'del'}[preposizione]][articolo]
+    separatore = '' if articolo.endswith("'") else ' '
+    return f"{articolo}{separatore}{valore_formattato}"
+
 
 # =================================================================
 # ⚙️ FUNZIONI DI REPLACEMENT PER POWERPOINT
