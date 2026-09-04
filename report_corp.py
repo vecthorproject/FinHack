@@ -119,6 +119,66 @@ def con_articolo(valore_formattato, preposizione=None):
     return f"{articolo}{separatore}{valore_formattato}"
 
 
+# =================================================================
+# 🧩 ORDINE DEI FIGLI NEI BLOCCHI DI FORMATTAZIONE (schema OOXML)
+# =================================================================
+# ECMA-376 impone una sequenza fissa ai figli di <w:pPr>, <w:tblPr> e <w:tcPr>.
+# Appendere in coda (append) produce documenti che LibreOffice rende benissimo ma
+# che Word considera non validi: con abbastanza violazioni fa scattare il prompt
+# di "riparazione" all'apertura. Le sequenze qui sotto sono quelle dello schema.
+_SEQUENZE_OOXML = {
+    'w:pPr': (
+        'w:pStyle', 'w:keepNext', 'w:keepLines', 'w:pageBreakBefore', 'w:framePr',
+        'w:widowControl', 'w:numPr', 'w:suppressLineNumbers', 'w:pBdr', 'w:shd',
+        'w:tabs', 'w:suppressAutoHyphens', 'w:kinsoku', 'w:wordWrap',
+        'w:overflowPunct', 'w:topLinePunct', 'w:autoSpaceDE', 'w:autoSpaceDN',
+        'w:bidi', 'w:adjustRightInd', 'w:snapToGrid', 'w:spacing', 'w:ind',
+        'w:contextualSpacing', 'w:mirrorIndents', 'w:suppressOverlap', 'w:jc',
+        'w:textDirection', 'w:textAlignment', 'w:textboxTightWrap', 'w:outlineLvl',
+        'w:divId', 'w:cnfStyle', 'w:rPr', 'w:sectPr', 'w:pPrChange',
+    ),
+    'w:tblPr': (
+        'w:tblStyle', 'w:tblpPr', 'w:tblOverlap', 'w:bidiVisual',
+        'w:tblStyleRowBandSize', 'w:tblStyleColBandSize', 'w:tblW', 'w:jc',
+        'w:tblCellSpacing', 'w:tblInd', 'w:tblBorders', 'w:shd', 'w:tblLayout',
+        'w:tblCellMar', 'w:tblLook', 'w:tblCaption', 'w:tblDescription',
+        'w:tblPrChange',
+    ),
+    'w:tcPr': (
+        'w:cnfStyle', 'w:tcW', 'w:gridSpan', 'w:hMerge', 'w:vMerge', 'w:tcBorders',
+        'w:shd', 'w:noWrap', 'w:tcMar', 'w:textDirection', 'w:tcFitText', 'w:vAlign',
+        'w:hideMark', 'w:headers', 'w:cellIns', 'w:cellDel', 'w:cellMerge',
+        'w:tcPrChange',
+    ),
+}
+
+
+def inserisci_in_ordine(contenitore, elemento):
+    """
+    Inserisce `elemento` dentro `contenitore` nella posizione prevista dallo schema
+    OOXML, invece che in coda. Se il contenitore o il tag non sono in tabella,
+    ricade sull'append (comportamento invariato).
+    """
+    sequenza = next(
+        (seq for nome, seq in _SEQUENZE_OOXML.items() if contenitore.tag == qn(nome)),
+        None
+    )
+    if sequenza is None or elemento.tag not in [qn(t) for t in sequenza]:
+        contenitore.append(elemento)
+        return elemento
+
+    tags = [qn(t) for t in sequenza]
+    successori = set(tags[tags.index(elemento.tag) + 1:])
+    for figlio in contenitore:
+        if isinstance(figlio.tag, str) and figlio.tag in successori:
+            figlio.addprevious(elemento)
+            return elemento
+    contenitore.append(elemento)
+    return elemento
+
+
+
+
 
 # =================================================================
 # 🟢 INDICATORI ECONOMICI (100% SEPARATI)
@@ -4739,7 +4799,7 @@ def correggi_box_kpi_executive_summary(output_buffer):
             ind = pPr.find(qn('w:ind'))
             if ind is None:
                 ind = OxmlElement('w:ind')
-                pPr.append(ind)
+                inserisci_in_ordine(pPr, ind)
             ind.set(qn('w:left'), str(INDENT_LEFT))
             if i == 0:
                 # titolo: solo rientro sinistro, larghezza piena per il testo del titolo
@@ -4884,7 +4944,7 @@ def correggi_riquadri_indicatori(output_buffer):
             spacing = pPr.find(qn('w:spacing'))
             if spacing is None:
                 spacing = OxmlElement('w:spacing')
-                pPr.append(spacing)
+                inserisci_in_ordine(pPr, spacing)
             spacing.set(qn('w:line'), str(altezza_riserva_ventesimi))
             spacing.set(qn('w:lineRule'), 'exact')
             idx_successivo = i + 1
@@ -4995,7 +5055,7 @@ def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
             spacing.set(_qn('w:after'), '0')
             spacing.set(_qn('w:line'), '20')
             spacing.set(_qn('w:lineRule'), 'exact')
-            pPr.append(spacing)
+            inserisci_in_ordine(pPr, spacing)
             old_rPr = pPr.find(_qn('w:rPr'))
             if old_rPr is not None:
                 pPr.remove(old_rPr)
@@ -5006,7 +5066,7 @@ def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
             szCs.set(_qn('w:val'), '2')
             rPr.append(sz)
             rPr.append(szCs)
-            pPr.append(rPr)
+            inserisci_in_ordine(pPr, rPr)
         else:
             # Nessuna forma ancorata: rimuovi completamente
             p._p.getparent().remove(p._p)
@@ -5197,11 +5257,11 @@ def migliora_layout(output_buffer):
                 pPr.remove(old_pb)
             pb = OxmlElement('w:pageBreakBefore')
             pb.set(qn('w:val'), 'true')
-            pPr.insert(0, pb)
+            inserisci_in_ordine(pPr, pb)
             kwn = pPr.find(qn('w:keepNext'))
             if kwn is None:
                 kwn = OxmlElement('w:keepNext')
-                pPr.append(kwn)
+                inserisci_in_ordine(pPr, kwn)
 
         if style in ['Heading 2', 'Heading 3'] and text:
             if pPr is None:
@@ -5210,7 +5270,7 @@ def migliora_layout(output_buffer):
             kwn = pPr.find(qn('w:keepNext'))
             if kwn is None:
                 kwn = OxmlElement('w:keepNext')
-                pPr.append(kwn)
+                inserisci_in_ordine(pPr, kwn)
 
    
 
@@ -5234,12 +5294,12 @@ def migliora_layout(output_buffer):
         tblW = OxmlElement('w:tblW')
         tblW.set(qn('w:type'), 'dxa')
         tblW.set(qn('w:w'), str(TABLE_WIDTH))
-        tblPr.append(tblW)
+        inserisci_in_ordine(tblPr, tblW)
 
         tblInd = OxmlElement('w:tblInd')
         tblInd.set(qn('w:type'), 'dxa')
         tblInd.set(qn('w:w'), str(BODY_INDENT))
-        tblPr.append(tblInd)
+        inserisci_in_ordine(tblPr, tblInd)
 
         tblBorders = parse_xml(
             r'<w:tblBorders %s>'
@@ -5251,7 +5311,7 @@ def migliora_layout(output_buffer):
             r'<w:insideV w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
             r'</w:tblBorders>' % nsdecls('w')
         )
-        tblPr.append(tblBorders)
+        inserisci_in_ordine(tblPr, tblBorders)
 
         rows = tbl.findall(qn('w:tr'))
         if not rows:
@@ -5275,7 +5335,7 @@ def migliora_layout(output_buffer):
                         pPr = OxmlElement('w:pPr')
                         para.insert(0, pPr)
                     if pPr.find(qn('w:keepNext')) is None:
-                        pPr.append(OxmlElement('w:keepNext'))
+                        inserisci_in_ordine(pPr, OxmlElement('w:keepNext'))
 
         num_cols = 0
         for cell in rows[0].findall(qn('w:tc')):
@@ -5302,7 +5362,7 @@ def migliora_layout(output_buffer):
                 tcW = OxmlElement('w:tcW')
                 tcW.set(qn('w:type'), 'dxa')
                 tcW.set(qn('w:w'), str(col_width * span))
-                tcPr.insert(0, tcW)
+                inserisci_in_ordine(tcPr, tcW)
     for p in doc.paragraphs:
         if p.style.name == 'Body Text' and p.text.strip():
              for run in p.runs:
@@ -5427,7 +5487,7 @@ def migliora_layout(output_buffer):
             pPr = OxmlElement('w:pPr')
             paragraph._p.insert(0, pPr)
         if pPr.find(qn('w:keepNext')) is None:
-            pPr.append(OxmlElement('w:keepNext'))
+            inserisci_in_ordine(pPr, OxmlElement('w:keepNext'))
 
     paragrafi = doc.paragraphs
     n_par = len(paragrafi)
@@ -5490,7 +5550,7 @@ def migliora_layout(output_buffer):
                         jc = pPr.find(qn('w:jc'))
                         if jc is None:
                             jc = OxmlElement('w:jc')
-                            pPr.append(jc)
+                            inserisci_in_ordine(pPr, jc)
                         jc.set(qn('w:val'), 'right')
     result = io.BytesIO()
     doc.save(result)
