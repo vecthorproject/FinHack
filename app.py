@@ -134,10 +134,38 @@ def elabora_capitolo_1(df_filtered, azienda_target, chiave_target=None):
         'S.P.A. a socio unico - SPA': 'Società per Azioni (S.p.A)'
     }
 
+    ETICHETTA_SRL = 'Società a Responsabilità Limitata (S.r.l)'
+    ETICHETTA_SPA = 'Società per Azioni (S.p.A)'
+    ETICHETTA_ALTRE = 'Altre forme societarie'
+
+    def macro_forma(fg_pulita):
+        """
+        Assegna la macro-categoria alla forma giuridica.
+
+        Prima si prova l'elenco esplicito qui sopra; poi, per non perdere le diciture
+        che ORBIS scrive in modo diverso, si cerca la sigla dentro il testo (stesso
+        criterio tollerante usato dal report). Tutto ciò che resta finisce in una terza
+        categoria invece di sparire: cosi' il totale della tabella macro coincide con
+        quello del report, e nessuna riga viene scartata per strada.
+        """
+        testo = str(fg_pulita).strip()
+        if testo in mappatura_fg:
+            return mappatura_fg[testo]
+        t = testo.lower()
+        if 'srl' in t or 's.r.l' in t:
+            return ETICHETTA_SRL
+        if 'spa' in t or 's.p.a' in t or 'per azioni' in t or 'società europea' in t:
+            return ETICHETTA_SPA
+        return ETICHETTA_ALTRE
+
     colonna_fg = 'Forma giuridica nazionale' 
-    df['Forma Giuridica Pulita'] = df[colonna_fg].str.replace(r'\s*\(Italia\)', '', regex=True).str.strip()
-    df['Macro Forma Giuridica'] = df['Forma Giuridica Pulita'].map(mappatura_fg)
-    df_cap1 = df.dropna(subset=['Forma Giuridica Pulita'])
+    df['Forma Giuridica Pulita'] = (
+        df[colonna_fg].astype(str)
+        .str.replace(r'\s*\(Italia\)', '', regex=True).str.strip()
+        .replace({'nan': 'N.D.', 'None': 'N.D.', '': 'N.D.'})
+    )
+    df['Macro Forma Giuridica'] = df['Forma Giuridica Pulita'].apply(macro_forma)
+    df_cap1 = df
 
     # 🟢 ESTRATTO TARGET: Individua la forma giuridica specifica e macro dell'azienda target
     df_target_check = riga_target(df_cap1, chiave_target, azienda_target)
@@ -174,30 +202,49 @@ def elabora_capitolo_1(df_filtered, azienda_target, chiave_target=None):
     grouped_fin = df_cap1.groupby('Macro Forma Giuridica')[[col_attivo, col_ricavi]].sum().T
     grouped_fin.index = ['Totale Attivo', 'Totale Ricavi']
 
+    # Le colonne S.r.l./S.p.A. ci sono sempre; quella delle altre forme compare solo
+    # se nel campione ce ne sono davvero, cosi' il foglio resta identico a prima sui
+    # settori popolati solo da S.r.l. e S.p.A.
+    # Il vecchio grouped_fin.get(..., 0).round(2) restituiva il NUMERO 0 quando una
+    # macro-categoria era assente (es. un settore senza nessuna S.p.A.) e mandava in
+    # AttributeError l'intero capitolo: ora si ripiega su una serie di zeri.
+    serie_zero = pd.Series(0.0, index=grouped_fin.index)
+    categorie_macro = [(ETICHETTA_SRL, 'S.r.l'), (ETICHETTA_SPA, 'S.p.A.')]
+    if ETICHETTA_ALTRE in grouped_fin.columns:
+        categorie_macro.append((ETICHETTA_ALTRE, 'Altre'))
+
     fin_macro_temp = pd.DataFrame(index=grouped_fin.index)
-    fin_macro_temp['S.r.l V.A.'] = grouped_fin.get('Società a Responsabilità Limitata (S.r.l)', 0).round(2)
-    fin_macro_temp['S.p.A. V.A.'] = grouped_fin.get('Società per Azioni (S.p.A)', 0).round(2)
+    for etichetta, breve in categorie_macro:
+        fin_macro_temp[f'{breve} V.A.'] = grouped_fin.get(etichetta, serie_zero).round(2)
     fin_macro_temp.reset_index(inplace=True)
     fin_macro_temp.rename(columns={'index': 'Variabile'}, inplace=True)
     fin_macro_temp = fin_macro_temp.iloc[::-1].reset_index(drop=True)
 
+    # La tabella parte dalla colonna E: Variabile in E, poi per ogni categoria una
+    # coppia V.A./%, e in fondo la coppia dei totali. Le lettere si ricavano dalla
+    # posizione invece di essere fissate a mano, cosi' restano giuste con 2 o 3 categorie.
+    def _lettera(indice_zero_based):
+        return xlsxwriter.utility.xl_col_to_name(indice_zero_based)
+
+    col_va = {breve: _lettera(5 + 2 * k) for k, (_, breve) in enumerate(categorie_macro)}
+    col_perc = {breve: _lettera(6 + 2 * k) for k, (_, breve) in enumerate(categorie_macro)}
+    col_tot_va = _lettera(5 + 2 * len(categorie_macro))
+
     fin_macro = pd.DataFrame()
     fin_macro['Variabile'] = fin_macro_temp['Variabile']
-    fin_macro['S.r.l V.A.'] = fin_macro_temp['S.r.l V.A.']
-    
-    srl_perc, spa_perc, tot_va, tot_perc = [], [], [], []
-    for i in range(len(fin_macro_temp)):
-        r = 5 + i 
-        tot_va.append(f'=F{r}+H{r}')
-        srl_perc.append(f'=IF(J{r}=0,0,F{r}/J{r}*100)')
-        spa_perc.append(f'=IF(J{r}=0,0,H{r}/J{r}*100)')
-        tot_perc.append(f'=G{r}+I{r}')
+    righe_excel = [5 + i for i in range(len(fin_macro_temp))]
 
-    fin_macro['S.r.l %'] = srl_perc
-    fin_macro['S.p.A. V.A.'] = fin_macro_temp['S.p.A. V.A.']
-    fin_macro['S.p.A. %'] = spa_perc
-    fin_macro['Totale V.A.'] = tot_va
-    fin_macro['Totale %'] = tot_perc
+    for _, breve in categorie_macro:
+        fin_macro[f'{breve} V.A.'] = fin_macro_temp[f'{breve} V.A.']
+        fin_macro[f'{breve} %'] = [
+            f'=IF({col_tot_va}{r}=0,0,{col_va[breve]}{r}/{col_tot_va}{r}*100)' for r in righe_excel
+        ]
+    fin_macro['Totale V.A.'] = [
+        '=' + '+'.join(f'{col_va[b]}{r}' for _, b in categorie_macro) for r in righe_excel
+    ]
+    fin_macro['Totale %'] = [
+        '=' + '+'.join(f'{col_perc[b]}{r}' for _, b in categorie_macro) for r in righe_excel
+    ]
 
 
     # ==========================================
@@ -1867,23 +1914,26 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
                 worksheet.write(row_ex - 1, col_num, "", fmt_space)
             elif col_name == 'Benchmark Economico':
                 # Riferimenti corretti: Profitto riga 8, EBITDA riga 9, EBIT riga 10
-                cond_D = f"IF(D{row_ex}>=${col_T2}$8,3,IF(D{row_ex}>=${col_T1}$8,2,1))"
-                cond_E = f"IF(E{row_ex}>=${col_T2}$9,3,IF(E{row_ex}>=${col_T1}$9,2,1))"
-                cond_F = f"IF(F{row_ex}>=${col_T2}$10,3,IF(F{row_ex}>=${col_T1}$10,2,1))"
+                # ISNUMBER: senza, il testo "n.d." di una cella mancante risulta maggiore
+                # di qualunque numero e l'impresa si prendeva il terzile MIGLIORE, mentre
+                # nel report lo stesso dato mancante vale il terzile peggiore.
+                cond_D = f"IF(ISNUMBER(D{row_ex}),IF(D{row_ex}>=${col_T2}$8,3,IF(D{row_ex}>=${col_T1}$8,2,1)),1)"
+                cond_E = f"IF(ISNUMBER(E{row_ex}),IF(E{row_ex}>=${col_T2}$9,3,IF(E{row_ex}>=${col_T1}$9,2,1)),1)"
+                cond_F = f"IF(ISNUMBER(F{row_ex}),IF(F{row_ex}>=${col_T2}$10,3,IF(F{row_ex}>=${col_T1}$10,2,1)),1)"
                 formula = f'=IF(({cond_D}+{cond_E}+{cond_F})>=8,"A",IF(({cond_D}+{cond_E}+{cond_F})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Finanziario':
                 # Riferimenti corretti: Rotazione riga 11, Quick riga 12, Current riga 13
-                cond_H = f"IF(H{row_ex}>=${col_T2}$11,3,IF(H{row_ex}>=${col_T1}$11,2,1))"
-                cond_I = f"IF(I{row_ex}>=${col_T2}$12,3,IF(I{row_ex}>=${col_T1}$12,2,1))"
-                cond_J = f"IF(J{row_ex}>=${col_T2}$13,3,IF(J{row_ex}>=${col_T1}$13,2,1))"
+                cond_H = f"IF(ISNUMBER(H{row_ex}),IF(H{row_ex}>=${col_T2}$11,3,IF(H{row_ex}>=${col_T1}$11,2,1)),1)"
+                cond_I = f"IF(ISNUMBER(I{row_ex}),IF(I{row_ex}>=${col_T2}$12,3,IF(I{row_ex}>=${col_T1}$12,2,1)),1)"
+                cond_J = f"IF(ISNUMBER(J{row_ex}),IF(J{row_ex}>=${col_T2}$13,3,IF(J{row_ex}>=${col_T1}$13,2,1)),1)"
                 formula = f'=IF(({cond_H}+{cond_I}+{cond_J})>=8,"A",IF(({cond_H}+{cond_I}+{cond_J})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Patrimoniale':
                 # Riferimenti corretti: Struttura 1° riga 14, Struttura 2° riga 15, Gearing riga 16
-                cond_L = f"IF(L{row_ex}>=${col_T2}$14,3,IF(L{row_ex}>=${col_T1}$14,2,1))"
-                cond_M = f"IF(M{row_ex}>=${col_T2}$15,3,IF(M{row_ex}>=${col_T1}$15,2,1))"
-                cond_N = f"IF(N{row_ex}<=${col_T1}$16,3,IF(N{row_ex}<=${col_T2}$16,2,1))"
+                cond_L = f"IF(ISNUMBER(L{row_ex}),IF(L{row_ex}>=${col_T2}$14,3,IF(L{row_ex}>=${col_T1}$14,2,1)),1)"
+                cond_M = f"IF(ISNUMBER(M{row_ex}),IF(M{row_ex}>=${col_T2}$15,3,IF(M{row_ex}>=${col_T1}$15,2,1)),1)"
+                cond_N = f"IF(ISNUMBER(N{row_ex}),IF(N{row_ex}<=${col_T1}$16,3,IF(N{row_ex}<=${col_T2}$16,2,1)),1)"
                 formula = f'=IF(({cond_L}+{cond_M}+{cond_N})>=8,"A",IF(({cond_L}+{cond_M}+{cond_N})>=5,"B","C"))'
                 worksheet.write_formula(row_ex - 1, col_num, formula, f_cntr)
             elif col_name == 'Benchmark Totale':
