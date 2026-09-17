@@ -73,6 +73,9 @@ def format_euro(numero, decimali=2):
 # il valore iniziava per 0, 8 o 11.
 
 # (preposizione, articolo semplice) -> forma contratta
+# preposizione semplice -> chiave della tabella delle forme articolate
+_PREPOSIZIONI_SEMPLICI = {'a': 'al', 'di': 'del', 'da': 'dal', 'in': 'nel', 'su': 'sul'}
+
 _PREPOSIZIONI_ARTICOLATE = {
     'il':  {'il': 'il',  'lo': 'lo',    "l'": "l'"},
     'al':  {'il': 'al',  'lo': 'allo',  "l'": "all'"},
@@ -114,7 +117,7 @@ def con_articolo(valore_formattato, preposizione=None):
     """
     articolo = articolo_numero(valore_formattato)
     if preposizione:
-        articolo = _PREPOSIZIONI_ARTICOLATE[{'a': 'al', 'di': 'del'}[preposizione]][articolo]
+        articolo = _PREPOSIZIONI_ARTICOLATE[_PREPOSIZIONI_SEMPLICI[preposizione]][articolo]
     separatore = '' if articolo.endswith("'") else ' '
     return f"{articolo}{separatore}{valore_formattato}"
 
@@ -183,6 +186,193 @@ def inserisci_in_ordine(contenitore, elemento):
 # =================================================================
 # 🟢 INDICATORI ECONOMICI (100% SEPARATI)
 # =================================================================
+
+
+# =================================================================
+# ✍️ MOTORE NARRATIVO PER INDICATORE (stile revisionato)
+# =================================================================
+# Ogni commento segue lo stesso schema in tre passaggi — valore 2024 contro la
+# mediana, traiettoria 2021-2024 con i numeri, riga di lettura — ma le formulazioni
+# ruotano in base alla posizione del bullet, così nove commenti di fila non
+# risultano copie l'uno dell'altro.
+
+ANNI_SERIE = ['2021', '2022', '2023', '2024']
+
+
+def _num(valore):
+    """Converte in float, o None se il dato non è utilizzabile."""
+    v = pd.to_numeric(valore, errors='coerce')
+    return None if pd.isna(v) else float(v)
+
+
+def serie_indicatore(df_settore, riga_azienda, col_base):
+    """Serie 2021-2024 dell'azienda e mediane annuali del settore, come dict anno->valore."""
+    az, sett = {}, {}
+    for anno in ANNI_SERIE:
+        col = f"{col_base} {anno}"
+        if riga_azienda is not None and col in riga_azienda.index:
+            az[anno] = _num(riga_azienda.get(col))
+        if col in df_settore.columns:
+            s = pd.to_numeric(df_settore[col], errors='coerce').dropna()
+            sett[anno] = float(s.median()) if not s.empty else None
+    return az, sett
+
+
+def _v(valore, unita='', dec=2):
+    return "n.d." if valore is None else f"{format_euro(valore, dec)}{unita}"
+
+
+def _va(valore, unita='', dec=2, prep=None):
+    """Valore con l'articolo concordato: "al 5,43%", "dall'8,14%", "dallo 0,96"."""
+    if valore is None:
+        return "n.d."
+    return f"{con_articolo(format_euro(valore, dec), prep)}{unita}"
+
+
+# Le due province autonome hanno nomi lunghissimi che mandano a capo la prima
+# colonna delle tabelle territoriali: in tabella si citano in forma abbreviata.
+ABBREVIAZIONI_REGIONE = {
+    'Provincia Autonoma di Bolzano/Bozen': 'P.A. Bolzano/Bozen',
+    'Provincia Autonoma di Trento': 'P.A. Trento',
+}
+
+
+def nome_regione_breve(nome):
+    return ABBREVIAZIONI_REGIONE.get(str(nome).strip(), nome)
+
+
+def preposizione_regione(nome_regione):
+    """
+    "in Lombardia" ma "nel Lazio" e "nelle Marche": in italiano la preposizione
+    davanti al nome di regione non è regolare.
+    """
+    n = str(nome_regione).strip()
+    articolate = {'lazio': 'nel', 'marche': 'nelle', 'veneto': 'nel',
+                  'molise': 'nel', 'piemonte': 'in', 'abruzzo': 'in'}
+    return f"{articolate.get(n.lower(), 'in')} {n}"
+
+
+def posizione_ordinale(valore):
+    """Posizione di classifica col punto separatore delle migliaia: 5.543°."""
+    try:
+        return f"{int(valore):,}".replace(',', '.') + "°"
+    except (TypeError, ValueError):
+        return f"{valore}°"
+
+
+def _articolo_nome(nome):
+    """"Il Margine EBITDA" ma "L'Indice di Struttura"."""
+    return "L'" if nome[:1].lower() in 'aeiou' else 'Il '
+
+
+def _punti(unita):
+    return ' punti percentuali' if unita == '%' else ''
+
+
+def _traiettoria(az, unita, dec, giro):
+    """Racconta il percorso 2021-2024 scegliendo la forma in base all'andamento."""
+    punti = [(a, az.get(a)) for a in ANNI_SERIE if az.get(a) is not None]
+    if len(punti) < 2:
+        return ""
+    (a0, v0), (aN, vN) = punti[0], punti[-1]
+    picco, minimo = max(punti, key=lambda p: p[1]), min(punti, key=lambda p: p[1])
+    intermedi = [a for a, _ in punti[1:-1]]
+
+    if picco[0] in intermedi and picco[1] > vN and picco[1] > v0:
+        varianti = [
+            f"Dopo essere salito {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
+            f"ripiega {_va(vN, unita, dec, 'a')} nel {aN}",
+            f"Il percorso tocca il massimo {_va(picco[1], unita, dec, 'a')} nel {picco[0]}, partendo "
+            f"{_va(v0, unita, dec, 'da')} del {a0}, per poi riportarsi {_va(vN, unita, dec, 'a')}",
+            f"Cresciuto {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
+            f"l'indicatore arretra {_va(vN, unita, dec, 'a')} nell'ultimo esercizio",
+        ]
+        return varianti[giro % len(varianti)]
+
+    if minimo[0] in intermedi and minimo[1] < vN and minimo[1] < v0:
+        return (f"Sceso fino {_va(minimo[1], unita, dec, 'a')} nel {minimo[0]}, il valore risale "
+                f"{_va(vN, unita, dec, 'a')} nel {aN}")
+
+    if vN > v0:
+        varianti = [
+            f"Nel quadriennio il valore sale {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
+            f"Il progresso è continuo: {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
+        ]
+        return varianti[giro % len(varianti)]
+
+    if vN < v0:
+        varianti = [
+            f"Nel quadriennio il valore rientra {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
+            f"Rispetto {_va(v0, unita, dec, 'a')} del {a0} l'indicatore si riduce {_va(vN, unita, dec, 'a')} del {aN}",
+        ]
+        return varianti[giro % len(varianti)]
+
+    return f"Il valore si mantiene sui livelli del {a0}"
+
+
+def _movimento_settore(sett, unita, dec, giro):
+    """Come si è mossa la mediana del comparto; si tace se è rimasta ferma."""
+    punti = [(a, sett.get(a)) for a in ANNI_SERIE if sett.get(a) is not None]
+    if len(punti) < 2:
+        return ""
+    v0, vN = punti[0][1], punti[-1][1]
+    if abs(vN - v0) < 10 ** (-dec):
+        return ""
+    verso = 'sale' if vN > v0 else 'scende'
+    varianti = [
+        f"il comparto, nello stesso arco, {verso} {_va(v0, unita, dec, 'da')} {_va(vN, unita, dec, 'a')}",
+        f"la mediana di settore {verso} invece {_va(v0, unita, dec, 'da')} {_va(vN, unita, dec, 'a')}",
+        f"nello stesso periodo il riferimento settoriale si porta {_va(vN, unita, dec, 'a')}",
+    ]
+    return varianti[giro % len(varianti)]
+
+
+def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
+                        inverso=False, lettura=None, giro=0):
+    """Compone il commento di un indicatore nello schema a tre passaggi."""
+    v_az, v_set = az.get('2024'), sett.get('2024')
+    art = _articolo_nome(nome)
+    if v_az is None:
+        return f"• {art}{nome} non risulta disponibile per il 2024."
+
+    testa = f"• {art}{nome} è pari {_va(v_az, unita, dec, 'a')}"
+    if v_set is not None:
+        testa += f", contro {_va(v_set, unita, dec)} della mediana settoriale"
+    frasi = [testa + "."]
+
+    traiettoria = _traiettoria(az, unita, dec, giro)
+    settore = _movimento_settore(sett, unita, dec, giro)
+    if traiettoria and settore:
+        frasi.append(f"{traiettoria}, mentre {settore}.")
+    elif traiettoria:
+        frasi.append(f"{traiettoria}.")
+
+    if soglia_unitaria and v_az is not None:
+        validi = [a for a in ANNI_SERIE if az.get(a) is not None]
+        sopra = [a for a in validi if az[a] >= 1]
+        if validi and len(sopra) == len(validi):
+            varianti = ["La soglia dell'unità non è mai stata intaccata nel periodo.",
+                        "In nessuno degli anni osservati il valore scende sotto l'unità.",
+                        "La copertura resta sopra l'unità per tutto il quadriennio."]
+            frasi.append(varianti[giro % len(varianti)])
+        elif v_az >= 1 and sopra:
+            frasi.append(f"L'unità viene superata a partire dal {sopra[0]}.")
+
+    if lettura:
+        frasi.append(lettura)
+    elif v_set is not None:
+        favorevole = (v_az <= v_set) if inverso else (v_az >= v_set)
+        if favorevole:
+            chiusure = ["Il confronto con il comparto resta quindi favorevole.",
+                        "Su questo fronte la società si colloca davanti al settore."]
+        else:
+            scarto = _v(abs(v_az - v_set), '', dec) + _punti(unita)
+            chiusure = [f"Restano {scarto} di distanza dal comparto.",
+                        f"Il divario da colmare vale {scarto}."]
+        frasi.append(chiusure[giro % len(chiusure)])
+
+    return " ".join(x for x in frasi if x)
+
 
 def costruisci_catena_filtri(info_filtri):
     """
@@ -433,6 +623,48 @@ CORREZIONI_TEMPLATE = [
      '{{ num_eco_fascia }} imprese, nella parte Patrimoniale la classe '
      '"{{ rating_patr }}" ne conta {{ num_patr_fascia }} e nella parte Finanziaria '
      'la classe "{{ rating_fin }}" ne conta {{ num_fin_fascia }}'),
+    # doppio spazio in una didascalia
+    (re.escape("mediano Settore  {{ codice_nace }}"), "mediano Settore {{ codice_nace }}"),
+    # Apertura del report: una frase che dice cosa si fa, al posto di tre che lo annunciano
+    (re.escape("Il presente report si pone l'obiettivo di analizzare il Posizionamento competitivo e "
+               "strutturale di {{ ragione_sociale }} – P.IVA {{ partita_iva }}, società operante "
+               "all\u2019interno del settore \u201c{{ descr_settore }}\u201d – Codice NACE Rev.2 "
+               "{{ codice_nace }}. L\u2019indagine non si limita a un\u2019istantanea statica della "
+               "situazione aziendale, ma si propone di valutare la resilienza e l\u2019efficienza "
+               "operativa della società attraverso l\u2019analisi integrata di tre dimensioni chiave, "
+               "sintetizzate in nove variabili di natura reddituale, patrimoniale e di liquidità. "
+               "Il confronto è integrato da un\u2019analisi evolutiva riferita al quadriennio 2021-2024, "
+               "al fine di evidenziare le dinamiche di performance e il posizionamento competitivo "
+               "dell\u2019impresa rispetto al mercato di riferimento:"),
+     "Il presente report analizza il posizionamento economico, patrimoniale e finanziario di "
+     "{{ ragione_sociale }} (P.IVA {{ partita_iva }}), impresa del settore "
+     "\u201c{{ descr_settore }}\u201d \u2013 Codice NACE Rev.2 {{ codice_nace }}. Il confronto con il "
+     "settore per l\u2019esercizio 2024 si affianca all\u2019esame dell\u2019evoluzione degli indicatori "
+     "nel quadriennio 2021-2024, così da distinguere la fotografia più recente dalle dinamiche "
+     "maturate nel tempo. Le dimensioni osservate sono tre:"),
+    (re.escape("L\u2019integrazione di queste tre componenti consente di tracciare il profilo di rischio e "
+               "di performance dell\u2019impresa rispetto ai parametri di riferimento (benchmark) del "
+               "settore, nonché di definirne il posizionamento (ranking) attraverso un\u2019analisi "
+               "comparativa. Ciò fornisce all\u2019impresa una base informativa solida a supporto dei "
+               "processi decisionali e della pianificazione strategica."),
+     "Lette insieme, le tre dimensioni mettono in relazione redditività, struttura delle fonti e "
+     "capacità di far fronte agli impegni di breve periodo, e restituiscono i punti di forza e le "
+     "aree che meritano attenzione. Il raffronto con il settore offre così una base concreta per le "
+     "decisioni di gestione."),
+    # "maggiore o uguale DI" regge la preposizione sbagliata, e la valuta va nella
+    # stessa forma usata nel resto del report
+    (re.escape("con un totale valore della produzione al 2024 maggiore o uguale di 1 mln di Euro"),
+     "con un totale valore della produzione 2024 maggiore o uguale a € 1 mln"),
+    # Capoverso territoriale: formulazione diretta e valuta in forma "€ 8.050,85 mln"
+    (re.escape("Rispetto all'area {{ macroregione }}, l'azienda si colloca in {{ regione_target }}, "
+               "territorio che contribuisce per il {{ perc_imprese_regione }}% al totale delle imprese "
+               "italiane del settore. La macroregione di appartenenza rappresenta il "
+               "{{ perc_ricavi_macroregione }}% del fatturato complessivo analizzato, per un valore "
+               "aggregato pari a {{ tot_ricavi_macro_mln }} mln di Euro."),
+     "La società ha sede {{ regione_con_preposizione }}, regione nella quale opera il "
+     "{{ perc_imprese_regione }}% delle imprese del settore presenti nel panel. L'area "
+     "{{ macroregione }} rappresenta il {{ perc_ricavi_macroregione }}% dei ricavi complessivi del "
+     "comparto analizzato, pari a € {{ tot_ricavi_macro_mln }} mln."),
     # 1a — il Margine di Profitto e' ante imposte (verificato sui dati): gli oneri
     # fiscali non lo toccano, a valle dell'EBIT pesano oneri finanziari e straordinari
     (re.escape("l'incidenza degli oneri finanziari e fiscali"),
@@ -899,7 +1131,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         'rat3_piu_pres_num': 'N.D.', 'rat3_piu_pres_categ': 'N.D.', 
         'rating_piu_pres': 'N.D.', 'rating_piu_pres_num_tot': 'N.D.',
         'num_max_soc': 'N.D.', 'num_soc_valide': 'N.D.', 'perc_su_istat': '100', 'max_soc_istat': 'N.D.',
-        'catena_filtri': '',
+        'catena_filtri': '', 'regione_con_preposizione': 'N.D.',
         'tab_territorio': [], 'tab_bench_territorio': []
     }
 
@@ -1028,69 +1260,131 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # --- 🤖 MOTORE NARRATIVO (Testi Dinamici e Tecnici in base ai Dati Reali) --- 
 
-    def get_impatto_territoriale(perc, nome, ricavi_formattati):
-        if perc >= 5.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} incide in maniera determinante sulla creazione di ricchezza locale, confermandosi un player di assoluto riferimento sul piano territoriale grazie a un impatto pari {con_articolo(format_euro(perc), 'a')}% rispetto al totale dei ricavi dell'area."
-        elif perc >= 1.0:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} fornisce un contributo significativo alla creazione di ricchezza locale, consolidando una posizione di rilievo sul piano territoriale con un'incidenza pari {con_articolo(format_euro(perc), 'a')}% rispetto ai ricavi complessivi dell'area."
-        elif perc >= 0.1:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} partecipa attivamente al tessuto economico locale, rappresentando una stabile realtà territoriale con un'incidenza pari {con_articolo(format_euro(perc), 'a')}% rispetto ai ricavi complessivi dell'area."
+    def get_impatto_territoriale(perc, nome, ricavi_formattati, macroregione):
+        """
+        Chiude il capoverso territoriale con il peso dell'azienda sull'area, senza
+        aggettivi di contorno: il dato e la sua scala bastano.
+        """
+        peso = {True: "una quota significativa", False: "una quota contenuta"}[perc >= 1.0]
+        return (f"Con un Valore della Produzione 2024 pari a € {ricavi_formattati} mln, {nome} "
+                f"rappresenta circa {con_articolo(format_euro(perc))}% dei ricavi complessivi delle "
+                f"imprese del settore localizzate nell'area {macroregione}, {peso} del comparto locale.")
+
+    def get_testo_totale(rating_eco, rating_patr, rating_fin, az_ebitda, set_ebitda,
+                         az_str1, az_str2, az_cr, az_qr):
+        """
+        Chiude la riga del Rating Combinato dicendo che cosa significano le tre lettere,
+        invece di ripetere a parole il giudizio già espresso dalla sigla.
+        """
+        pezzi = []
+        if pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1:
+            pezzi.append("la liquidità di breve periodo risulta adeguata")
         else:
-            return f"Con ricavi pari a {ricavi_formattati} mln di EUR, {nome} opera all'interno di un mercato territoriale ampio e competitivo, contribuendo al tessuto economico locale con un'incidenza pari {con_articolo(format_euro(perc), 'a')}% rispetto ai ricavi complessivi dell'area."
+            pezzi.append("la liquidità di breve periodo richiede attenzione")
+        if pd.notna(az_str1) and pd.notna(az_str2) and az_str1 >= 1 and az_str2 >= 1:
+            pezzi.append("la struttura delle fonti copre le immobilizzazioni con capitale permanente")
+        else:
+            pezzi.append("la copertura delle immobilizzazioni poggia in parte su fonti a breve")
+        if pd.notna(az_ebitda) and pd.notna(set_ebitda) and az_ebitda < set_ebitda:
+            pezzi.append("mentre la redditività si colloca al di sotto della mediana di settore")
+        else:
+            pezzi.append("mentre la redditività si mantiene sui riferimenti del comparto")
+        return ("Le tre lettere vanno lette separatamente: " + ", ".join(pezzi[:-1]) +
+                " " + pezzi[-1] + ".")
 
-    def get_testo_totale(rating):
-        if rating == 'A':
-            return "Questo risultato riflette un profilo economico-patrimoniale solido, con indicatori di redditività, indipendenza finanziaria ed equilibrio di breve termine superiori ai parametri mediani del settore."
-        elif rating == 'B':
-            return "Questo risultato riflette un profilo di sostanziale stabilità complessiva, evidenziando un assetto economico-patrimoniale solido pur con margini di miglioramento specifici nell'ottimizzazione degli asset e dei margini operativi."
-        elif rating == 'C':
-            return "Questo risultato evidenzia elementi di vulnerabilità nella struttura economica, patrimoniale e finanziaria, suggerendo l'opportunità di interventi mirati per stabilizzare i flussi di cassa, riequilibrare le fonti di finanziamento o recuperare marginalità operativa."
-        return "Non sono disponibili dati sufficienti per elaborare un giudizio complessivo accurato."
+    def get_testo_eco(rating, az_ebitda, set_ebitda, az_ebit, set_ebit, az_prof, set_prof, serie_ebitda):
+        """Riga dell'Equilibrio Economico nell'Executive Summary."""
+        sotto = [n for n, (a, m) in (('EBITDA', (az_ebitda, set_ebitda)), ('EBIT', (az_ebit, set_ebit)),
+                                     ('Margine di Profitto', (az_prof, set_prof)))
+                 if pd.notna(a) and pd.notna(m) and a < m]
+        if len(sotto) == 3:
+            testa = "nel 2024 i tre margini analizzati risultano inferiori alle rispettive mediane settoriali"
+        elif sotto:
+            testa = f"nel 2024 risultano sotto la mediana di settore {' e '.join(sotto)}"
+        else:
+            testa = "nel 2024 i tre margini si collocano sopra le rispettive mediane settoriali"
+        coda = ""
+        v23, v24 = serie_ebitda.get('2023'), serie_ebitda.get('2024')
+        if v23 is not None and v24 is not None:
+            plurale = len(sotto) != 1
+            verbo = "si accompagnano" if plurale else "si accompagna"
+            coda = (f", e la distanza {verbo} a una contrazione rispetto al 2023" if v24 < v23
+                    else ", in miglioramento rispetto al 2023")
+        return (f"{testa}{coda}. L'elemento da approfondire riguarda la capacità della gestione "
+                f"caratteristica di trasformare il Valore della Produzione in reddito operativo.")
 
-    def get_testo_eco(rating):
-        if rating == 'A':
-            return "I margini operativi (EBITDA ed EBIT) e il margine di profitto si collocano stabilmente al di sopra dei parametri mediani di settore. L'impresa mostra una buona efficienza nel generare reddito dalla gestione caratteristica e nel trasformare i ricavi in risultato ante imposte."
-        elif rating == 'B':
-            return "La redditività operativa e netta risulta adeguata alle dinamiche di settore. L'azienda presenta una buona capacità di generare reddito operativo, seppur con spazi di ottimizzazione nell'assorbimento dei costi di gestione e degli oneri accessori per incrementare l'efficienza della struttura economica."
-        elif rating == 'C':
-            return "L'analisi dei margini segnala una minore capacità di trasformare i ricavi in risultato operativo e netto. Il posizionamento al di sotto dei parametri settoriali denota una minore efficienza della struttura economica e un'elevata incidenza dei costi di gestione."
-        return "Dati economici non disponibili o insufficienti."
+    def get_testo_patr(rating, az_str1, az_str2, az_gear, set_gear, serie_gear):
+        """Riga dell'Equilibrio Patrimoniale nell'Executive Summary."""
+        if pd.notna(az_str1) and pd.notna(az_str2) and az_str1 >= 1 and az_str2 >= 1:
+            testa = ("gli indici di struttura sono superiori all'unità: le immobilizzazioni risultano coperte "
+                     "dal patrimonio netto e, considerando anche le passività non correnti, dal capitale permanente")
+        else:
+            testa = ("gli indici di struttura non raggiungono l'unità: parte delle immobilizzazioni resta "
+                     "finanziata da fonti a breve scadenza")
+        if pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear:
+            v23, v24 = serie_gear.get('2023'), serie_gear.get('2024')
+            verso = ""
+            if v23 is not None and v24 is not None:
+                verso = (", pur essendo diminuito rispetto al 2023" if v24 < v23
+                         else ", in aumento rispetto al 2023")
+            return f"{testa}. Il Gearing resta tuttavia più elevato della mediana settoriale{verso}."
+        return f"{testa}. Il Gearing si mantiene entro i riferimenti del comparto."
 
-    def get_testo_patr(rating):
-        if rating == 'A':
-            return "La struttura patrimoniale rappresenta un punto di solidità dell'azienda. Il capitale proprio copre interamente gli investimenti a lungo termine (immobilizzazioni), garantendo una buona indipendenza dai vincoli di rimborso a breve termine."
-        elif rating == 'B':
-            return "La struttura patrimoniale appare equilibrata. L'azienda finanzia una parte adeguata delle proprie immobilizzazioni attraverso capitale permanente, sebbene il ricorso al capitale di terzi per sostenere gli impieghi a medio-lungo termine debba essere costantemente monitorato."
-        elif rating == 'C':
-            return "La struttura patrimoniale evidenzia uno squilibrio nella correlazione temporale tra fonti e impieghi. Una porzione significativa delle immobilizzazioni risulta finanziata mediante capitale di terzi con obbligo di rimborso nel breve termine, esponendo l'azienda a potenziali rischi di rifinanziamento."
-        return "Dati patrimoniali non disponibili o insufficienti."
+    def get_testo_fin(rating, az_cr, az_qr, az_rot, set_rot):
+        """Riga dell'Equilibrio Finanziario nell'Executive Summary."""
+        if pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1:
+            testa = ("Current Ratio e Quick Ratio sono entrambi superiori all'unità: le passività correnti "
+                     "risultano coperte anche al netto delle rimanenze")
+        elif pd.notna(az_cr) and az_cr >= 1:
+            testa = ("il Current Ratio copre le passività correnti, mentre il Quick Ratio resta sotto l'unità "
+                     "e lega la copertura allo smobilizzo delle rimanenze")
+        else:
+            testa = "Current Ratio e Quick Ratio restano al di sotto dell'unità"
+        if pd.notna(az_rot) and pd.notna(set_rot) and az_rot > set_rot * 2:
+            return (f"{testa}. L'Indice di Rotazione del Capitale Investito raggiunge un valore molto elevato "
+                    f"rispetto al settore: un risultato da leggere insieme alla composizione del capitale investito.")
+        return f"{testa}."
 
-    def get_testo_fin(rating):
-        if rating == 'A':
-            return "L'equilibrio della struttura finanziaria di breve termine è solido. Le attività correnti coprono integralmente i debiti esigibili nell'esercizio e le risorse prontamente liquidabili assicurano una buona solvibilità immediata, senza necessità di smobilizzare le scorte."
-        elif rating == 'B':
-            return "L'equilibrio della struttura finanziaria di breve termine è sufficiente a coprire gli impieghi correnti. Tuttavia, la liquidità immediata potrebbe presentare una parziale dipendenza dalla monetizzazione delle scorte o dall'incasso dei crediti per soddisfare tutti gli impegni a breve."
-        elif rating == 'C':
-            return "La struttura finanziaria registra potenziali tensioni di liquidità. L'incapacità delle attività correnti o prontamente liquidabili di far fronte agevolmente alle passività correnti segnala il rischio di dover ricorrere a ulteriori fonti di finanziamento esterne."
-        return "Dati finanziari non disponibili o insufficienti."
+    def get_testo_sintesi(rating_comb, az_ebitda, set_ebitda, az_gear, set_gear, az_cr, az_qr):
+        """Chiusura dell'Executive Summary: dove si regge e dove serve attenzione."""
+        # ogni voce porta con sé la preposizione già articolata, per evitare
+        # accostamenti come "su l'equilibrio"
+        tiene, attenzione = [], []
+        (tiene if (pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1)
+         else attenzione).append("sull'equilibrio finanziario di breve periodo")
+        (attenzione if (pd.notna(az_ebitda) and pd.notna(set_ebitda) and az_ebitda < set_ebitda)
+         else tiene).append("sulla redditività operativa")
+        (attenzione if (pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear)
+         else tiene).append("sul livello di indebitamento")
 
-    def get_testo_sintesi(rating):
-        if rating == 'A':
-            return "In sintesi, l'integrazione di questi equilibri mostra un'impresa con una struttura economica, patrimoniale e finanziaria solida. L'efficienza nell'impiego del capitale investito e la solidità delle fonti di finanziamento supportano i futuri percorsi di crescita."
-        elif rating == 'B':
-            return "In sintesi, il coordinamento tra struttura patrimoniale e liquidità finanziaria assicura all'impresa la continuità operativa. Risulta tuttavia opportuno monitorare la capacità del capitale investito di tradursi in ricavi, al fine di non erodere i margini di sicurezza nel lungo periodo."
-        elif rating == 'C':
-            return "In sintesi, la combinazione dei tre equilibri rivela inefficienze nella struttura economica, patrimoniale e finanziaria che penalizzano l'impiego del capitale e l'autonomia monetaria. È opportuno intervenire per ripristinare un migliore allineamento temporale tra le fonti di finanziamento e gli impieghi."
-        return ""
+        def elenco(voci):
+            return voci[0] if len(voci) == 1 else ", ".join(voci[:-1]) + f" e {voci[-1]}"
 
-    def get_intro_benchmark_eco(rating):
-        if rating == 'A':
-            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una redditività operativa e netta superiore ai parametri mediani del comparto di riferimento:'
-        elif rating == 'B':
-            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" evidenzia una capacità di generare reddito adeguata e allineata ai valori mediani del comparto di riferimento, pur con specifici margini di intervento:'
-        elif rating == 'C':
-            return f'Rispetto al Benchmark Economico, la valutazione "{rating}" sottolinea una marginalità operativa e netta contratta, al di sotto dei parametri mediani espressi dal comparto di riferimento:'
-        return "Rispetto al Benchmark Economico, i dati a disposizione non consentono di esprimere una valutazione completa, come riassunto di seguito:"
+        frase = "Nel complesso"
+        if tiene:
+            frase += f", il 2024 mostra una buona tenuta {elenco(tiene)}"
+        if attenzione:
+            snodo = ", mentre l'attenzione va posta " if tiene else ", l'attenzione va posta "
+            frase += snodo + elenco(attenzione)
+        return frase + ", alla luce dell'evoluzione osservata nel quadriennio."
+
+    def get_intro_benchmark_eco(rating, az_ebitda, set_ebitda, az_ebit, set_ebit, az_prof, set_prof):
+        """
+        Apre il Benchmark Economico dando subito i tre confronti in cifre, invece di
+        annunciare a parole quello che i bullet ripetono poco sotto.
+        """
+        sotto = sum(1 for a, m in ((az_ebitda, set_ebitda), (az_ebit, set_ebit), (az_prof, set_prof))
+                    if pd.notna(a) and pd.notna(m) and a < m)
+        if sotto == 3:
+            apertura = "I tre indicatori mostrano una redditività inferiore alle rispettive mediane del settore"
+        elif sotto == 0:
+            apertura = "I tre indicatori si collocano al di sopra delle rispettive mediane del settore"
+        else:
+            apertura = "Il confronto con le mediane di settore restituisce un quadro disomogeneo"
+        cifre = (f"EBITDA {format_euro(az_ebitda)}% contro {format_euro(set_ebitda)}%, "
+                 f"EBIT {format_euro(az_ebit)}% contro {format_euro(set_ebit)}% e "
+                 f"Margine di Profitto {format_euro(az_prof)}% contro {format_euro(set_prof)}%")
+        return f'Nel 2024 il Benchmark Economico è classificato in Classe "{rating}". {apertura}: {cifre}.'
 
     # =================================================================
     # 🟢 INDICATORI ECONOMICI (Valore vs Mediana) - Formattati a Bullet Points
@@ -1117,14 +1411,24 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     # 🟠 INDICATORI PATRIMONIALI (Valore vs 1 e Gearing vs Mediana)
     # =================================================================
-    def get_intro_benchmark_patr(rating):
-        if rating == 'A':
-            return "L'analisi attesta una buona robustezza nella copertura degli investimenti, posizionando gli indici strutturali dell'azienda al di sopra delle soglie di sicurezza:"
-        elif rating == 'B':
-            return "L'analisi evidenzia un rapporto tra capitale, debiti e immobilizzazioni adeguato e in linea con i parametri mediani del mercato di riferimento:"
-        elif rating == 'C':
-            return "L'analisi segnala squilibri nella correlazione temporale tra le fonti di copertura e le immobilizzazioni aziendali rispetto ai parametri di sicurezza:"
-        return "L'analisi non consente di esprimere una valutazione completa sui rischi a lungo termine a causa di dati insufficienti:"
+    def get_intro_benchmark_patr(rating, az_str1, az_str2, az_gear, set_gear):
+        """Apre il Benchmark Patrimoniale distinguendo copertura degli impieghi e leva."""
+        coperti = pd.notna(az_str1) and pd.notna(az_str2) and az_str1 >= 1 and az_str2 >= 1
+        leva_alta = pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear
+        if coperti and leva_alta:
+            corpo = ("I due indici di struttura sono superiori all'unità e segnalano immobilizzazioni coperte da "
+                     "fonti durevoli, mentre il Gearing indica una maggiore incidenza del capitale di terzi "
+                     "rispetto al patrimonio netto")
+        elif coperti:
+            corpo = ("I due indici di struttura sono superiori all'unità e il Gearing si mantiene entro i "
+                     "riferimenti del comparto: la copertura degli impieghi durevoli non presenta criticità")
+        elif leva_alta:
+            corpo = ("Gli indici di struttura non raggiungono l'unità e il Gearing supera il riferimento "
+                     "settoriale: la copertura delle immobilizzazioni poggia in misura rilevante sul debito")
+        else:
+            corpo = ("Gli indici di struttura restano al di sotto dell'unità, pur con un livello di "
+                     "indebitamento allineato al comparto")
+        return f'Nel 2024 il Benchmark Patrimoniale è classificato in Classe "{rating}". {corpo}.'
 
     def get_analisi_indici_struttura(az_str1, set_str1, az_str2, set_str2):
         if az_str1 >= 1:
@@ -1148,14 +1452,23 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     # 🔵 INDICATORI FINANZIARI (Valore vs 1 e Rotazione vs Mediana)
     # =================================================================
-    def get_intro_benchmark_fin(rating):
-        if rating == 'A':
-            return "L'analisi degli indicatori correnti evidenzia una condizione di stabilità nel breve periodo e una buona capacità di generare ricavi tramite l'impiego delle risorse, superiore ai parametri mediani del settore:"
-        elif rating == 'B':
-            return "L'analisi degli indicatori correnti evidenzia un equilibrio finanziario di breve termine adeguato a coprire le passività correnti, in linea con gli standard del settore:"
-        elif rating == 'C':
-            return "L'analisi degli indicatori correnti segnala potenziali tensioni di liquidità e un impiego meno efficiente delle risorse rispetto alle soglie di sicurezza:"
-        return "L'analisi non consente di esprimere una valutazione completa sulla gestione della liquidità:"
+    def get_intro_benchmark_fin(rating, az_cr, az_qr, az_rot, set_rot):
+        """Apre il Benchmark Finanziario separando la copertura di breve dalla rotazione."""
+        copertura = pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1
+        rot_alta = pd.notna(az_rot) and pd.notna(set_rot) and az_rot > set_rot
+        if copertura:
+            corpo = "Current Ratio e Quick Ratio evidenziano una copertura adeguata delle passività correnti"
+        elif pd.notna(az_cr) and az_cr >= 1:
+            corpo = ("Il Current Ratio copre le passività correnti, mentre il Quick Ratio resta al di sotto "
+                     "dell'unità e lascia la copertura legata allo smobilizzo delle rimanenze")
+        else:
+            corpo = "Current Ratio e Quick Ratio restano al di sotto dell'unità"
+        if rot_alta:
+            corpo += (", mentre l'Indice di Rotazione del Capitale Investito presenta un valore superiore "
+                      "alla mediana settoriale")
+        else:
+            corpo += ", con una rotazione del capitale investito inferiore al riferimento di settore"
+        return f'Nel 2024 il Benchmark Finanziario è classificato in Classe "{rating}". {corpo}.'
 
     def get_analisi_current_ratio(az_cr, set_cr):
         if az_cr >= 1:
@@ -1512,11 +1825,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "dovrebbe strutturare un piano di rafforzamento patrimoniale e operativo, valutando iniezioni di capitale e un contenimento mirato dei costi non strategici."
 
 
-    context['descr_rating_tot'] = get_testo_totale(context['rating_comb'])
-    context['descr_rating_eco'] = get_testo_eco(context['rating_eco'])
-    context['descr_rating_patr'] = get_testo_patr(context['rating_patr'])
-    context['descr_rating_fin'] = get_testo_fin(context['rating_fin'])
-    context['descr_sintesi'] = get_testo_sintesi(context['rating_comb'])
+    # Le descrizioni dell'Executive Summary usano i valori e le serie: vengono
+    # popolate più sotto, dopo il calcolo degli indicatori.
     
     # =================================================================
     # 🟢 ESTRAZIONE VALORI NUMERICI REALI (FLOAT) E MEDIANE DI SETTORE (2024)
@@ -1551,15 +1861,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     # 🎯 POPOLAMENTO REALE DEL DIZIONARIO CON CHIAMATE POSIZIONALI CORRETTE
     # =================================================================
-    context['intro_benchmark_eco'] = get_intro_benchmark_eco(context['rating_eco'])
+    context['intro_benchmark_eco'] = get_intro_benchmark_eco(context['rating_eco'], val_az_ebitda_24, val_set_ebitda_24, val_az_ebit_24, val_set_ebit_24, val_az_profitto_24, val_set_profitto_24)
     context['analisi_margini_operativi'] = get_analisi_margini_operativi(val_az_ebitda_24, val_set_ebitda_24, val_az_ebit_24, val_set_ebit_24, desc_nace_pulita)
     context['analisi_margine_profitto'] = get_analisi_margine_profitto(val_az_profitto_24, val_set_profitto_24, desc_nace_pulita)
 
-    context['intro_benchmark_patr'] = get_intro_benchmark_patr(context['rating_patr'])
+    context['intro_benchmark_patr'] = get_intro_benchmark_patr(context['rating_patr'], val_az_strut1_24, val_az_strut2_24, val_az_gearing_24, val_set_gearing_24)
     context['analisi_indici_struttura'] = get_analisi_indici_struttura(val_az_strut1_24, val_set_strut1_24, val_az_strut2_24, val_set_strut2_24)
     context['analisi_gearing'] = get_analisi_gearing(val_az_gearing_24, val_set_gearing_24)
 
-    context['intro_benchmark_fin'] = get_intro_benchmark_fin(context['rating_fin'])
+    context['intro_benchmark_fin'] = get_intro_benchmark_fin(context['rating_fin'], val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
     context['analisi_rotazione'] = get_analisi_rotazione(val_az_rot_24, val_set_rot_24, desc_nace_pulita)
     context['analisi_current_ratio'] = get_analisi_current_ratio(val_az_cr_24, val_set_cr_24)
     context['analisi_quick_ratio'] = get_analisi_quick_ratio(val_az_qr_24, val_set_qr_24)
@@ -1568,18 +1878,71 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # -----------------------------------------------------
     # INIEZIONE TAG COMPLETAMENTE SEPARATI PER WORD
     # -----------------------------------------------------
-    context['intro_margini'] = get_intro_benchmark_eco(context['rating_eco']) + " " + get_intro_margini(desc_nace_pulita)
-    context['analisi_ebitda'] = get_analisi_ebitda(val_az_ebitda_24, val_set_ebitda_24)
-    context['analisi_ebit'] = get_analisi_ebit(val_az_ebit_24, val_set_ebit_24)
-    context['analisi_margine_profitto'] = get_analisi_margine_profitto_tag(val_az_profitto_24, val_set_profitto_24)
+    # =================================================================
+    # ✍️ COMMENTI PER INDICATORE — schema valore/mediana, traiettoria, lettura
+    # =================================================================
+    riga_serie = df_target.iloc[0] if not df_target.empty else None
+    BASI_INDICATORI = {
+        'ebitda':    ('Margine EBITDA (*) %',                          'Margine EBITDA',                       '%',  False, False),
+        'ebit':      ('Margine EBIT (*) %',                            'Margine EBIT',                         '%',  False, False),
+        'profitto':  ('Margine di Profitto (*) %',                     'Margine di Profitto',                  '%',  False, False),
+        'strut1':    ('Indice di Struttura 1° livello (*)',            'Indice di Struttura di 1° livello',    '',   True,  False),
+        'strut2':    ('Indice di Struttura 2° livello (*)',            'Indice di Struttura di 2° livello',    '',   True,  False),
+        'gearing':   ('Gearing (*) %',                                 'Gearing',                              '%',  False, True),
+        'cr':        ('Current Ratio (*)',                             'Current Ratio',                        '',   True,  False),
+        'qr':        ('Quick Ratio (*)',                               'Quick Ratio',                          '',   True,  False),
+        'rotazione': ('Indice di Rotazione del Capitale Investito (*)','Indice di Rotazione del Capitale Investito', '', False, False),
+    }
+    LETTURE = {
+        'strut1':  "Un valore superiore all'unità indica che il patrimonio netto copre integralmente le immobilizzazioni.",
+        'strut2':  "Il capitale permanente, dato da patrimonio netto e passività non correnti, copre quindi le immobilizzazioni.",
+        'cr':      "Le attività correnti coprono le passività di pari scadenza.",
+        'qr':      "La copertura delle passività correnti regge anche al netto delle rimanenze.",
+    }
+    serie_az, serie_set, commenti = {}, {}, {}
+    for giro, (chiave, (base, nome, unita, soglia, inverso)) in enumerate(BASI_INDICATORI.items()):
+        az, st = serie_indicatore(df_orbis, riga_serie, base)
+        serie_az[chiave], serie_set[chiave] = az, st
+        lettura = LETTURE.get(chiave)
+        # la riga di lettura vale solo se la soglia è davvero rispettata
+        if chiave in ('cr', 'qr', 'strut1', 'strut2') and (az.get('2024') is None or az['2024'] < 1):
+            lettura = None
+        commenti[chiave] = commento_indicatore(
+            nome, az, st, unita=unita, soglia_unitaria=soglia, inverso=inverso,
+            lettura=lettura, giro=giro
+        )
 
-    context['analisi_struttura1'] = get_analisi_struttura1(val_az_strut1_24)
-    context['analisi_struttura2'] = get_analisi_struttura2(val_az_strut2_24)
-    context['analisi_gearing'] = get_analisi_gearing_tag(val_az_gearing_24, val_set_gearing_24)
+    context['intro_margini'] = get_intro_benchmark_eco(context['rating_eco'], val_az_ebitda_24, val_set_ebitda_24,
+                                                       val_az_ebit_24, val_set_ebit_24,
+                                                       val_az_profitto_24, val_set_profitto_24)
+    context['analisi_ebitda'] = commenti['ebitda']
+    context['analisi_ebit'] = commenti['ebit']
+    context['analisi_margine_profitto'] = commenti['profitto']
 
-    context['analisi_current_ratio'] = get_analisi_current_ratio_tag(val_az_cr_24, val_set_cr_24)
-    context['analisi_quick_ratio'] = get_analisi_quick_ratio_tag(val_az_qr_24, val_set_qr_24)
-    context['analisi_rotazione'] = get_analisi_rotazione_tag(val_az_rot_24, val_set_rot_24)
+    context['analisi_struttura1'] = commenti['strut1']
+    context['analisi_struttura2'] = commenti['strut2']
+    context['analisi_gearing'] = commenti['gearing']
+
+    context['analisi_current_ratio'] = commenti['cr']
+    context['analisi_quick_ratio'] = commenti['qr']
+    context['analisi_rotazione'] = commenti['rotazione']
+
+    # --- Executive Summary: ora che serie e valori sono disponibili ---
+    context['descr_rating_tot'] = get_testo_totale(
+        context['rating_eco'], context['rating_patr'], context['rating_fin'],
+        val_az_ebitda_24, val_set_ebitda_24, val_az_strut1_24, val_az_strut2_24,
+        val_az_cr_24, val_az_qr_24)
+    context['descr_rating_eco'] = get_testo_eco(
+        context['rating_eco'], val_az_ebitda_24, val_set_ebitda_24, val_az_ebit_24,
+        val_set_ebit_24, val_az_profitto_24, val_set_profitto_24, serie_az['ebitda'])
+    context['descr_rating_patr'] = get_testo_patr(
+        context['rating_patr'], val_az_strut1_24, val_az_strut2_24, val_az_gearing_24,
+        val_set_gearing_24, serie_az['gearing'])
+    context['descr_rating_fin'] = get_testo_fin(
+        context['rating_fin'], val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
+    context['descr_sintesi'] = get_testo_sintesi(
+        context['rating_comb'], val_az_ebitda_24, val_set_ebitda_24, val_az_gearing_24,
+        val_set_gearing_24, val_az_cr_24, val_az_qr_24)
 
 
     # Calcolo dei totali per la fascia di Rating dell'Azienda
@@ -1687,7 +2050,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['conclusione_economica'] = get_conclusione_economica(val_az_ebitda_24, val_set_ebitda_24, val_az_profitto_24, val_set_profitto_24)
     context['conclusione_finanziaria_dettaglio'] = get_conclusione_finanziaria_dettaglio(val_az_cr_24, val_az_qr_24)
     context['raccomandazione_finale'] = get_raccomandazione_finale(context['rating_comb'])
-    context['impatto_territoriale'] = get_impatto_territoriale(perc_ricavi_target_su_macro, ragione_sociale_pulita, format_euro(ricavi_mln))
+    context['regione_con_preposizione'] = preposizione_regione(regione_target_pulita)
+    context['impatto_territoriale'] = get_impatto_territoriale(perc_ricavi_target_su_macro, ragione_sociale_pulita, format_euro(ricavi_mln), macroregione_target)
 
     # Costruzione delle Medaglie di Settore!!!
     conteggi = df_rating['Benchmark Totale'].value_counts()
@@ -2759,7 +3123,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     df_terr = df_orbis.copy()
     def pulisci_regione(x):
         if pd.isna(x): return 'Altro'
-        return str(x).split(' - ')[1] if ' - ' in str(x) else str(x)
+        nome = str(x).split(' - ')[1] if ' - ' in str(x) else str(x)
+        return nome_regione_breve(nome)
     df_terr['Reg_Clean'] = df_terr[col_regione].apply(pulisci_regione) if col_regione else 'Altro'
 
     tot_imp = len(df_terr)
@@ -2890,15 +3255,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     t3.cell(2, 0).text = 'Ranking Nazionale'
     t3.cell(2, 0).paragraphs[0].runs[0].bold = True
-    t3.cell(2, 1).text = f"{context.get('rnk_naz_ebitda', 'N.D.')}°"
-    t3.cell(2, 2).text = f"{context.get('rnk_naz_ebit', 'N.D.')}°"
-    t3.cell(2, 3).text = f"{context.get('rnk_naz_prof', 'N.D.')}°"
+    t3.cell(2, 1).text = posizione_ordinale(context.get('rnk_naz_ebitda', 'N.D.'))
+    t3.cell(2, 2).text = posizione_ordinale(context.get('rnk_naz_ebit', 'N.D.'))
+    t3.cell(2, 3).text = posizione_ordinale(context.get('rnk_naz_prof', 'N.D.'))
 
     t3.cell(3, 0).text = 'Ranking Regionale'
     t3.cell(3, 0).paragraphs[0].runs[0].bold = True
-    t3.cell(3, 1).text = f"{context.get('rnk_reg_ebitda', 'N.D.')}°"
-    t3.cell(3, 2).text = f"{context.get('rnk_reg_ebit', 'N.D.')}°"
-    t3.cell(3, 3).text = f"{context.get('rnk_reg_prof', 'N.D.')}°"
+    t3.cell(3, 1).text = posizione_ordinale(context.get('rnk_reg_ebitda', 'N.D.'))
+    t3.cell(3, 2).text = posizione_ordinale(context.get('rnk_reg_ebit', 'N.D.'))
+    t3.cell(3, 3).text = posizione_ordinale(context.get('rnk_reg_prof', 'N.D.'))
     context['tabella_3_dinamica'] = sd_tab3
 
     # --- TABELLA 4: PATRIMONIALE ---
@@ -2917,15 +3282,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     t4.cell(2, 0).text = 'Ranking Nazionale'
     t4.cell(2, 0).paragraphs[0].runs[0].bold = True
-    t4.cell(2, 1).text = f"{context.get('rnk_naz_strut1', 'N.D.')}°"
-    t4.cell(2, 2).text = f"{context.get('rnk_naz_strut2', 'N.D.')}°"
-    t4.cell(2, 3).text = f"{context.get('rnk_naz_gear', 'N.D.')}°"
+    t4.cell(2, 1).text = posizione_ordinale(context.get('rnk_naz_strut1', 'N.D.'))
+    t4.cell(2, 2).text = posizione_ordinale(context.get('rnk_naz_strut2', 'N.D.'))
+    t4.cell(2, 3).text = posizione_ordinale(context.get('rnk_naz_gear', 'N.D.'))
 
     t4.cell(3, 0).text = 'Ranking Regionale'
     t4.cell(3, 0).paragraphs[0].runs[0].bold = True
-    t4.cell(3, 1).text = f"{context.get('rnk_reg_strut1', 'N.D.')}°"
-    t4.cell(3, 2).text = f"{context.get('rnk_reg_strut2', 'N.D.')}°"
-    t4.cell(3, 3).text = f"{context.get('rnk_reg_gear', 'N.D.')}°"
+    t4.cell(3, 1).text = posizione_ordinale(context.get('rnk_reg_strut1', 'N.D.'))
+    t4.cell(3, 2).text = posizione_ordinale(context.get('rnk_reg_strut2', 'N.D.'))
+    t4.cell(3, 3).text = posizione_ordinale(context.get('rnk_reg_gear', 'N.D.'))
     context['tabella_4_dinamica'] = sd_tab4
 
     # --- TABELLA 5: FINANZIARIO ---
@@ -2944,15 +3309,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     t5.cell(2, 0).text = 'Ranking Nazionale'
     t5.cell(2, 0).paragraphs[0].runs[0].bold = True
-    t5.cell(2, 1).text = f"{context.get('rnk_naz_cr', 'N.D.')}°"
-    t5.cell(2, 2).text = f"{context.get('rnk_naz_qr', 'N.D.')}°"
-    t5.cell(2, 3).text = f"{context.get('rnk_naz_rot', 'N.D.')}°"
+    t5.cell(2, 1).text = posizione_ordinale(context.get('rnk_naz_cr', 'N.D.'))
+    t5.cell(2, 2).text = posizione_ordinale(context.get('rnk_naz_qr', 'N.D.'))
+    t5.cell(2, 3).text = posizione_ordinale(context.get('rnk_naz_rot', 'N.D.'))
 
     t5.cell(3, 0).text = 'Ranking Regionale'
     t5.cell(3, 0).paragraphs[0].runs[0].bold = True
-    t5.cell(3, 1).text = f"{context.get('rnk_reg_cr', 'N.D.')}°"
-    t5.cell(3, 2).text = f"{context.get('rnk_reg_qr', 'N.D.')}°"
-    t5.cell(3, 3).text = f"{context.get('rnk_reg_rot', 'N.D.')}°"
+    t5.cell(3, 1).text = posizione_ordinale(context.get('rnk_reg_cr', 'N.D.'))
+    t5.cell(3, 2).text = posizione_ordinale(context.get('rnk_reg_qr', 'N.D.'))
+    t5.cell(3, 3).text = posizione_ordinale(context.get('rnk_reg_rot', 'N.D.'))
     context['tabella_5_dinamica'] = sd_tab5
 
 
@@ -2994,7 +3359,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     df_t6 = df_rating.copy()
     def pulisci_reg(x):
         if pd.isna(x): return 'Altro'
-        return str(x).split(' - ')[1] if ' - ' in str(x) else str(x)
+        nome = str(x).split(' - ')[1] if ' - ' in str(x) else str(x)
+        return nome_regione_breve(nome)
     
     df_t6['Reg_Clean'] = df_t6[col_regione].apply(pulisci_reg) if col_regione else 'Altro'
 
@@ -5224,7 +5590,10 @@ def migliora_layout(output_buffer):
     LEFT_MARGIN = 720
     RIGHT_MARGIN = 1080
     TEXT_WIDTH = PAGE_W - LEFT_MARGIN - RIGHT_MARGIN   # 10440
-    TABLE_WIDTH = TEXT_WIDTH - BODY_INDENT              # 10028
+    # Le tabelle occupano tutta la larghezza utile, senza il rientro del corpo del
+    # testo: serve ogni millimetro per far stare ogni riga su una riga sola.
+    TABLE_INDENT = 0
+    TABLE_WIDTH = TEXT_WIDTH - TABLE_INDENT
 
     # ================================================================
     # 1. Heading vuoti → Normal + page break + keepWithNext
@@ -5298,7 +5667,7 @@ def migliora_layout(output_buffer):
 
         tblInd = OxmlElement('w:tblInd')
         tblInd.set(qn('w:type'), 'dxa')
-        tblInd.set(qn('w:w'), str(BODY_INDENT))
+        tblInd.set(qn('w:w'), str(TABLE_INDENT))
         inserisci_in_ordine(tblPr, tblInd)
 
         tblBorders = parse_xml(
@@ -5346,9 +5715,33 @@ def migliora_layout(output_buffer):
         if num_cols < 1:
             continue
 
-        col_width = TABLE_WIDTH // num_cols
+        # La prima colonna ospita le etichette ("Provincia Autonoma di Bolzano/Bozen",
+        # "Indice di Struttura 1° Liv."), le altre solo numeri: spartire la larghezza in
+        # parti uguali manda a capo le etichette. Qui la prima colonna riceve una quota
+        # maggiore e le restanti si dividono il resto.
+        if num_cols >= 4:
+            quota = 0.26 if num_cols <= 6 else (0.22 if num_cols <= 8 else 0.20)
+            prima_col = int(TABLE_WIDTH * quota)
+            altre_col = (TABLE_WIDTH - prima_col) // (num_cols - 1)
+        else:
+            prima_col = altre_col = TABLE_WIDTH // num_cols
+
+        # Margini di cella ridotti sulle tabelle fitte: ogni millimetro recuperato
+        # è larghezza utile che evita l'a capo.
+        margine = 40 if num_cols >= 6 else 80
+        vecchio_mar = tblPr.find(qn('w:tblCellMar'))
+        if vecchio_mar is not None:
+            tblPr.remove(vecchio_mar)
+        cell_mar = OxmlElement('w:tblCellMar')
+        for lato, valore in (('left', margine), ('right', margine), ('top', 20), ('bottom', 20)):
+            el = OxmlElement(f'w:{lato}')
+            el.set(qn('w:w'), str(valore))
+            el.set(qn('w:type'), 'dxa')
+            cell_mar.append(el)
+        inserisci_in_ordine(tblPr, cell_mar)
 
         for row in rows:
+            indice_col = 0
             for cell in row.findall(qn('w:tc')):
                 tcPr = cell.find(qn('w:tcPr'))
                 if tcPr is None:
@@ -5359,10 +5752,34 @@ def migliora_layout(output_buffer):
                 old_tcW = tcPr.find(qn('w:tcW'))
                 if old_tcW is not None:
                     tcPr.remove(old_tcW)
+                larghezza = prima_col if indice_col == 0 else altre_col * span
+                if indice_col == 0 and span > 1:
+                    larghezza = prima_col + altre_col * (span - 1)
                 tcW = OxmlElement('w:tcW')
                 tcW.set(qn('w:type'), 'dxa')
-                tcW.set(qn('w:w'), str(col_width * span))
+                tcW.set(qn('w:w'), str(larghezza))
                 inserisci_in_ordine(tcPr, tcW)
+                indice_col += span
+
+        # Corpo più piccolo quanto più la tabella è fitta di colonne, così le celle
+        # non vanno a capo. I titoli di riga restano leggibili perché la prima colonna
+        # è già stata allargata sopra.
+        corpo = {4: 9, 5: 8.5, 6: 8, 7: 7.5, 8: 7.5}.get(num_cols, 7 if num_cols > 8 else 10)
+        for row in rows:
+            for cell in row.findall(qn('w:tc')):
+                for para in cell.findall('.//' + qn('w:p')):
+                    for run in para.findall(qn('w:r')):
+                        rPr = run.find(qn('w:rPr'))
+                        if rPr is None:
+                            rPr = OxmlElement('w:rPr')
+                            run.insert(0, rPr)
+                        for tag in ('w:sz', 'w:szCs'):
+                            vecchio = rPr.find(qn(tag))
+                            if vecchio is not None:
+                                rPr.remove(vecchio)
+                            el = OxmlElement(tag)
+                            el.set(qn('w:val'), str(int(corpo * 2)))
+                            rPr.append(el)
     for p in doc.paragraphs:
         if p.style.name == 'Body Text' and p.text.strip():
              for run in p.runs:
