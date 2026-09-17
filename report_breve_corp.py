@@ -34,6 +34,9 @@ def format_euro(numero, decimali=2):
 # il valore iniziava per 0, 8 o 11.
 
 # (preposizione, articolo semplice) -> forma contratta
+# preposizione semplice -> chiave della tabella delle forme articolate
+_PREPOSIZIONI_SEMPLICI = {'a': 'al', 'di': 'del', 'da': 'dal', 'in': 'nel', 'su': 'sul'}
+
 _PREPOSIZIONI_ARTICOLATE = {
     'il':  {'il': 'il',  'lo': 'lo',    "l'": "l'"},
     'al':  {'il': 'al',  'lo': 'allo',  "l'": "all'"},
@@ -75,7 +78,7 @@ def con_articolo(valore_formattato, preposizione=None):
     """
     articolo = articolo_numero(valore_formattato)
     if preposizione:
-        articolo = _PREPOSIZIONI_ARTICOLATE[{'a': 'al', 'di': 'del'}[preposizione]][articolo]
+        articolo = _PREPOSIZIONI_ARTICOLATE[_PREPOSIZIONI_SEMPLICI[preposizione]][articolo]
     separatore = '' if articolo.endswith("'") else ' '
     return f"{articolo}{separatore}{valore_formattato}"
 
