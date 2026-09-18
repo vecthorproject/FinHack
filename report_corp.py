@@ -280,30 +280,33 @@ def _traiettoria(az, unita, dec, giro):
 
     if picco[0] in intermedi and picco[1] > vN and picco[1] > v0:
         varianti = [
-            f"Dopo essere salito {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
-            f"ripiega {_va(vN, unita, dec, 'a')} nel {aN}",
-            f"Il percorso tocca il massimo {_va(picco[1], unita, dec, 'a')} nel {picco[0]}, partendo "
-            f"{_va(v0, unita, dec, 'da')} del {a0}, per poi riportarsi {_va(vN, unita, dec, 'a')}",
-            f"Cresciuto {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
-            f"l'indicatore arretra {_va(vN, unita, dec, 'a')} nell'ultimo esercizio",
+            f"Era salito {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
+            f"ma nel {aN} scende {_va(vN, unita, dec, 'a')}",
+            f"Il valore più alto è quello del {picco[0]} ({_v(picco[1], unita, dec)}); nel {aN} "
+            f"si torna {_va(vN, unita, dec, 'a')}, sopra il {_v(v0, unita, dec)} di partenza"
+            if vN > v0 else
+            f"Il valore più alto è quello del {picco[0]} ({_v(picco[1], unita, dec)}); nel {aN} "
+            f"si scende {_va(vN, unita, dec, 'a')}, sotto il {_v(v0, unita, dec)} di partenza",
+            f"Dopo la crescita {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
+            f"l'ultimo anno riporta il valore {_va(vN, unita, dec, 'a')}",
         ]
         return varianti[giro % len(varianti)]
 
     if minimo[0] in intermedi and minimo[1] < vN and minimo[1] < v0:
-        return (f"Sceso fino {_va(minimo[1], unita, dec, 'a')} nel {minimo[0]}, il valore risale "
-                f"{_va(vN, unita, dec, 'a')} nel {aN}")
+        return (f"Dopo il minimo del {minimo[0]} ({_v(minimo[1], unita, dec)}), nel {aN} risale "
+                f"{_va(vN, unita, dec, 'a')}")
 
     if vN > v0:
         varianti = [
-            f"Nel quadriennio il valore sale {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
-            f"Il progresso è continuo: {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
+            f"Nei quattro anni il valore sale {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
+            f"La crescita è costante: {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
         ]
         return varianti[giro % len(varianti)]
 
     if vN < v0:
         varianti = [
-            f"Nel quadriennio il valore rientra {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
-            f"Rispetto {_va(v0, unita, dec, 'a')} del {a0} l'indicatore si riduce {_va(vN, unita, dec, 'a')} del {aN}",
+            f"Nei quattro anni il valore scende {_va(v0, unita, dec, 'da')} del {a0} {_va(vN, unita, dec, 'a')} del {aN}",
+            f"Dal {_v(v0, unita, dec)} del {a0} si arriva {_va(vN, unita, dec, 'a')} del {aN}",
         ]
         return varianti[giro % len(varianti)]
 
@@ -320,9 +323,9 @@ def _movimento_settore(sett, unita, dec, giro):
         return ""
     verso = 'sale' if vN > v0 else 'scende'
     varianti = [
-        f"il comparto, nello stesso arco, {verso} {_va(v0, unita, dec, 'da')} {_va(vN, unita, dec, 'a')}",
+        f"nello stesso periodo il settore {verso} {_va(v0, unita, dec, 'da')} {_va(vN, unita, dec, 'a')}",
         f"la mediana di settore {verso} invece {_va(v0, unita, dec, 'da')} {_va(vN, unita, dec, 'a')}",
-        f"nello stesso periodo il riferimento settoriale si porta {_va(vN, unita, dec, 'a')}",
+        f"il settore, negli stessi anni, arriva {_va(vN, unita, dec, 'a')}",
     ]
     return varianti[giro % len(varianti)]
 
@@ -351,24 +354,24 @@ def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
         validi = [a for a in ANNI_SERIE if az.get(a) is not None]
         sopra = [a for a in validi if az[a] >= 1]
         if validi and len(sopra) == len(validi):
-            varianti = ["La soglia dell'unità non è mai stata intaccata nel periodo.",
-                        "In nessuno degli anni osservati il valore scende sotto l'unità.",
-                        "La copertura resta sopra l'unità per tutto il quadriennio."]
+            varianti = ["Il valore non è mai sceso sotto l'unità.",
+                        "In nessuno dei quattro anni si scende sotto l'unità.",
+                        "La copertura resta sopra l'unità per tutto il periodo."]
             frasi.append(varianti[giro % len(varianti)])
         elif v_az >= 1 and sopra:
-            frasi.append(f"L'unità viene superata a partire dal {sopra[0]}.")
+            frasi.append(f"L'unità viene superata dal {sopra[0]} in poi.")
 
     if lettura:
         frasi.append(lettura)
     elif v_set is not None:
         favorevole = (v_az <= v_set) if inverso else (v_az >= v_set)
         if favorevole:
-            chiusure = ["Il confronto con il comparto resta quindi favorevole.",
-                        "Su questo fronte la società si colloca davanti al settore."]
+            chiusure = ["Su questo fronte la società sta davanti al settore.",
+                        "Il confronto con il settore è quindi a favore dell'azienda."]
         else:
             scarto = _v(abs(v_az - v_set), '', dec) + _punti(unita)
-            chiusure = [f"Restano {scarto} di distanza dal comparto.",
-                        f"Il divario da colmare vale {scarto}."]
+            chiusure = [f"La distanza dal settore è di {scarto}.",
+                        f"Restano {scarto} da recuperare."]
         frasi.append(chiusure[giro % len(chiusure)])
 
     return " ".join(x for x in frasi if x)
@@ -623,6 +626,60 @@ CORREZIONI_TEMPLATE = [
      '{{ num_eco_fascia }} imprese, nella parte Patrimoniale la classe '
      '"{{ rating_patr }}" ne conta {{ num_patr_fascia }} e nella parte Finanziaria '
      'la classe "{{ rating_fin }}" ne conta {{ num_fin_fascia }}'),
+    (re.escape('L\u2019analisi integrata dei benchmark delinea un profilo aziendale '
+               '{{ sintesi_profilo_integrato }} Il Rating Combinato "{{ rating_comb }}" posiziona '
+               'l\u2019azienda come una realtà {{ sintesi_posizionamento_lungo_periodo }}'),
+     'Nel complesso il quadro restituisce {{ sintesi_profilo_integrato }} '
+     '{{ sintesi_posizionamento_lungo_periodo }}'),
+    # Panoramica dell'Equilibrio Economico: due frasi generiche sostituite dai dati
+    (re.escape("L'Analisi dell'Equilibrio Economico per il quadriennio evidenzia dinamiche di "
+               "redditività influenzate dall'evoluzione del contesto settoriale. Il quadriennio in "
+               "esame è stato caratterizzato da fasi eterogenee, con andamenti non sempre lineari "
+               "negli anni considerati."),
+     "{{ panoramica_economica }}"),
+    (re.escape("Tuttavia, il 2024 ha segnato un punto di stabilizzazione. In questo contesto "
+               "sfidante, l'analisi mette in luce"),
+     "L'analisi mette in luce"),
+    # Metodo: due capoversi lunghi ridotti a quello che serve sapere
+    (re.escape('Tale analisi si definisce come Analisi di Equilibrio Economico, Patrimoniale e '
+               'Finanziario, condotta per le annualità 2021-2024 sugli indicatori, e si basa '
+               'sull\u2019applicazione di strumenti di statistica descrittiva alle distribuzioni di '
+               'dati. Tramite questo passaggio è stata valutata l\'efficacia della media rispetto '
+               'alla mediana come indicatore di sintesi dell\u2019andamento settoriale, determinando '
+               "quest'ultima come parametro definitivo. Successivamente, è stata calcolata la "
+               'variazione percentuale della mediana per tracciare con precisione i trend evolutivi '
+               'del quadriennio analizzato.'),
+     'Per descrivere il settore si usa la mediana e non la media, perché la mediana non viene '
+     'spostata dai pochi valori estremi presenti nel campione. Sulle mediane è stata poi calcolata '
+     'la variazione anno su anno, per seguire la direzione del comparto nel quadriennio.'),
+    (re.escape('Una volta definiti i dati da utilizzare, si è proceduto a confrontare i valori delle '
+               'variabili dell\u2019azienda target con il valore mediano delle stesse per l\u2019intero '
+               'settore, al fine di valutare sia un andamento storico, guardando come le due '
+               'distribuzioni di dati variano dal 2021 al 2024, sia con particolare focus al 2024 '
+               'dato l\u2019obiettivo finale dello studio di posizionamento.'),
+     'I valori dell\u2019azienda sono poi confrontati con quelli del settore, sia lungo tutto il '
+     'periodo 2021-2024 sia con attenzione particolare al 2024, che è l\u2019anno su cui viene '
+     'costruito il posizionamento.'),
+    # Il Rating Combinato è la sigla a tre lettere: la lettera unica di sintesi non
+    # viene più presentata come "il rating"
+    (re.escape('un Rating Combinato ({{ rating_comb }}) di classe "{{ rating_tot }}".'),
+     'un Rating Combinato "{{ rating_tot }}".'),
+    (re.escape('Benchmark Totale  {{ rating_eco }} + {{ rating_patr }} + {{ rating_fin }} = {{ rating_comb }}'),
+     'Rating Combinato  {{ rating_eco }} + {{ rating_patr }} + {{ rating_fin }} = {{ rating_tot }}'),
+    (re.escape('Il Rating Combinato ({{ rating_comb }}) {{ analisi_combinata }}. La valutazione '
+               'globale "{{ rating_tot }}" conferma l\'appartenenza della società a quella fascia di '
+               '{{ num_soc_fascia_tot }} imprese a livello di Benchmark Totale '
+               '({{ perc_soc_fascia_tot }}% del campione analizzato) che rappresentano '
+               '{{ descr_fascia_appartenenza }} del settore nel 2024.'),
+     'Il Rating Combinato "{{ rating_tot }}" {{ analisi_combinata }} La stessa combinazione ricorre '
+     'in {{ num_soc_fascia_tot }} imprese del panel, pari al {{ perc_soc_fascia_tot }}% del campione.'),
+    (re.escape('Il Rating complessivo \u201c{{ rating_comb }}\u201d dell\u2019azienda e il conseguente '
+               'posizionamento della stessa all\u2019interno del settore deriva da un\u2019analisi tecnica '
+               'condotta sulle nove variabili considerate per la costruzione dei benchmark al 2024.'),
+     'Il Rating Combinato \u201c{{ rating_tot }}\u201d e il posizionamento che ne deriva nascono '
+     'dalle nove variabili usate per costruire i tre benchmark, riferite al 2024. La lettura '
+     'storica 2021-2024 completa il quadro, mostrando come si siano mossi nel tempo i valori '
+     'aziendali e le mediane di settore.'),
     # doppio spazio in una didascalia
     (re.escape("mediano Settore  {{ codice_nace }}"), "mediano Settore {{ codice_nace }}"),
     # Apertura del report: una frase che dice cosa si fa, al posto di tre che lo annunciano
@@ -1131,7 +1188,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         'rat3_piu_pres_num': 'N.D.', 'rat3_piu_pres_categ': 'N.D.', 
         'rating_piu_pres': 'N.D.', 'rating_piu_pres_num_tot': 'N.D.',
         'num_max_soc': 'N.D.', 'num_soc_valide': 'N.D.', 'perc_su_istat': '100', 'max_soc_istat': 'N.D.',
-        'catena_filtri': '', 'regione_con_preposizione': 'N.D.',
+        'catena_filtri': '', 'regione_con_preposizione': 'N.D.', 'panoramica_economica': '',
         'tab_territorio': [], 'tab_bench_territorio': []
     }
 
@@ -1498,13 +1555,18 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             return "il posizionamento finale riflette risultanze asimmetriche nel panel di settore. Sebbene la solvibilità generale risulti presidiata in linea con i valori mediani, permangono mirati elementi di sfasamento monetario sul ciclo di liquidazione immediata delle rimanenze."
 
     def get_analisi_combinata(eco, patr, fin):
-        dict_eco = {'A': "un'ottima marginalità operativa", 'B': "una redditività caratteristica in linea col mercato", 'C': "una debole capacità di trasformare i ricavi in margini"}
-        dict_patr = {'A': "un'indipendenza finanziaria che copre le immobilizzazioni", 'B': "un capitale permanente adeguato agli asset", 'C': "un forte squilibrio nell'indebitamento a sostegno degli impieghi"}
-        dict_fin = {'A': "una rotazione ottimale per coprire le passività a breve", 'B': "un Current Ratio adeguato a onorare i debiti esigibili", 'C': "un Quick Ratio dipendente dallo smobilizzo delle rimanenze"}
-
-        if eco in ['A','B','C'] and patr in ['A','B','C'] and fin in ['A','B','C']:
-            return f"riflette un'azienda che poggia su {dict_patr[patr]}, associata a {dict_eco[eco]} e {dict_fin[fin]}."
-        return "riflette un'azienda per la quale non è possibile tracciare un profilo combinato completo a causa di dati mancanti."
+        """Traduce le tre lettere in una riga leggibile, senza incastri di subordinate."""
+        dict_eco = {'A': "una buona redditività operativa", 'B': "una redditività in linea col mercato",
+                    'C': "una redditività sotto i riferimenti di settore"}
+        dict_patr = {'A': "mezzi propri che coprono le immobilizzazioni",
+                     'B': "un capitale permanente adeguato agli investimenti",
+                     'C': "una copertura degli investimenti che poggia sul debito"}
+        dict_fin = {'A': "una liquidità di breve periodo solida",
+                    'B': "una liquidità di breve periodo adeguata",
+                    'C': "una liquidità di breve periodo dipendente dalle rimanenze"}
+        if eco in dict_eco and patr in dict_patr and fin in dict_fin:
+            return (f"mette insieme {dict_eco[eco]}, {dict_patr[patr]} e {dict_fin[fin]}.")
+        return "non è ricostruibile per intero a causa di dati mancanti."
 
     def get_descr_fascia_appartenenza(rating):
         if rating == 'A': return "la solidità reddituale, patrimoniale e finanziaria"
@@ -1796,15 +1858,33 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         if az_rot >= set_rot: return "È possibile focalizzarsi su piani di sviluppo commerciale per sfruttare la redditività di rotazione già superiore alla mediana di settore."
         else: return "È opportuno valutare la dismissione di asset non core o un incremento delle vendite per tradurre in flussi di cassa il capitale immesso."
 
-    def get_sintesi_profilo_integrato(rating_comb):
-        if rating_comb == 'A': return "un modello solido, patrimonialmente indipendente e con buone coperture di liquidità a breve."
-        elif rating_comb == 'B': return "un assetto complessivamente equilibrato che assicura la continuità in linea col mercato di riferimento."
-        else: return "uno scenario di vulnerabilità su più fronti (marginalità o cassa) disallineato rispetto alla concorrenza."
+    def get_sintesi_profilo_integrato(az_ebitda, set_ebitda, az_gear, set_gear, az_cr, az_qr):
+        """Apre la chiusura elencando come stanno davvero le tre aree."""
+        pezzi = []
+        pezzi.append("una redditività sotto i riferimenti di settore"
+                     if (pd.notna(az_ebitda) and pd.notna(set_ebitda) and az_ebitda < set_ebitda)
+                     else "una redditività in linea con il settore")
+        pezzi.append("un ricorso al debito ancora elevato"
+                     if (pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear)
+                     else "un indebitamento contenuto")
+        pezzi.append("una liquidità di breve periodo adeguata"
+                     if (pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1)
+                     else "una liquidità di breve periodo da presidiare")
+        return ", ".join(pezzi[:-1]) + f" e {pezzi[-1]}."
 
-    def get_sintesi_posizionamento_lungo_periodo(rating_comb):
-        if rating_comb == 'A': return "in grado di assorbire con maggiore margine le perturbazioni di mercato, grazie a solidi indici di solvibilità e redditività operativa."
-        elif rating_comb == 'B': return "resiliente e atta a garantire la sopravvivenza d'esercizio mantenendo un attento bilanciamento dei costi."
-        else: return "esposta a un maggiore rischio di tensione di liquidità e di erosione dei margini, in presenza di una leva finanziaria elevata."
+    def get_sintesi_posizionamento_lungo_periodo(serie_ebitda, serie_gear):
+        """Aggiunge la direzione presa dalle due grandezze che contano di più."""
+        margini = serie_ebitda.get('2023'), serie_ebitda.get('2024')
+        leva = serie_gear.get('2023'), serie_gear.get('2024')
+        parti = []
+        if None not in margini:
+            parti.append("i margini si sono ridotti rispetto al 2023" if margini[1] < margini[0]
+                         else "i margini sono migliorati rispetto al 2023")
+        if None not in leva:
+            parti.append("l'indebitamento è sceso" if leva[1] < leva[0] else "l'indebitamento è salito")
+        if not parti:
+            return "Il quadriennio non offre elementi sufficienti per leggerne la direzione."
+        return f"Nell'ultimo anno {' mentre '.join(parti)}."
 
     def get_conclusione_patrimoniale(az_str1, az_gear, set_gear):
         if az_str1 >= 1.0 and az_gear <= set_gear: return "la copertura tramite mezzi propri e il Gearing contenuto riducono l'esposizione dell'azienda a eventuali restrizioni del credito bancario."
@@ -1819,10 +1899,23 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         elif az_cr >= 1.0: return "conferma la copertura dei debiti a breve nel complesso, pur con una componente di dipendenza dallo smobilizzo dei magazzini."
         else: return "rivela fragilità strutturali nel circolante netto, a conferma dell'opportunità di incassare o dismettere scorte in tempi più contratti."
 
-    def get_raccomandazione_finale(rating_comb):
-        if rating_comb == 'A': return "dispone di un buon margine per accedere a nuovo credito per investimenti o espansione settoriale."
-        elif rating_comb == 'B': return "dovrebbe concentrare l'azione manageriale sull'ottimizzazione del circolante per compiere uno scale-up stabile."
-        else: return "dovrebbe strutturare un piano di rafforzamento patrimoniale e operativo, valutando iniezioni di capitale e un contenimento mirato dei costi non strategici."
+    def get_raccomandazione_finale(az_ebitda, set_ebitda, az_gear, set_gear, az_cr, az_qr):
+        """Chiude indicando la priorità che i numeri suggeriscono, non una formula di rito."""
+        priorita = []
+        if pd.notna(az_ebitda) and pd.notna(set_ebitda) and az_ebitda < set_ebitda:
+            priorita.append("il recupero dei margini operativi")
+        if pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear:
+            priorita.append("il controllo dell'indebitamento")
+        if not (pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1):
+            priorita.append("il presidio della liquidità di breve periodo")
+        if not priorita:
+            return ("può consolidare la posizione raggiunta, mantenendo il presidio su margini, "
+                    "indebitamento e liquidità.")
+        if len(priorita) == 1:
+            elenco = priorita[0]
+        else:
+            elenco = ", ".join(priorita[:-1]) + f" e {priorita[-1]}"
+        return f"può concentrare l'attenzione gestionale su {elenco}."
 
 
     # Le descrizioni dell'Executive Summary usano i valori e le serie: vengono
@@ -1946,11 +2039,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
 
     # Calcolo dei totali per la fascia di Rating dell'Azienda
-    target_glob = context['rating_comb']
-    
-    if target_glob in ['A', 'B', 'C'] and 'Benchmark Totale' in df_rating.columns:
-        num_soc_fascia_tot = len(df_rating[df_rating['Benchmark Totale'] == target_glob])
-        tot_valide_bench = len(df_rating[df_rating['Benchmark Totale'].isin(['A', 'B', 'C'])])
+    # Quante imprese condividono esattamente la stessa combinazione a tre lettere:
+    # un dato più parlante della lettera unica di sintesi, che è stata tolta dal testo.
+    target_glob = context['rating_tot']
+
+    if 'Rating Combinato' in df_rating.columns and isinstance(target_glob, str) and len(target_glob) == 3:
+        num_soc_fascia_tot = len(df_rating[df_rating['Rating Combinato'] == target_glob])
+        tot_valide_bench = len(df_rating[df_rating['Rating Combinato'].astype(str).str.len() == 3])
         perc_soc_fascia_tot = (num_soc_fascia_tot / tot_valide_bench * 100) if tot_valide_bench > 0 else 0
         
         # Ogni area va contata sulla PROPRIA classe: target_glob e' la lettera del
@@ -2044,12 +2139,27 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['gestione_tesoreria_fin'] = get_gestione_tesoreria_fin(val_az_cr_24, val_az_qr_24)
     context['priorita_strategica_fin'] = get_priorita_strategica_fin(val_az_rot_24, val_set_rot_24)
 
-    context['sintesi_profilo_integrato'] = get_sintesi_profilo_integrato(context['rating_comb'])
-    context['sintesi_posizionamento_lungo_periodo'] = get_sintesi_posizionamento_lungo_periodo(context['rating_comb'])
+    def get_panoramica_economica(serie_ebitda, serie_set_ebitda):
+        """Sostituisce le due frasi generiche di apertura dell'Equilibrio Economico."""
+        v0, v23, v24 = serie_ebitda.get('2021'), serie_ebitda.get('2023'), serie_ebitda.get('2024')
+        s0, s24 = serie_set_ebitda.get('2021'), serie_set_ebitda.get('2024')
+        if None in (v23, v24):
+            return "Nel quadriennio 2021-2024 la redditività aziendale viene letta insieme a quella del settore."
+        andamento = ("migliora fino al 2023 e arretra nel 2024" if v24 < v23
+                     else "prosegue in miglioramento anche nel 2024")
+        coda = ""
+        if None not in (s0, s24):
+            coda = (" Il settore, nello stesso periodo, cresce complessivamente."
+                    if s24 > s0 else " Anche il settore, nello stesso periodo, arretra.")
+        return (f"Nel quadriennio 2021-2024 la redditività aziendale {andamento}.{coda}")
+
+    context['panoramica_economica'] = get_panoramica_economica(serie_az['ebitda'], serie_set['ebitda'])
+    context['sintesi_profilo_integrato'] = get_sintesi_profilo_integrato(val_az_ebitda_24, val_set_ebitda_24, val_az_gearing_24, val_set_gearing_24, val_az_cr_24, val_az_qr_24)
+    context['sintesi_posizionamento_lungo_periodo'] = get_sintesi_posizionamento_lungo_periodo(serie_az['ebitda'], serie_az['gearing'])
     context['conclusione_patrimoniale'] = get_conclusione_patrimoniale(val_az_strut1_24, val_az_gearing_24, val_set_gearing_24)
     context['conclusione_economica'] = get_conclusione_economica(val_az_ebitda_24, val_set_ebitda_24, val_az_profitto_24, val_set_profitto_24)
     context['conclusione_finanziaria_dettaglio'] = get_conclusione_finanziaria_dettaglio(val_az_cr_24, val_az_qr_24)
-    context['raccomandazione_finale'] = get_raccomandazione_finale(context['rating_comb'])
+    context['raccomandazione_finale'] = get_raccomandazione_finale(val_az_ebitda_24, val_set_ebitda_24, val_az_gearing_24, val_set_gearing_24, val_az_cr_24, val_az_qr_24)
     context['regione_con_preposizione'] = preposizione_regione(regione_target_pulita)
     context['impatto_territoriale'] = get_impatto_territoriale(perc_ricavi_target_su_macro, ragione_sociale_pulita, format_euro(ricavi_mln), macroregione_target)
 
