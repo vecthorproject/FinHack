@@ -218,8 +218,8 @@ def elimina_slide(prs, slide):
 
 
 def aggiungi_card_commento(slide, sinistra, alto, larghezza, altezza,
-                           icona_metrica, titolo, trend_word, testo):
-    """La card di commento accanto al grafico: barra colorata, icona, badge, testo."""
+                           titolo, trend_word, testo):
+    """La card di commento accanto al grafico: barra colorata, titolo, badge, testo."""
     from pptx.dml.color import RGBColor
     from pptx.enum.shapes import MSO_SHAPE
     from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
@@ -244,15 +244,9 @@ def aggiungi_card_commento(slide, sinistra, alto, larghezza, altezza,
     tf.word_wrap = True
     tf.vertical_anchor = MSO_ANCHOR.TOP
     tf.margin_left = tf.margin_right = Cm(0.8)
-    tf.margin_top = Cm(0.9)
+    tf.margin_top = Cm(1.2)
 
-    p_icona = tf.paragraphs[0]
-    p_icona.alignment = PP_ALIGN.CENTER
-    p_icona.space_after = Pt(8)
-    p_icona.add_run().text = icona_metrica
-    p_icona.runs[0].font.size = Pt(40)
-
-    p_titolo = tf.add_paragraph()
+    p_titolo = tf.paragraphs[0]
     p_titolo.alignment = PP_ALIGN.CENTER
     p_titolo.space_after = Pt(6)
     r_titolo = p_titolo.add_run()
@@ -483,69 +477,6 @@ def get_trend_style(trend_word):
         return '○', '94A3B8'   # grigio chiaro, distinto dal "stabile" verificato
     return '●', '64748B'       # grigio (stabile)
 
-def formatta_box_commento_grafico(slide, placeholder, icona_metrica, titolo, trend_word, testo):
-    """Trasforma il box {{commento_grafico_*}} da testo piatto e centrato in una card leggibile:
-    barra colorata in alto (coerente col trend) + icona della metrica + titolo per esteso
-    (a capo centrato se lungo) + badge trend + testo di analisi."""
-    from pptx.dml.color import RGBColor
-    from pptx.util import Pt, Emu
-    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-    from pptx.enum.shapes import MSO_SHAPE
-
-    shape, coords = get_shape_and_coords(slide.shapes, placeholder)
-    if not shape or not coords:
-        return
-    left, top, width, height = coords
-
-    icona_trend, colore_hex = get_trend_style(trend_word)
-    colore = RGBColor.from_string(colore_hex)
-
-    # Barra accento in cima alla card, colorata in base al verso del trend
-    barra = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, Emu(45720))
-    barra.fill.solid()
-    barra.fill.fore_color.rgb = colore
-    barra.line.fill.background()
-    barra.shadow.inherit = False
-
-    tf = shape.text_frame
-    tf.clear()
-    tf.word_wrap = True
-    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-
-    # Icona grande della metrica: riempie lo spazio vuoto della card e la rende identificabile a colpo d'occhio
-    p_icona = tf.paragraphs[0]
-    p_icona.alignment = PP_ALIGN.CENTER
-    p_icona.space_after = Pt(10)
-    r_icona = p_icona.add_run()
-    r_icona.text = icona_metrica
-    r_icona.font.size = Pt(44)
-
-    p_titolo = tf.add_paragraph()
-    p_titolo.alignment = PP_ALIGN.CENTER
-    p_titolo.space_after = Pt(8)
-    r_titolo = p_titolo.add_run()
-    r_titolo.text = titolo.upper()
-    r_titolo.font.bold = True
-    r_titolo.font.size = Pt(18)
-    r_titolo.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
-
-    p_badge = tf.add_paragraph()
-    p_badge.alignment = PP_ALIGN.CENTER
-    p_badge.space_after = Pt(14)
-    r_badge = p_badge.add_run()
-    testo_badge = "N.D." if trend_word == 'n.d.' else trend_word.capitalize()
-    r_badge.text = f"{icona_trend}  {testo_badge}"
-    r_badge.font.bold = True
-    r_badge.font.size = Pt(16)
-    r_badge.font.color.rgb = colore
-
-    p_corpo = tf.add_paragraph()
-    p_corpo.alignment = PP_ALIGN.CENTER
-    r_corpo = p_corpo.add_run()
-    r_corpo.text = testo
-    r_corpo.font.size = Pt(14)
-    r_corpo.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
-
 # =================================================================
 # 🤖 MOTORE NARRATIVO PER POWERPOINT
 # =================================================================
@@ -768,12 +699,17 @@ def lettura_indicatore(chiave, valore, mediana):
     return ""
 
 
-def preposizione_regione_ppt(nome_regione):
-    """"in Lombardia" ma "nel Lazio" e "nelle Marche"."""
+def preposizione_regione_ppt(nome_regione, preposizione='in'):
+    """
+    "nella regione Lazio", "della regione Lombardia": la stessa forma del report Word.
+    Con "regione" davanti l'articolo e' sempre lo stesso, e non si rischia un "nel
+    Valle d'Aosta"; le province autonome portano gia' il loro nome per esteso.
+    """
     n = str(nome_regione).strip()
-    articolate = {'lazio': 'nel', 'marche': 'nelle', 'veneto': 'nel',
-                  'molise': 'nel', 'piemonte': 'in', 'abruzzo': 'in'}
-    return f"{articolate.get(n.lower(), 'in')} {n}"
+    articolata = {'in': 'nella', 'di': 'della', 'a': 'alla', 'da': 'dalla', 'su': 'sulla'}.get(preposizione, 'nella')
+    if n.lower().startswith('provincia'):
+        return f"{articolata} {n}"
+    return f"{articolata} regione {n}"
 
 
 def commento_2024_ppt(nome_con_articolo, valore, mediana, unita, inverso, lettura, giro=0):
@@ -1484,17 +1420,17 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Percorso 2021-2024 letto una volta sola: l'etichetta serve al badge colorato del
     # box, la frase e' il racconto che finisce nel commento, l'escursione e il salto
     # piu' forte alimentano il foglio di alert per chi commenta.
-    # (chiave, colonna base, icona, titolo del box, nome con l'articolo, unita', inverso)
+    # (chiave, colonna base, titolo del box, nome con l'articolo, unita', inverso)
     PERCORSI_INDICATORI = [
-        ('eco_1',  'Margine di Profitto (*) %',                      '\U0001f4b0', 'Profit Margin',                              'Il Profit Margin',                             '%', False),
-        ('eco_2',  'Margine EBIT (*) %',                             '\U0001f4c8', 'EBIT Margin',                                "L'EBIT Margin",                                '%', False),
-        ('eco_3',  'Margine EBITDA (*) %',                           '\U0001f4ca', 'EBITDA Margin',                              "L'EBITDA Margin",                              '%', False),
-        ('patr_1', 'Indice di Struttura 1\u00b0 livello (*)',            '\U0001f3db\ufe0f', 'Indice di Struttura 1\u00b0 Livello',  "L'Indice di Struttura di 1\u00b0 livello",         '',  False),
-        ('patr_2', 'Indice di Struttura 2\u00b0 livello (*)',            '\U0001f3d7\ufe0f', 'Indice di Struttura 2\u00b0 Livello',  "L'Indice di Struttura di 2\u00b0 livello",         '',  False),
-        ('patr_3', 'Gearing (*) %',                                  '\u2696\ufe0f', 'Gearing',                                  'Il Gearing',                                   '%', True),
-        ('fin_1',  'Current Ratio (*)',                              '\U0001f4a7', 'Current Ratio',                              'Il Current Ratio',                             '',  False),
-        ('fin_2',  'Quick Ratio (*)',                                '\u26a1', 'Quick Ratio',                                    'Il Quick Ratio',                               '',  False),
-        ('fin_3',  'Indice di Rotazione del Capitale Investito (*)',  '\U0001f504', 'Indice di Rotazione del Capitale Investito', "L'Indice di Rotazione del Capitale Investito", '',  False),
+        ('eco_1',  'Margine di Profitto (*) %',                      'Profit Margin',                              'Il Profit Margin',                             '%', False),
+        ('eco_2',  'Margine EBIT (*) %',                             'EBIT Margin',                                "L'EBIT Margin",                                '%', False),
+        ('eco_3',  'Margine EBITDA (*) %',                           'EBITDA Margin',                              "L'EBITDA Margin",                              '%', False),
+        ('patr_1', 'Indice di Struttura 1\u00b0 livello (*)',            'Indice di Struttura 1\u00b0 Livello',  "L'Indice di Struttura di 1\u00b0 livello",         '',  False),
+        ('patr_2', 'Indice di Struttura 2\u00b0 livello (*)',            'Indice di Struttura 2\u00b0 Livello',  "L'Indice di Struttura di 2\u00b0 livello",         '',  False),
+        ('patr_3', 'Gearing (*) %',                                  'Gearing',                                  'Il Gearing',                                   '%', True),
+        ('fin_1',  'Current Ratio (*)',                              'Current Ratio',                              'Il Current Ratio',                             '',  False),
+        ('fin_2',  'Quick Ratio (*)',                                'Quick Ratio',                                    'Il Quick Ratio',                               '',  False),
+        ('fin_3',  'Indice di Rotazione del Capitale Investito (*)',  'Indice di Rotazione del Capitale Investito', "L'Indice di Rotazione del Capitale Investito", '',  False),
     ]
     VALORI_INDICATORI = {
         'eco_1': (az_prof, ita_prof), 'eco_2': (az_ebit, ita_ebit), 'eco_3': (az_ebitda, ita_ebitda),
@@ -1502,12 +1438,12 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         'fin_1': (az_cr, ita_cr), 'fin_2': (az_qr, ita_qr), 'fin_3': (az_rot, ita_rot),
     }
     percorsi = {}
-    for giro_perc, (chiave_perc, base_perc, icona_perc, titolo_perc,
+    for giro_perc, (chiave_perc, base_perc, titolo_perc,
                     nome_perc, unita_perc, inverso_perc) in enumerate(PERCORSI_INDICATORI):
         valore_perc, mediana_perc = VALORI_INDICATORI[chiave_perc]
         dati_perc = analizza_percorso(serie_anni(base_perc), inverso=inverso_perc, unita=unita_perc)
         dati_perc.update({
-            'icona': icona_perc, 'titolo': titolo_perc, 'nome': nome_perc,
+            'titolo': titolo_perc, 'nome': nome_perc,
             'unita': unita_perc, 'inverso': inverso_perc,
             'valore': valore_perc, 'mediana': mediana_perc,
         })
@@ -1534,13 +1470,6 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
 
     # FIN — img_fin_1=CurrentRatio, img_fin_2=QuickRatio, img_fin_3=Rotazione
     context['commento_barre_fin']     = get_commento_barre_fin(az_cr, az_qr, az_rot, ita_cr, ita_qr, ita_rot, reg_cr, reg_qr, reg_rot)
-
-    # 🎨 Box commento dei grafici andamento (icona + titolo per esteso + trend + testo): card, non {{}} piatti.
-    # Formato tupla: (icona_metrica, titolo_per_esteso, trend, testo)
-    dati_box_commenti = {
-        f'commento_grafico_{chiave}': (dati['icona'], dati['titolo'], dati['trend'], dati['commento'])
-        for chiave, dati in percorsi.items()
-    }
 
     # =================================================================
     # --- 5. TABELLA MARKET LEADER (SEMPLICE E PULITA) ---
@@ -1770,8 +1699,6 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         if img_mappa_geo:
             replace_placeholder_with_picture(slide, "[[MAPPA_ITALIA]]", img_mappa_geo)
 
-        for chiave, (icona_metrica, titolo, trend_word, testo) in dati_box_commenti.items():
-            formatta_box_commento_grafico(slide, chiave, icona_metrica, titolo, trend_word, testo)
 
     # =================================================================
     # 🧩 UNA SLIDE PER GRAFICO, DUE PER INDICATORE
@@ -1812,12 +1739,12 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             slide_2024 = prepara_slide_indicatore(
                 prs, modello_slide, f"{dati['titolo']} — 2024",
                 f"{nome_area} · impresa a confronto con la mediana italiana e con quella "
-                f"{preposizione_regione_ppt(regione_target_pulita)}",
+                f"{preposizione_regione_ppt(regione_target_pulita, 'di')}",
             )
             slide_2024.shapes.add_picture(img_2024, GRAFICO_SX, GRAFICO_ALTO, width=GRAFICO_LARGO)
             aggiungi_card_commento(
                 slide_2024, CARD_SX, GRAFICO_ALTO, CARD_LARGA, CARD_ALTA,
-                dati['icona'], dati['titolo'], dati['trend'], dati['commento_2024'],
+                dati['titolo'], dati['trend'], dati['commento_2024'],
             )
             nuove_slide.append(slide_2024)
 
@@ -1834,7 +1761,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             slide_trend.shapes.add_picture(img_trend, GRAFICO_SX, GRAFICO_ALTO, width=GRAFICO_LARGO)
             aggiungi_card_commento(
                 slide_trend, CARD_SX, GRAFICO_ALTO, CARD_LARGA, CARD_ALTA,
-                dati['icona'], dati['titolo'], dati['trend'], dati['commento_trend'],
+                dati['titolo'], dati['trend'], dati['commento_trend'],
             )
             nuove_slide.append(slide_trend)
 

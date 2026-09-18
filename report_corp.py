@@ -251,15 +251,24 @@ def nome_regione_breve(nome):
     return ABBREVIAZIONI_REGIONE.get(str(nome).strip(), nome)
 
 
-def preposizione_regione(nome_regione):
+_PREPOSIZIONI_REGIONE = {'in': 'nella', 'di': 'della', 'a': 'alla', 'da': 'dalla', 'su': 'sulla'}
+
+
+def preposizione_regione(nome_regione, preposizione='in'):
     """
-    "in Lombardia" ma "nel Lazio" e "nelle Marche": in italiano la preposizione
-    davanti al nome di regione non è regolare.
+    "nella regione Lazio", "della regione Lombardia": una forma sola per tutte.
+
+    La preposizione davanti al nome di regione non e' regolare ("in Lombardia", "nel
+    Lazio", "nelle Marche", "in Valle d'Aosta") e una tabella di eccezioni prima o
+    poi sbaglia. Con "regione" davanti l'articolo e' sempre femminile singolare.
+    Le due province autonome, che nei NUTS2 compaiono al posto del Trentino-Alto
+    Adige, portano gia' il loro nome per esteso: "nella Provincia Autonoma di Trento".
     """
     n = str(nome_regione).strip()
-    articolate = {'lazio': 'nel', 'marche': 'nelle', 'veneto': 'nel',
-                  'molise': 'nel', 'piemonte': 'in', 'abruzzo': 'in'}
-    return f"{articolate.get(n.lower(), 'in')} {n}"
+    articolata = _PREPOSIZIONI_REGIONE.get(preposizione, 'nella')
+    if n.lower().startswith('provincia'):
+        return f"{articolata} {n}"
+    return f"{articolata} regione {n}"
 
 
 def posizione_ordinale(valore):
@@ -739,7 +748,7 @@ CORREZIONI_TEMPLATE = [
                "italiane del settore. La macroregione di appartenenza rappresenta il "
                "{{ perc_ricavi_macroregione }}% del fatturato complessivo analizzato, per un valore "
                "aggregato pari a {{ tot_ricavi_macro_mln }} mln di Euro."),
-     "La società ha sede {{ regione_con_preposizione }}, regione nella quale opera il "
+     "La società ha sede {{ regione_con_preposizione }}, dove opera il "
      "{{ perc_imprese_regione }}% delle imprese del settore presenti nel panel. L'area "
      "{{ macroregione }} rappresenta il {{ perc_ricavi_macroregione }}% dei ricavi complessivi del "
      "comparto analizzato, pari a € {{ tot_ricavi_macro_mln }} mln."),
