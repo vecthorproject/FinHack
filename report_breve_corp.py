@@ -165,16 +165,20 @@ def elabora_shape_per_testo(shape, context):
 
 # ORBIS accoda "(*)" ai nomi dei campi che calcola lui ("Margine di Profitto (*) %"):
 # serve a leggere l'estrazione, ma nelle slide e' un refuso che non rimanda a nulla.
+# Le migliaia di euro, scritte ora "migl" ora "mil", si uniformano in "mgl"; il
+# contesto (EUR, il simbolo di euro o la parentesi che chiude) evita di toccare le
+# ragioni sociali.
 _RE_ASTERISCO_ORBIS = re.compile(r'\s*\(\*\)')
+_RE_MIGLIAIA = re.compile(r'\b(?:migl|mil)\b(?=\s*(?:EUR|\u20ac|\)))', re.IGNORECASE)
 
 
 def pulisci_nome_orbis(testo):
-    """Toglie il marcatore "(*)" da un nome di campo ORBIS."""
-    return _RE_ASTERISCO_ORBIS.sub('', str(testo))
+    """Toglie il marcatore "(*)" e uniforma le migliaia a "mgl"."""
+    return _RE_MIGLIAIA.sub('mgl', _RE_ASTERISCO_ORBIS.sub('', str(testo)))
 
 
-def togli_asterischi_orbis_pptx(prs):
-    """Rete di sicurezza: nessun "(*)" deve restare nelle slide."""
+def normalizza_etichette_orbis_pptx(prs):
+    """Rete di sicurezza sulle etichette dell'estrazione nelle slide."""
     def cornici(forme):
         for forma in forme:
             if getattr(forma, "shape_type", None) == 6:   # gruppo
@@ -191,8 +195,11 @@ def togli_asterischi_orbis_pptx(prs):
         for cornice in cornici(slide.shapes):
             for paragrafo in cornice.paragraphs:
                 for run in paragrafo.runs:
-                    if run.text and '(*)' in run.text:
-                        run.text = pulisci_nome_orbis(run.text)
+                    if not run.text:
+                        continue
+                    ripulito = pulisci_nome_orbis(run.text)
+                    if ripulito != run.text:
+                        run.text = ripulito
 
 
 def get_shape_and_coords(shapes, placeholder):
@@ -1183,7 +1190,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         for (i, j), cell in table.get_celld().items():
 
             if i == 0:
-                # Header row — font ridotto per intestazioni lunghe (es. "migl €")
+                # Header row — font ridotto per intestazioni lunghe (es. "mgl €")
                 cell.set_facecolor('#002060')
                 cell.set_text_props(color='white', weight='bold')
                 cell.set_edgecolor('white')
@@ -1233,7 +1240,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     az_bench = f"{rat_eco}{rat_pat}{rat_fin}" # Es: "ABA"
 
     # Costruzione Matrice Tabella (Colonna Benchmark singola e pulita)
-    colonne_tbl = ['Tot. Val. Prod. (migl €)', 'Tot. Attivo (migl €)', 'Benchmark']
+    colonne_tbl = ['Tot. Val. Prod. (mgl €)', 'Tot. Attivo (mgl €)', 'Benchmark']
     indici_tbl = [str(market_leader)[:35], str(azienda_target)[:35], 'Mediana Settore']
     
     dati_tbl = [
@@ -1398,7 +1405,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         for chiave, (icona_metrica, titolo, trend_word, testo) in dati_box_commenti.items():
             formatta_box_commento_grafico(slide, chiave, icona_metrica, titolo, trend_word, testo)
 
-    togli_asterischi_orbis_pptx(prs)
+    normalizza_etichette_orbis_pptx(prs)
 
     output_ppt = io.BytesIO()
     prs.save(output_ppt)

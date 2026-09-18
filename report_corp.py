@@ -398,10 +398,16 @@ def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
 # refuso: la sigla non rimanda a nessuna nota.
 _RE_ASTERISCO_ORBIS = re.compile(r'\s*\(\*\)')
 
+# Le migliaia di euro compaiono nell'estrazione ora come "migl" ora come "mil":
+# nel documento si usa sempre "mgl". Il contesto (EUR, il simbolo di euro o la
+# parentesi che chiude) evita di toccare parole che iniziano allo stesso modo o
+# ragioni sociali come "MIL SERVICE".
+_RE_MIGLIAIA = re.compile(r'\b(?:migl|mil)\b(?=\s*(?:EUR|\u20ac|\)))', re.IGNORECASE)
+
 
 def pulisci_nome_orbis(testo):
-    """Toglie il marcatore "(*)" da un nome di campo ORBIS."""
-    return _RE_ASTERISCO_ORBIS.sub('', str(testo))
+    """Toglie il marcatore "(*)" e uniforma le migliaia a "mgl"."""
+    return _RE_MIGLIAIA.sub('mgl', _RE_ASTERISCO_ORBIS.sub('', str(testo)))
 
 
 def costruisci_catena_filtri(info_filtri):
@@ -5206,9 +5212,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     output_word = correggi_articoli_percentuali(output_word)
 
     # =================================================================
-    # 🧹 POST-PROCESSOR: via il marcatore "(*)" dei campi ORBIS
+    # 🧹 POST-PROCESSOR: etichette ORBIS senza "(*)" e migliaia in "mgl"
     # =================================================================
-    output_word = togli_asterischi_orbis(output_word)
+    output_word = normalizza_etichette_orbis(output_word)
 
     # =================================================================
     # 🖼️ POST-PROCESSOR: copertina (logo F&V e titolo su una riga)
@@ -5471,13 +5477,14 @@ def sistema_copertina(output_buffer, percorso_logo=PERCORSO_LOGO_WATERMARK):
     return result
 
 
-def togli_asterischi_orbis(output_buffer):
+def normalizza_etichette_orbis(output_buffer):
     """
-    Rete di sicurezza: nessun "(*)" deve restare nel documento finale.
+    Rete di sicurezza sulle etichette che arrivano dall'estrazione.
 
-    Il marcatore arriva dai nomi di campo dell'estrazione e puo' entrare nel testo
-    ovunque si citi una colonna (Nota Metodologica, intestazioni di tabella,
-    caselle di testo, intestazioni e pie' di pagina).
+    Nessun "(*)" deve restare nel documento finale, e le migliaia di euro si
+    scrivono sempre "mgl". Entrambe le forme possono entrare nel testo ovunque si
+    citi una colonna: Nota Metodologica, intestazioni di tabella, caselle di testo,
+    intestazioni e pie' di pagina.
     """
     output_buffer.seek(0)
     doc = docx.Document(output_buffer)
@@ -5505,8 +5512,11 @@ def togli_asterischi_orbis(output_buffer):
                                 yield p
 
     for p in paragrafi():
-        if '(*)' in p.text:
+        testo = p.text
+        if '(*)' in testo:
             _sostituisci_testo_paragrafo(p, r'\s*\(\*\)', '')
+        if _RE_MIGLIAIA.search(testo):
+            _sostituisci_testo_paragrafo(p, _RE_MIGLIAIA.pattern, 'mgl')
 
     result = io.BytesIO()
     doc.save(result)

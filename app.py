@@ -264,10 +264,10 @@ def elabora_capitolo_1(df_filtered, azienda_target, chiave_target=None):
 
     output_buffer = io.BytesIO()
     with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
-        fg_detail.to_excel(writer, sheet_name='FG', index=False, startcol=0, startrow=0)
-        fg_macro.to_excel(writer, sheet_name='FG', index=False, startcol=4, startrow=3)
-        fin_detail.to_excel(writer, sheet_name='Liv.Agg. per FG', index=False, startcol=0, startrow=0)
-        fin_macro.to_excel(writer, sheet_name='Liv.Agg. per FG', index=False, startcol=4, startrow=3)
+        fg_detail.rename(columns=pulisci_nome_orbis).to_excel(writer, sheet_name='FG', index=False, startcol=0, startrow=0)
+        fg_macro.rename(columns=pulisci_nome_orbis).to_excel(writer, sheet_name='FG', index=False, startcol=4, startrow=3)
+        fin_detail.rename(columns=pulisci_nome_orbis).to_excel(writer, sheet_name='Liv.Agg. per FG', index=False, startcol=0, startrow=0)
+        fin_macro.rename(columns=pulisci_nome_orbis).to_excel(writer, sheet_name='Liv.Agg. per FG', index=False, startcol=4, startrow=3)
         # Scrittura del foglio di isolamento dedicato
         info_target_data.to_excel(writer, sheet_name='Target_Forma_Giuridica', index=False)
 
@@ -471,8 +471,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     # Intestazioni unite
     worksheet.write(0, 0, 'Regioni', format_header_blue)
     worksheet.merge_range(0, 1, 0, 2, 'Numero Imprese', format_header_blue)
-    worksheet.merge_range(0, 3, 0, 4, 'Somma di Ricavi - migl EUR', format_header_blue)
-    worksheet.merge_range(0, 5, 0, 6, 'Somma di Totale Attivo - migl EUR', format_header_blue)
+    worksheet.merge_range(0, 3, 0, 4, 'Somma di Ricavi - mgl EUR', format_header_blue)
+    worksheet.merge_range(0, 5, 0, 6, 'Somma di Totale Attivo - mgl EUR', format_header_blue)
     worksheet.merge_range(0, 7, 0, 8, 'Numero Dipendenti', format_header_blue)
     
     subheaders = ['', 'V.A.', '%', 'V.A.', '%', 'V.A.', '%', 'V.A.', '%']
@@ -566,8 +566,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     col_reg_start = 17 
     worksheet.write(1, col_reg_start, 'Regione', format_header_blue)
     worksheet.write(1, col_reg_start+1, 'Numero Imprese', format_header_blue)
-    worksheet.write(1, col_reg_start+2, 'Tot. Ricavi - migl EUR', format_header_blue)
-    worksheet.write(1, col_reg_start+3, 'Tot. Attivo - migl EUR', format_header_blue)
+    worksheet.write(1, col_reg_start+2, 'Tot. Ricavi - mgl EUR', format_header_blue)
+    worksheet.write(1, col_reg_start+3, 'Tot. Attivo - mgl EUR', format_header_blue)
     worksheet.write(1, col_reg_start+4, 'Numero Dipendenti', format_header_blue)
 
     reg_idx = 2
@@ -615,8 +615,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     col_chart_istogrammi = 'X'
     crea_istogramma('Imprese per Regione', col_reg_start+1, f'{col_chart_istogrammi}2')
-    crea_istogramma('Tot. Ricavi per Regione (migl EUR)', col_reg_start+2, f'{col_chart_istogrammi}17')
-    crea_istogramma('Tot. Attivo per Regione (migl EUR)', col_reg_start+3, f'{col_chart_istogrammi}32')
+    crea_istogramma('Tot. Ricavi per Regione (mgl EUR)', col_reg_start+2, f'{col_chart_istogrammi}17')
+    crea_istogramma('Tot. Attivo per Regione (mgl EUR)', col_reg_start+3, f'{col_chart_istogrammi}32')
     crea_istogramma('Dipendenti per Regione', col_reg_start+4, f'{col_chart_istogrammi}47')
 
     ws_quartili = workbook.add_worksheet('Quartili')
@@ -624,8 +624,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     df_raw = df_base[['Totale Attivo migl EUR 2024', 'Totale Ricavi migl EUR 2024']].dropna()
     df_raw = df_raw.sort_values(by='Totale Ricavi migl EUR 2024', ascending=False)
     
-    ws_quartili.write(0, 0, 'Totale Attivo migl EUR 2024', format_header_blue)
-    ws_quartili.write(0, 1, 'Totale valore della produzione migl EUR 2024', format_header_blue)
+    ws_quartili.write(0, 0, 'Totale Attivo mgl EUR 2024', format_header_blue)
+    ws_quartili.write(0, 1, 'Totale valore della produzione mgl EUR 2024', format_header_blue)
     
     for r_idx, (_, row) in enumerate(df_raw.iterrows(), 1):
         ws_quartili.write(r_idx, 0, row['Totale Attivo migl EUR 2024'], f_dec)
@@ -636,17 +636,17 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     ws_quartili.write(0, 3, 'Variabile', format_header_blue)
     ws_quartili.write(0, 4, 'V.A.', format_header_blue)
-    ws_quartili.write(1, 3, 'Totale Ricavi - migl EUR')
+    ws_quartili.write(1, 3, 'Totale Ricavi - mgl EUR')
     ws_quartili.write_formula(1, 4, f"=SUM(B2:B{ultima_riga_dati})", f_dec)
-    ws_quartili.write(2, 3, 'Totale Attivo - migl EUR')
+    ws_quartili.write(2, 3, 'Totale Attivo - mgl EUR')
     ws_quartili.write_formula(2, 4, f"=SUM(A2:A{ultima_riga_dati})", f_dec)
 
     ws_quartili.set_column('D:D', 22)
     ws_quartili.set_column('E:E', 20)
 
     ws_quartili.write(0, 6, 'Quartile', format_header_blue)
-    ws_quartili.write(0, 7, 'Totale Attivo - migl EUR', format_header_blue)
-    ws_quartili.write(0, 8, 'Totale Ricavi - migl EUR', format_header_blue)
+    ws_quartili.write(0, 7, 'Totale Attivo - mgl EUR', format_header_blue)
+    ws_quartili.write(0, 8, 'Totale Ricavi - mgl EUR', format_header_blue)
 
     nomi_quartili = ['Minimo', '1°', '2°', '3°', '4°']
     for i, nome in enumerate(nomi_quartili):
@@ -657,8 +657,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     start_r = 8
     ws_quartili.write(start_r, 6, 'Quartile', format_header_blue)
-    ws_quartili.write(start_r, 7, 'Totale Attivo - migl EUR', format_header_blue)
-    ws_quartili.write(start_r, 8, 'Totale Ricavi - migl EUR', format_header_blue)
+    ws_quartili.write(start_r, 7, 'Totale Attivo - mgl EUR', format_header_blue)
+    ws_quartili.write(start_r, 8, 'Totale Ricavi - mgl EUR', format_header_blue)
 
     intervalli_nomi = ['1°', '2°', '3°', '4°']
     for i in range(4):
@@ -693,8 +693,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
             ('Ragione Sociale', riga_g['Ragione Sociale'], format_regione),
             ('Macroregione Appartenenza', riga_g['Macroregione'], format_regione),
             ('Regione Specifica (NUTS2)', riga_g['Nome Regione'], format_regione),
-            ('Totale Ricavi - migl EUR 2024', riga_g['Totale Ricavi migl EUR 2024'], f_dec),
-            ('Totale Attivo - migl EUR 2024', riga_g['Totale Attivo migl EUR 2024'], f_dec),
+            ('Totale Ricavi - mgl EUR 2024', riga_g['Totale Ricavi migl EUR 2024'], f_dec),
+            ('Totale Attivo - mgl EUR 2024', riga_g['Totale Attivo migl EUR 2024'], f_dec),
             ('Numero Dipendenti 2024', riga_g['Numero dipendenti 2024'], f_int)
         ]
         
