@@ -10,6 +10,9 @@ from pptx import Presentation
 from identificazione_azienda import riga_target
 from pptx.util import Inches, Pt, Cm
 import matplotlib.patheffects as pe
+import copy
+from pptx.dml.color import RGBColor
+from pptx.util import Emu
 
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
@@ -162,6 +165,147 @@ def elabora_shape_per_testo(shape, context):
     if getattr(shape, "shape_type", None) == 6:
         for s in shape.shapes:
             elabora_shape_per_testo(s, context)
+
+# =================================================================
+# 🧩 UNA SLIDE PER GRAFICO
+# =================================================================
+# Con tre grafici affiancati le scale si pestano i piedi: sulla stessa slide
+# convivevano un Gearing a 159,50% e un Indice di Struttura a 1,88, e il secondo
+# diventava una riga piatta. Ogni indicatore ha quindi due slide sue, una per la
+# fotografia 2024 e una per il percorso 2021-2024, entrambe commentate.
+
+_NS_REL = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
+
+
+def duplica_slide(prs, modello):
+    """Copia una slide con tutte le sue forme e le sue immagini."""
+    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+    nuova = prs.slides.add_slide(modello.slide_layout)
+    for forma in list(nuova.shapes):
+        forma._element.getparent().remove(forma._element)
+    # Gli rId della copia non coincidono con quelli dell'originale: si rimappano,
+    # altrimenti le immagini puntano nel vuoto.
+    mappa = {}
+    for rid, rel in modello.part.rels.items():
+        if rel.reltype == RT.SLIDE_LAYOUT:
+            continue
+        if rel.is_external:
+            mappa[rid] = nuova.part.rels.get_or_add_ext_rel(rel.reltype, rel.target_ref)
+        else:
+            mappa[rid] = nuova.part.rels.get_or_add(rel.reltype, rel.target_part)
+    for forma in modello.shapes:
+        elemento = copy.deepcopy(forma._element)
+        for nodo in elemento.iter():
+            for attributo in list(nodo.attrib):
+                if attributo.startswith(_NS_REL) and nodo.attrib[attributo] in mappa:
+                    nodo.attrib[attributo] = mappa[nodo.attrib[attributo]]
+        nuova.shapes._spTree.append(elemento)
+    return nuova
+
+
+def sposta_slide(prs, slide, posizione):
+    lista = prs.slides._sldIdLst
+    elemento = list(lista)[prs.slides.index(slide)]
+    lista.remove(elemento)
+    lista.insert(posizione, elemento)
+
+
+def elimina_slide(prs, slide):
+    lista = prs.slides._sldIdLst
+    elemento = list(lista)[prs.slides.index(slide)]
+    prs.part.drop_rel(elemento.get(_NS_REL + 'id'))
+    lista.remove(elemento)
+
+
+def aggiungi_card_commento(slide, sinistra, alto, larghezza, altezza,
+                           icona_metrica, titolo, trend_word, testo):
+    """La card di commento accanto al grafico: barra colorata, icona, badge, testo."""
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+
+    icona_trend, colore_hex = get_trend_style(trend_word)
+    colore = RGBColor.from_string(colore_hex)
+
+    riquadro = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, sinistra, alto, larghezza, altezza)
+    riquadro.fill.solid()
+    riquadro.fill.fore_color.rgb = RGBColor(0xF8, 0xFA, 0xFC)
+    riquadro.line.color.rgb = RGBColor(0xE2, 0xE8, 0xF0)
+    riquadro.shadow.inherit = False
+
+    barra = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, sinistra, alto, larghezza, Emu(45720))
+    barra.fill.solid()
+    barra.fill.fore_color.rgb = colore
+    barra.line.fill.background()
+    barra.shadow.inherit = False
+
+    tf = riquadro.text_frame
+    tf.clear()
+    tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.TOP
+    tf.margin_left = tf.margin_right = Cm(0.8)
+    tf.margin_top = Cm(0.9)
+
+    p_icona = tf.paragraphs[0]
+    p_icona.alignment = PP_ALIGN.CENTER
+    p_icona.space_after = Pt(8)
+    p_icona.add_run().text = icona_metrica
+    p_icona.runs[0].font.size = Pt(40)
+
+    p_titolo = tf.add_paragraph()
+    p_titolo.alignment = PP_ALIGN.CENTER
+    p_titolo.space_after = Pt(6)
+    r_titolo = p_titolo.add_run()
+    r_titolo.text = titolo.upper()
+    r_titolo.font.bold = True
+    r_titolo.font.size = Pt(17)
+    r_titolo.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
+
+    p_badge = tf.add_paragraph()
+    p_badge.alignment = PP_ALIGN.CENTER
+    p_badge.space_after = Pt(12)
+    r_badge = p_badge.add_run()
+    r_badge.text = f"{icona_trend}  {'N.D.' if trend_word == 'n.d.' else trend_word.capitalize()}"
+    r_badge.font.bold = True
+    r_badge.font.size = Pt(15)
+    r_badge.font.color.rgb = colore
+
+    p_corpo = tf.add_paragraph()
+    p_corpo.alignment = PP_ALIGN.LEFT
+    r_corpo = p_corpo.add_run()
+    r_corpo.text = testo
+    r_corpo.font.size = Pt(13)
+    r_corpo.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+    return riquadro
+
+
+def prepara_slide_indicatore(prs, modello, occhiello, titolo_slide):
+    """Clona la slide modello e la svuota di tutto tranne lo sfondo e il filetto."""
+    slide = duplica_slide(prs, modello)
+    for forma in list(slide.shapes):
+        if forma.shape_type == 13:                       # le tre immagini del modello
+            forma._element.getparent().remove(forma._element)
+        elif forma.has_text_frame and forma.text_frame.text.strip():
+            forma._element.getparent().remove(forma._element)
+
+    riga_occhiello = slide.shapes.add_textbox(Cm(1.75), Cm(1.0), Cm(20), Cm(1.4))
+    tf = riga_occhiello.text_frame
+    tf.word_wrap = False
+    corsa = tf.paragraphs[0].add_run()
+    corsa.text = occhiello
+    corsa.font.size = Pt(26)
+    corsa.font.bold = True
+    corsa.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
+
+    riga_titolo = slide.shapes.add_textbox(Cm(1.75), Cm(2.35), Cm(30), Cm(1.2))
+    tf2 = riga_titolo.text_frame
+    tf2.word_wrap = False
+    corsa2 = tf2.paragraphs[0].add_run()
+    corsa2.text = titolo_slide
+    corsa2.font.size = Pt(16)
+    corsa2.font.color.rgb = RGBColor(0x64, 0x74, 0x8B)
+    return slide
+
 
 # ORBIS accoda "(*)" ai nomi dei campi che calcola lui ("Margine di Profitto (*) %"):
 # serve a leggere l'estrazione, ma nelle slide e' un refuso che non rimanda a nulla.
@@ -624,6 +768,37 @@ def lettura_indicatore(chiave, valore, mediana):
     return ""
 
 
+def preposizione_regione_ppt(nome_regione):
+    """"in Lombardia" ma "nel Lazio" e "nelle Marche"."""
+    n = str(nome_regione).strip()
+    articolate = {'lazio': 'nel', 'marche': 'nelle', 'veneto': 'nel',
+                  'molise': 'nel', 'piemonte': 'in', 'abruzzo': 'in'}
+    return f"{articolate.get(n.lower(), 'in')} {n}"
+
+
+def commento_2024_ppt(nome_con_articolo, valore, mediana, unita, inverso, lettura, giro=0):
+    """La slide del 2024: dove sta il valore rispetto al settore, e cosa vuol dire."""
+    return commento_percorso_ppt(nome_con_articolo, valore, mediana, unita, inverso,
+                                 lettura, '', giro=giro)
+
+
+def commento_trend_ppt(nome_con_articolo, frase_percorso, dati_percorso, unita=''):
+    """La slide dell'andamento: il percorso, e il punto su cui si dovra' rispondere."""
+    if not frase_percorso:
+        return f"{nome_con_articolo} non ha una serie storica sufficiente per leggere un andamento."
+    pezzi = [frase_percorso]
+    salto = dati_percorso.get('salto')
+    if salto and abs(salto[2]) >= 20:
+        anno_da, anno_a, variazione = salto
+        verso = 'sale' if variazione > 0 else 'scende'
+        pezzi.append(f"Lo scalino pi\u00f9 netto \u00e8 fra il {anno_da} e il {anno_a}, quando il "
+                     f"valore {verso} {con_articolo(format_euro(abs(variazione)), 'di')}%: "
+                     f"\u00e8 il punto che merita una spiegazione nel commento.")
+    elif dati_percorso.get('escursione_pct', 0) < 5:
+        pezzi.append("Nel quadriennio il valore non si muove in modo apprezzabile.")
+    return " ".join(pezzi)
+
+
 def commento_percorso_ppt(nome_con_articolo, valore, mediana, unita, inverso,
                           lettura, frase_percorso, giro=0):
     """Il commento di un grafico: dove sta il 2024, come ci e' arrivato, cosa vuol dire."""
@@ -1034,8 +1209,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # =================================================================
     # --- 3. GENERAZIONE GRAFICI MINI (TREND STORICI)
     # =================================================================
-    def crea_grafico_mini(anni, valori_az, valori_set, valori_reg, titolo='', show_legend=False, is_percentage=False):
-        fig, ax = plt.subplots(figsize=(3.6, 3.6))
+    def crea_grafico_mini(anni, valori_az, valori_set, valori_reg, titolo='', show_legend=False, is_percentage=False, figsize=(3.6, 3.6), pagina_intera=False):
+        fig, ax = plt.subplots(figsize=figsize)
         
         v_az = [float(v) if pd.notna(v) else 0.0 for v in valori_az]
         v_set = [float(v) if pd.notna(v) else 0.0 for v in valori_set]
@@ -1052,7 +1227,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         ax.plot(anni, v_reg, marker='o', linewidth=2.0, markersize=4, color=col_reg, label=regione_target_pulita)
         ax.plot(anni, v_set, marker='o', linewidth=2.0, markersize=4, color=col_set, linestyle=':', label='Italia')
 
-        ax.margins(y=0.5)
+        ax.margins(y=0.22 if pagina_intera else 0.5)
 
         suffix = "%" if is_percentage else ""
         
@@ -1081,9 +1256,9 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
                     p['txt'], 
                     (anni[i], p['val']), 
                     textcoords="offset points", 
-                    xytext=offsets[j], 
+                    xytext=(offsets[j][0], offsets[j][1] * (1.5 if pagina_intera else 1.0)), 
                     ha='center', 
-                    fontsize=9.0,          # 🟢 NUMERI INGRANDITI
+                    fontsize=13.0 if pagina_intera else 9.0,
                     fontweight='bold',  
                     color=p['color'],
                     path_effects=[pe.withStroke(linewidth=2.5, foreground='white')] # 🟢 BORDO BIANCO SALVAVITA
@@ -1096,8 +1271,9 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         ax.spines['bottom'].set_color('#E2E8F0')
 
         # 🟢 LEGENDA PIÙ GRANDE
-        ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.55), ncol=3, frameon=False, 
-                fontsize=8.5, handletextpad=0.3, columnspacing=1.0)
+        ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.16 if pagina_intera else -0.55),
+                ncol=3, frameon=False,
+                fontsize=13 if pagina_intera else 8.5, handletextpad=0.3, columnspacing=1.5)
                 
         fig.patch.set_alpha(0.0)
         ax.patch.set_alpha(0.0)
@@ -1138,10 +1314,12 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # =================================================================
     # --- 4. GRAFICI A BARRE E TABELLE RANKING (2024)
     # =================================================================
-    def crea_grafico_barre_confronto(metriche, val_ita, val_reg, val_az, nome_regione):
-        fig, ax = plt.subplots(figsize=(7, 3.5))
+    def crea_grafico_barre_confronto(metriche, val_ita, val_reg, val_az, nome_regione, figsize=(7, 3.5), etichette_valori=False, suffisso=''):
+        fig, ax = plt.subplots(figsize=figsize)
         x = np.arange(len(metriche))
-        width = 0.25
+        width = 0.20 if len(metriche) == 1 else 0.25
+        if len(metriche) == 1:
+            ax.set_xlim(-0.55, 0.55)
         
         v_ita = [float(v) if pd.notna(v) else 0.0 for v in val_ita]
         v_reg = [float(v) if pd.notna(v) else 0.0 for v in val_reg]
@@ -1151,11 +1329,18 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         ax.bar(x, v_reg, width, label=nome_regione, color='#C0504D', edgecolor='white')
         ax.bar(x + width, v_az, width, label='Azienda', color='#9BBB59', edgecolor='white')
         
+        if etichette_valori:
+            for barre in (ax.containers if hasattr(ax, 'containers') else []):
+                ax.bar_label(barre, labels=[f"{format_euro(b.get_height())}{suffisso}" for b in barre],
+                             padding=4, fontsize=13, fontweight='bold', color='#1E293B')
+            ax.margins(y=0.18)
+
         ax.set_xticks(x)
         ax.set_xticklabels(metriche, fontsize=11, color='#595959')
         
         # 👇 MODIFICA: Spinta la legenda più in basso (da -0.2 a -0.35)
-        ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.35), ncol=3, frameon=False, fontsize=10)
+        ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.22 if etichette_valori else -0.35),
+                  ncol=3, frameon=False, fontsize=14 if etichette_valori else 10)
         
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -1326,10 +1511,17 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             'unita': unita_perc, 'inverso': inverso_perc,
             'valore': valore_perc, 'mediana': mediana_perc,
         })
+        lettura_perc = lettura_indicatore(chiave_perc, valore_perc, mediana_perc)
+        dati_perc['commento_2024'] = commento_2024_ppt(
+            nome_perc, valore_perc, mediana_perc, unita_perc, inverso_perc,
+            lettura_perc, giro=giro_perc,
+        )
+        dati_perc['commento_trend'] = commento_trend_ppt(
+            nome_perc, dati_perc['frase'], dati_perc, unita_perc,
+        )
         dati_perc['commento'] = commento_percorso_ppt(
             nome_perc, valore_perc, mediana_perc, unita_perc, inverso_perc,
-            lettura_indicatore(chiave_perc, valore_perc, mediana_perc),
-            dati_perc['frase'], giro=giro_perc,
+            lettura_perc, dati_perc['frase'], giro=giro_perc,
         )
         percorsi[chiave_perc] = dati_perc
 
@@ -1580,6 +1772,80 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
 
         for chiave, (icona_metrica, titolo, trend_word, testo) in dati_box_commenti.items():
             formatta_box_commento_grafico(slide, chiave, icona_metrica, titolo, trend_word, testo)
+
+    # =================================================================
+    # 🧩 UNA SLIDE PER GRAFICO, DUE PER INDICATORE
+    # =================================================================
+    # Le vecchie slide "Andamento" mettevano tre grafici affiancati: con un Gearing
+    # a tre cifre accanto a un indice di struttura sotto il 2, il secondo diventava
+    # una riga piatta. Ogni indicatore prende quindi due slide sue.
+    AREE_SLIDE = [
+        ('Equilibrio Economico', ['eco_3', 'eco_2', 'eco_1']),
+        ('Equilibrio Patrimoniale', ['patr_1', 'patr_2', 'patr_3']),
+        ('Equilibrio Finanziario', ['fin_1', 'fin_2', 'fin_3']),
+    ]
+    REGIONALI_2024 = {
+        'eco_1': reg_prof, 'eco_2': reg_ebit, 'eco_3': reg_ebitda,
+        'patr_1': reg_str1, 'patr_2': reg_str2, 'patr_3': reg_gear,
+        'fin_1': reg_cr, 'fin_2': reg_qr, 'fin_3': reg_rot,
+    }
+    COLONNE_SERIE = {chiave: base for chiave, base, *_ in PERCORSI_INDICATORI}
+
+    modello_slide = prs.slides[10]          # "Andamento" del template
+    GRAFICO_SX, GRAFICO_ALTO = Cm(1.75), Cm(6.2)
+    GRAFICO_LARGO = Cm(29.5)
+    CARD_SX, CARD_LARGA = Cm(32.5), Cm(15.0)
+    CARD_ALTA = Cm(19.0)
+
+    nuove_slide = []
+    for nome_area, chiavi_area in AREE_SLIDE:
+        for chiave in chiavi_area:
+            dati = percorsi[chiave]
+            unita = dati['unita']
+            perc = (unita == '%')
+
+            # --- fotografia 2024 -------------------------------------------------
+            img_2024 = crea_grafico_barre_confronto(
+                [dati['titolo']], [dati['mediana']], [REGIONALI_2024[chiave]], [dati['valore']],
+                regione_target_pulita, figsize=(11.0, 5.6), etichette_valori=True, suffisso=unita,
+            )
+            slide_2024 = prepara_slide_indicatore(
+                prs, modello_slide, f"{dati['titolo']} — 2024",
+                f"{nome_area} · impresa a confronto con la mediana italiana e con quella "
+                f"{preposizione_regione_ppt(regione_target_pulita)}",
+            )
+            slide_2024.shapes.add_picture(img_2024, GRAFICO_SX, GRAFICO_ALTO, width=GRAFICO_LARGO)
+            aggiungi_card_commento(
+                slide_2024, CARD_SX, GRAFICO_ALTO, CARD_LARGA, CARD_ALTA,
+                dati['icona'], dati['titolo'], dati['trend'], dati['commento_2024'],
+            )
+            nuove_slide.append(slide_2024)
+
+            # --- percorso 2021-2024 ----------------------------------------------
+            serie_az, serie_set, serie_reg = get_dati_grafico(COLONNE_SERIE[chiave])
+            img_trend = crea_grafico_mini(
+                ['2021', '2022', '2023', '2024'], serie_az, serie_set, serie_reg,
+                titolo='', is_percentage=perc, figsize=(11.0, 5.4), pagina_intera=True,
+            )
+            slide_trend = prepara_slide_indicatore(
+                prs, modello_slide, f"{dati['titolo']} — andamento 2021-2024",
+                f"{nome_area} · serie 2021-2024 dell'impresa, del settore e della regione",
+            )
+            slide_trend.shapes.add_picture(img_trend, GRAFICO_SX, GRAFICO_ALTO, width=GRAFICO_LARGO)
+            aggiungi_card_commento(
+                slide_trend, CARD_SX, GRAFICO_ALTO, CARD_LARGA, CARD_ALTA,
+                dati['icona'], dati['titolo'], dati['trend'], dati['commento_trend'],
+            )
+            nuove_slide.append(slide_trend)
+
+    # Via le sei slide vecchie (tre "Andamento" a tre grafici e tre di soli commenti)
+    for slide_vecchia in [prs.slides[i] for i in (15, 14, 13, 12, 11, 10)]:
+        elimina_slide(prs, slide_vecchia)
+
+    # Le nuove entrano dopo le tre slide di area, prima della Sintesi Strategica
+    for posizione, slide_nuova in enumerate(nuove_slide, start=10):
+        sposta_slide(prs, slide_nuova, posizione)
+
 
     normalizza_etichette_orbis_pptx(prs)
     aggiungi_logo_slide(prs)
