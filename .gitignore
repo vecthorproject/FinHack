@@ -3,3 +3,9 @@ __pycache__/
 .claude/settings.local.json
 .venv/
 .DS_Store
+
+# Estrazioni ORBIS e documenti di lavoro nella cartella principale: sono dati di
+# prova, non sorgenti del progetto. Gli Istat in fileistat/ restano tracciati.
+/*.xlsx
+/CHATGPT*.docx
+prove/

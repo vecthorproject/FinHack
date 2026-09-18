@@ -393,6 +393,17 @@ def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
     return " ".join(x for x in frasi if x)
 
 
+# ORBIS accoda "(*)" ai nomi dei campi che calcola lui ("Margine di Profitto (*) %").
+# Serve a leggere l'estrazione, ma in un testo destinato a chi legge il report e' un
+# refuso: la sigla non rimanda a nessuna nota.
+_RE_ASTERISCO_ORBIS = re.compile(r'\s*\(\*\)')
+
+
+def pulisci_nome_orbis(testo):
+    """Toglie il marcatore "(*)" da un nome di campo ORBIS."""
+    return _RE_ASTERISCO_ORBIS.sub('', str(testo))
+
+
 def costruisci_catena_filtri(info_filtri):
     """
     🔧 BUG 1f — la Nota Metodologica dichiarava 2 soli filtri di selezione.
@@ -422,8 +433,9 @@ def costruisci_catena_filtri(info_filtri):
     if residui:
         etichette = []
         for p in residui:
-            # Le etichette ORBIS sono nomi di campo: si citano cosi' come sono.
-            nome = str(p.get('criterio', '')).strip().rstrip(':').strip()
+            # Le etichette ORBIS sono nomi di campo: si citano cosi' come sono,
+            # tolto il marcatore "(*)" che non significa niente per chi legge.
+            nome = pulisci_nome_orbis(p.get('criterio', '')).strip().rstrip(':').strip()
             if nome:
                 etichette.append(nome)
         elenco = (", ".join(etichette[:-1]) + f" e {etichette[-1]}") if len(etichette) > 1 else "".join(etichette)
@@ -5193,6 +5205,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     output_word = correggi_articoli_percentuali(output_word)
 
     # =================================================================
+    # 🧹 POST-PROCESSOR: via il marcatore "(*)" dei campi ORBIS
+    # =================================================================
+    output_word = togli_asterischi_orbis(output_word)
+
+    # =================================================================
     # 🖼️ POST-PROCESSOR: copertina (logo F&V e titolo su una riga)
     # =================================================================
     output_word = sistema_copertina(output_word)
@@ -5446,6 +5463,49 @@ def sistema_copertina(output_buffer, percorso_logo=PERCORSO_LOGO_WATERMARK):
                         break
                     recuperata += _altezza_paragrafo_vuoto_pt(vuoto)
                     corpo_doc.remove(elemento)
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
+
+
+def togli_asterischi_orbis(output_buffer):
+    """
+    Rete di sicurezza: nessun "(*)" deve restare nel documento finale.
+
+    Il marcatore arriva dai nomi di campo dell'estrazione e puo' entrare nel testo
+    ovunque si citi una colonna (Nota Metodologica, intestazioni di tabella,
+    caselle di testo, intestazioni e pie' di pagina).
+    """
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+
+    def paragrafi():
+        for p in doc.paragraphs:
+            yield p
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        yield p
+        for txbx in doc.element.body.iter(qn('w:txbxContent')):
+            for p_el in txbx.findall(qn('w:p')):
+                yield Paragraph(p_el, doc)
+        for sez in doc.sections:
+            for parte in (sez.header, sez.footer, sez.first_page_header,
+                          sez.first_page_footer, sez.even_page_header, sez.even_page_footer):
+                for p in parte.paragraphs:
+                    yield p
+                for table in parte.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            for p in cell.paragraphs:
+                                yield p
+
+    for p in paragrafi():
+        if '(*)' in p.text:
+            _sostituisci_testo_paragrafo(p, r'\s*\(\*\)', '')
 
     result = io.BytesIO()
     doc.save(result)

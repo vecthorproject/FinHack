@@ -163,6 +163,38 @@ def elabora_shape_per_testo(shape, context):
         for s in shape.shapes:
             elabora_shape_per_testo(s, context)
 
+# ORBIS accoda "(*)" ai nomi dei campi che calcola lui ("Margine di Profitto (*) %"):
+# serve a leggere l'estrazione, ma nelle slide e' un refuso che non rimanda a nulla.
+_RE_ASTERISCO_ORBIS = re.compile(r'\s*\(\*\)')
+
+
+def pulisci_nome_orbis(testo):
+    """Toglie il marcatore "(*)" da un nome di campo ORBIS."""
+    return _RE_ASTERISCO_ORBIS.sub('', str(testo))
+
+
+def togli_asterischi_orbis_pptx(prs):
+    """Rete di sicurezza: nessun "(*)" deve restare nelle slide."""
+    def cornici(forme):
+        for forma in forme:
+            if getattr(forma, "shape_type", None) == 6:   # gruppo
+                yield from cornici(forma.shapes)
+                continue
+            if forma.has_text_frame:
+                yield forma.text_frame
+            if getattr(forma, "has_table", False) and forma.has_table:
+                for riga in forma.table.rows:
+                    for cella in riga.cells:
+                        yield cella.text_frame
+
+    for slide in prs.slides:
+        for cornice in cornici(slide.shapes):
+            for paragrafo in cornice.paragraphs:
+                for run in paragrafo.runs:
+                    if run.text and '(*)' in run.text:
+                        run.text = pulisci_nome_orbis(run.text)
+
+
 def get_shape_and_coords(shapes, placeholder):
     """Ricerca ricorsiva anti-errore per trovare la casella esatta anche se raggruppata o scritta male"""
     placeholder_clean = placeholder.replace(" ", "").lower()
@@ -1365,6 +1397,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
 
         for chiave, (icona_metrica, titolo, trend_word, testo) in dati_box_commenti.items():
             formatta_box_commento_grafico(slide, chiave, icona_metrica, titolo, trend_word, testo)
+
+    togli_asterischi_orbis_pptx(prs)
 
     output_ppt = io.BytesIO()
     prs.save(output_ppt)

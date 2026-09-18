@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
-from report_corp import genera_report_word
+from report_corp import genera_report_word, pulisci_nome_orbis
 from report_breve_corp import genera_presentazione_ppt
 from identificazione_azienda import (
     maschera_target, riga_target, risolvi_ricerca, chiave_da_riga,
@@ -752,7 +752,7 @@ def elabora_capitolo_3(df_filtered, azienda_target, chiave_target=None):
         maschera_riga_target = maschera_target(df, chiave_target, azienda_target).to_numpy()
 
         for i, col in enumerate(df.columns):
-            worksheet_data.write(0, i, col, formati['header'])
+            worksheet_data.write(0, i, pulisci_nome_orbis(col), formati['header'])
             col_data = df[col].dropna()
             max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2
             worksheet_data.set_column(i, i, min(max_len, 45))
@@ -1112,7 +1112,7 @@ def elabora_capitolo_4(df_filtered, azienda_target, chiave_target=None):
         maschera_riga_target = maschera_target(df, chiave_target, azienda_target).to_numpy()
 
         for i, col in enumerate(df.columns):
-            worksheet_data.write(0, i, col, formati['header'])
+            worksheet_data.write(0, i, pulisci_nome_orbis(col), formati['header'])
             col_data = df[col].dropna()
             max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2
             worksheet_data.set_column(i, i, min(max_len, 45))
@@ -1465,7 +1465,7 @@ def elabora_capitolo_5(df_filtered, azienda_target, chiave_target=None):
         maschera_riga_target = maschera_target(df, chiave_target, azienda_target).to_numpy()
 
         for i, col in enumerate(df.columns):
-            worksheet_data.write(0, i, col, formati['header'])
+            worksheet_data.write(0, i, pulisci_nome_orbis(col), formati['header'])
             col_data = df[col].dropna()
             max_len = len(str(col)) + 2 if col_data.empty else max(col_data.astype(str).map(len).max(), len(str(col))) + 2
             worksheet_data.set_column(i, i, min(max_len, 45))
@@ -1884,7 +1884,7 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
             worksheet.write(0, col_num, "", fmt_space)
         else:
             formato = fmt_header_metric if '2024' in col_name else fmt_header
-            worksheet.write(0, col_num, col_name, formato)
+            worksheet.write(0, col_num, pulisci_nome_orbis(col_name), formato)
         
     # Creazione degli stili di evidenziazione per l'azienda target nella lista
     fmt_target_data = workbook.add_format({'bg_color': '#FFF2CC', 'border': 1, 'align': 'left', 'valign': 'vcenter', 'bold': True})

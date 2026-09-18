@@ -33,6 +33,7 @@ from report_corp import (
     inserisci_in_ordine,
     nome_regione_breve,
     posizione_ordinale,
+    pulisci_nome_orbis,
     preposizione_regione,
     serie_indicatore,
 )
@@ -184,7 +185,7 @@ def _testo(contenitore, testo, dim=9, grassetto=False, colore=None,
     par.paragraph_format.space_before = Pt(0)
     if allineamento is not None:
         par.alignment = allineamento
-    run = par.add_run(testo)
+    run = par.add_run(pulisci_nome_orbis(testo))
     run.font.size = Pt(dim)
     run.bold = grassetto
     run.font.color.rgb = colore if colore is not None else C_NAVY
@@ -478,7 +479,7 @@ def _capoverso(doc, testo, dim=9, colore=None, spazio_dopo=6):
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(spazio_dopo)
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    r = p.add_run(testo)
+    r = p.add_run(pulisci_nome_orbis(testo))
     r.font.size = Pt(dim)
     r.font.color.rgb = colore if colore is not None else C_NAVY
     return p
