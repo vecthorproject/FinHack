@@ -646,8 +646,8 @@ CORREZIONI_TEMPLATE = [
      "segnala meno debito. Ne derivano le categorie seguenti:"),
     # La riga del Benchmark Totale mostrava la somma delle tre lettere e il risultato
     # in lettera unica: resta il solo Rating Combinato.
-    ("Benchmark Totale \uf0de \{\{ rating_eco \}\} \+ \{\{ rating_patr \}\} \+ "
-     "\{\{ rating_fin \}\} = \{\{ rating_comb \}\}",
+    (re.escape("Benchmark Totale \uf0de {{ rating_eco }} + {{ rating_patr }} + "
+               "{{ rating_fin }} = {{ rating_comb }}"),
      # La freccia \uf0de esiste solo nel font Symbol: scritta nel run Calibri della
      # riga diventa un punto interrogativo, quindi al suo posto va un trattino lungo.
      "Rating Combinato \u2014 {{ rating_tot }}"),
