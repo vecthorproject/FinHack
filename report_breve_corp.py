@@ -177,6 +177,81 @@ def pulisci_nome_orbis(testo):
     return _RE_MIGLIAIA.sub('mgl', _RE_ASTERISCO_ORBIS.sub('', str(testo)))
 
 
+# Logo F&V in basso su ogni slide. Sul fondo scuro della copertina e della chiusura
+# il logo originale, blu notte e oliva, sparirebbe: li' viene usata una versione in
+# bianco ricavata al volo dallo stesso file.
+PERCORSO_LOGO = "logofv.png"
+LOGO_LARGHEZZA_CM = 3.4
+LOGO_MARGINE_CM = 1.5
+SOGLIA_FONDO_SCURO = 110    # luminanza 0-255 sotto la quale serve il logo chiaro
+
+
+def _logo_in_bianco(percorso):
+    """Stessa sagoma del logo, tutta bianca: serve sui fondi scuri."""
+    from PIL import Image
+    with Image.open(percorso) as img:
+        immagine = img.convert('RGBA')
+    pixel = immagine.load()
+    larghezza, altezza = immagine.size
+    for y in range(altezza):
+        for x in range(larghezza):
+            r, g, b, a = pixel[x, y]
+            if a:
+                pixel[x, y] = (255, 255, 255, a)
+    uscita = io.BytesIO()
+    immagine.save(uscita, format='PNG')
+    uscita.seek(0)
+    return uscita
+
+
+def _fondo_scuro(slide):
+    """Guarda la fascia bassa della slide: e' li' che finisce il logo."""
+    from PIL import Image
+    import numpy as np
+    for forma in slide.shapes:
+        blip = forma._element.find('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+        if blip is None:
+            continue
+        rid = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+        if not rid or rid not in slide.part.rels:
+            continue
+        try:
+            with Image.open(io.BytesIO(slide.part.rels[rid].target_part.blob)) as img:
+                pixel = np.array(img.convert('RGB'))
+        except Exception:
+            continue
+        alto, largo, _ = pixel.shape
+        fascia = pixel[int(alto * 0.90):, :int(largo * 0.20)].reshape(-1, 3).mean(axis=0)
+        return (0.299 * fascia[0] + 0.587 * fascia[1] + 0.114 * fascia[2]) < SOGLIA_FONDO_SCURO
+    return False
+
+
+def aggiungi_logo_slide(prs, percorso_logo=PERCORSO_LOGO):
+    """Appoggia il logo in basso a sinistra su tutte le slide, copertina compresa."""
+    if not percorso_logo or not os.path.exists(percorso_logo):
+        return 0
+    logo_bianco = None
+    larghezza = Cm(LOGO_LARGHEZZA_CM)
+    messi = 0
+    for slide in prs.slides:
+        scuro = _fondo_scuro(slide)
+        if scuro:
+            if logo_bianco is None:
+                logo_bianco = _logo_in_bianco(percorso_logo)
+            logo_bianco.seek(0)
+            sorgente = logo_bianco
+        else:
+            sorgente = percorso_logo
+        try:
+            immagine = slide.shapes.add_picture(sorgente, Cm(LOGO_MARGINE_CM), 0, width=larghezza)
+        except Exception:
+            continue
+        # allineato in basso, con lo stesso margine che ha a sinistra
+        immagine.top = prs.slide_height - immagine.height - Cm(LOGO_MARGINE_CM * 0.55)
+        messi += 1
+    return messi
+
+
 def normalizza_etichette_orbis_pptx(prs):
     """Rete di sicurezza sulle etichette dell'estrazione nelle slide."""
     def cornici(forme):
@@ -246,8 +321,9 @@ def get_trend_style(trend_word):
     indicatore letto "al contrario" (piu' basso = meglio): prima riceveva ▲ "in
     miglioramento" anche quando il valore era sceso dal 160,82% al 68,83%, in contrasto con
     tutti gli altri indicatori della stessa slide. "in miglioramento"/"in peggioramento"
-    sono prodotti solo da get_trend_e_base(..., inverso=True), quindi il verso del numero
-    e' deducibile dalla parola stessa.
+    sono prodotti solo da analizza_percorso(..., inverso=True), quindi il verso del numero
+    e' deducibile dalla parola stessa. "altalenante" segnala invece un percorso che e'
+    tornato al punto di partenza dopo essersi mosso: non e' ne' salita ne' discesa.
     """
     if trend_word == 'in crescita':
         return '▲', '16A34A'   # numero salito, lettura positiva
@@ -257,6 +333,8 @@ def get_trend_style(trend_word):
         return '▼', 'DC2626'   # numero sceso, lettura negativa
     if trend_word == 'in miglioramento':
         return '▼', '16A34A'   # numero sceso, lettura positiva (indicatore inverso)
+    if trend_word == 'altalenante':
+        return '◆', 'D97706'   # ambra: gli estremi si equivalgono ma nel mezzo si e' mosso
     if trend_word == 'n.d.':
         return '○', '94A3B8'   # grigio chiaro, distinto dal "stabile" verificato
     return '●', '64748B'       # grigio (stabile)
@@ -402,98 +480,176 @@ def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
 # 📝 COMMENTI STANDARDIZZATI PER I GRAFICI (Trend e Barre)
 # =================================================================
 
-def get_trend_e_base(valori_per_anno, inverso=False):
-    """
-    valori_per_anno: lista di tuple (anno, valore) in ordine cronologico, es.
-    [(2021, x), (2022, y), (2023, z), (2024, w)], con valore None/NaN per gli anni
-    non disponibili. Usa il primo e l'ultimo anno DAVVERO disponibili (non 2021/2024
-    fissi), cosi' il trend riflette i dati reali anche quando manca il 2021 (capita per
-    aziende senza storico Orbis pregresso).
-    Ritorna (trend_word, anno_base, valore_base); trend_word == "n.d." se ci sono
-    meno di 2 punti validi.
-    """
-    disponibili = [(anno, val) for anno, val in valori_per_anno if val is not None and pd.notna(val)]
-    if len(disponibili) < 2:
-        return "n.d.", None, None
+# Soglie di lettura del percorso 2021-2024.
+SOGLIA_VARIAZIONE = 10.0   # % sul valore di partenza: sotto, gli estremi si equivalgono
+SOGLIA_ESCURSIONE = 15.0   # % : sopra, nel mezzo il valore si e' mosso in modo visibile
 
-    anno_base, val_base = disponibili[0]
-    _, val_ultimo = disponibili[-1]
-    try:
-        v_base, v_ultimo = float(val_base), float(val_ultimo)
-        diff = v_ultimo - v_base
-        # Variazione percentuale sul valore di partenza, non differenza assoluta:
-        # una soglia fissa (es. 0,5) e' tarata sui margini (scala 0-100) ma appiattisce a
-        # "stabile" i ratio di liquidita'/struttura (scala 0-3), dove uno spostamento di
-        # 0,2-0,3 e' gia' un miglioramento ben visibile nel grafico andamento accanto.
-        base = abs(v_base) if abs(v_base) > 0.01 else abs(v_ultimo)
-        var_pct = (diff / base * 100) if base > 0.01 else 0.0
+
+def analizza_percorso(valori_per_anno, inverso=False, unita=''):
+    """
+    Legge la serie storica e restituisce l'etichetta di trend piu' il racconto del
+    percorso, anno per anno dove serve.
+
+    Il confronto fra primo e ultimo anno, da solo, mente: una serie
+    1,80 -> 2,39 -> 1,45 -> 1,80 ha gli estremi identici e verrebbe dichiarata
+    "stabile" anche se nel mezzo si e' mossa di quasi un punto. Qui l'escursione fra
+    massimo e minimo viene guardata sempre e, quando e' ampia, il percorso viene
+    raccontato con gli anni di svolta invece di essere schiacciato in un aggettivo.
+
+    Ritorna un dizionario con: trend (etichetta per il badge), frase (il racconto),
+    anno_base e val_base, escursione_pct e salto (la variazione fra due anni
+    consecutivi piu' forte del periodo, che serve al foglio di alert).
+    """
+    punti = [(int(anno), float(valore)) for anno, valore in valori_per_anno
+             if valore is not None and pd.notna(valore)]
+    vuoto = {'trend': 'n.d.', 'frase': '', 'anno_base': None, 'val_base': None,
+             'escursione_pct': 0.0, 'salto': None, 'anno_max': None, 'anno_min': None}
+    if len(punti) < 2:
+        return vuoto
+
+    (a0, v0), (aN, vN) = punti[0], punti[-1]
+    anno_max, v_max = max(punti, key=lambda p: p[1])
+    anno_min, v_min = min(punti, key=lambda p: p[1])
+    riferimento = max(abs(v0), abs(vN), 0.01)
+
+    var_finale = (vN - v0) / riferimento * 100
+    escursione = (v_max - v_min) / riferimento * 100
+
+    # Il salto piu' forte fra due anni consecutivi: e' il punto che chi commenta
+    # deve saper spiegare.
+    salto = None
+    for (anno_a, val_a), (anno_b, val_b) in zip(punti, punti[1:]):
+        base = max(abs(val_a), 0.01)
+        variazione = (val_b - val_a) / base * 100
+        if salto is None or abs(variazione) > abs(salto[2]):
+            salto = (anno_a, anno_b, variazione)
+
+    if abs(var_finale) > SOGLIA_VARIAZIONE:
         if inverso:
-            if var_pct > 10: return "in peggioramento", anno_base, val_base
-            elif var_pct < -10: return "in miglioramento", anno_base, val_base
+            trend = 'in peggioramento' if var_finale > 0 else 'in miglioramento'
         else:
-            if var_pct > 10: return "in crescita", anno_base, val_base
-            elif var_pct < -10: return "in contrazione", anno_base, val_base
-    except (TypeError, ValueError, ZeroDivisionError):
-        return "n.d.", None, None
-    return "stabile", anno_base, val_base
+            trend = 'in crescita' if var_finale > 0 else 'in contrazione'
+    elif escursione > SOGLIA_ESCURSIONE:
+        trend = 'altalenante'
+    else:
+        trend = 'stabile'
 
-def _raffronto_base(trend, anno_base, val_base, unita=''):
-    """Ancora l'aggettivo di trend al dato dell'anno base che lo giustifica (il primo anno
-    davvero disponibile, non necessariamente il 2021): senza il valore di partenza, un
-    "stabile" o un "in crescita" restano aggettivi isolati e possono sembrare in
-    contraddizione con il grafico andamento mostrato accanto, che gli anni li mette
-    a confronto per esteso."""
-    if not trend or trend == "n.d.":
+    return {'trend': trend, 'frase': _racconta_percorso(punti, anno_max, v_max, anno_min, v_min,
+                                                        escursione, trend, unita),
+            'anno_base': a0, 'val_base': v0, 'escursione_pct': escursione,
+            'salto': salto, 'anno_max': anno_max, 'anno_min': anno_min}
+
+
+SOGLIA_SVOLTA = 5.0   # % : sotto, l'ultimo tratto non merita di essere raccontato
+
+
+def _racconta_percorso(punti, anno_max, v_max, anno_min, v_min, escursione, trend, unita=''):
+    """Il percorso a parole: dove e' salito, dove e' sceso, in che anno."""
+    (a0, v0), (aN, vN) = punti[0], punti[-1]
+    intermedi = [anno for anno, _ in punti[1:-1]]
+    riferimento = max(abs(v0), abs(vN), 0.01)
+    n = lambda valore: f"{format_euro(valore)}{unita}"
+    # "stesso livello del 2021" si puo' dire solo se il valore ci e' tornato davvero.
+    scarto_finale = abs(vN - v0) / riferimento * 100
+    chiusura = f"stesso livello del {a0}" if scarto_finale <= 2 else "vicino al punto di partenza"
+
+    if trend == 'stabile':
+        return f"Resta sui livelli del {a0} per tutto il periodo."
+
+    if trend == 'altalenante':
+        # Gli estremi si equivalgono ma nel mezzo il valore si e' mosso: e' proprio il
+        # caso in cui dire "stabile" sarebbe falso.
+        if anno_max in intermedi and anno_min in intermedi:
+            primo, secondo = ((anno_max, v_max), (anno_min, v_min)) if anno_max < anno_min \
+                else ((anno_min, v_min), (anno_max, v_max))
+            return (f"Chiude {con_articolo(n(vN), 'a')} come nel {a0}, ma nel mezzo passa "
+                    f"{con_articolo(n(primo[1]), 'da')} del {primo[0]} "
+                    f"{con_articolo(n(secondo[1]), 'a')} del {secondo[0]}.")
+        if anno_max in intermedi:
+            return (f"Sale fino {con_articolo(n(v_max), 'a')} nel {anno_max}, poi rientra "
+                    f"{con_articolo(n(vN), 'a')}: {chiusura}.")
+        if anno_min in intermedi:
+            return (f"Scende fino {con_articolo(n(v_min), 'a')} nel {anno_min}, poi risale "
+                    f"{con_articolo(n(vN), 'a')}: {chiusura}.")
+        return (f"Fra il {a0} e il {aN} il valore oscilla "
+                f"{con_articolo(n(v_min), 'da')} {con_articolo(n(v_max), 'a')}.")
+
+    # Trend con una direzione netta: la svolta si racconta solo se l'ultimo tratto
+    # e' abbastanza ampio da vedersi nel grafico.
+    ritorno_dal_picco = abs(v_max - vN) / riferimento * 100
+    ritorno_dal_minimo = abs(vN - v_min) / riferimento * 100
+    if anno_max in intermedi and v_max > v0 and v_max > vN and ritorno_dal_picco > SOGLIA_SVOLTA:
+        return (f"Sale {con_articolo(n(v0), 'da')} del {a0} {con_articolo(n(v_max), 'a')} "
+                f"del {anno_max}, poi scende {con_articolo(n(vN), 'a')} nel {aN}.")
+    if anno_min in intermedi and v_min < v0 and v_min < vN and ritorno_dal_minimo > SOGLIA_SVOLTA:
+        return (f"Scende {con_articolo(n(v0), 'da')} del {a0} {con_articolo(n(v_min), 'a')} "
+                f"del {anno_min}, poi risale {con_articolo(n(vN), 'a')} nel {aN}.")
+    verso = 'Sale' if vN > v0 else 'Scende'
+    coda = ""
+    if escursione > SOGLIA_ESCURSIONE + abs((vN - v0) / max(abs(v0), 0.01) * 100):
+        coda = f", toccando {n(v_max)} nel {anno_max}"
+    return (f"{verso} {con_articolo(n(v0), 'da')} del {a0} {con_articolo(n(vN), 'a')} "
+            f"del {aN}{coda}.")
+
+
+# Ogni indicatore ha una riga di lettura sua, che dice cosa significa il valore
+# raggiunto; il confronto con il settore e il racconto del percorso sono invece
+# costruiti allo stesso modo per tutti, ma con aperture che ruotano, cosi' nove
+# commenti di fila non sembrano nove copie.
+def lettura_indicatore(chiave, valore, mediana):
+    if valore is None or pd.isna(valore):
         return ""
-    if anno_base is None or val_base is None or pd.isna(val_base):
-        return f", {trend}"
-    return f", {trend} (dal {format_euro(val_base)}{unita} del {anno_base})"
+    if chiave == 'patr_1':
+        return ("Il patrimonio netto copre da solo le immobilizzazioni."
+                if valore >= 1 else
+                "Il patrimonio netto non basta a coprire le immobilizzazioni.")
+    if chiave == 'patr_2':
+        return ("Contando anche i debiti a medio-lungo termine la copertura \u00e8 piena."
+                if valore >= 1 else
+                "Neppure con i debiti a medio-lungo termine la copertura \u00e8 piena.")
+    if chiave == 'patr_3':
+        return ("Il ricorso al capitale di terzi resta contenuto."
+                if mediana is not None and not pd.isna(mediana) and valore <= mediana else
+                "Il peso del debito sul patrimonio netto resta il punto da presidiare.")
+    if chiave == 'fin_1':
+        return ("Le attivit\u00e0 correnti coprono i debiti che scadono entro l'anno."
+                if valore >= 1 else
+                "Le attivit\u00e0 correnti non bastano a coprire i debiti a breve.")
+    if chiave == 'fin_2':
+        return ("La copertura regge anche senza contare il magazzino."
+                if valore >= 1 else
+                "La copertura dipende dallo smobilizzo del magazzino.")
+    if chiave == 'fin_3':
+        return "Misura quante volte il capitale investito si \u00e8 tradotto in produzione."
+    return ""
 
-def get_commento_ebitda_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"L'EBITDA Margin si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
 
-def get_commento_ebit_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"L'EBIT Margin si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+def commento_percorso_ppt(nome_con_articolo, valore, mediana, unita, inverso,
+                          lettura, frase_percorso, giro=0):
+    """Il commento di un grafico: dove sta il 2024, come ci e' arrivato, cosa vuol dire."""
+    if valore is None or pd.isna(valore):
+        return f"{nome_con_articolo} non risulta disponibile per il 2024."
 
-def get_commento_profit_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"Il Profit Margin si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)}%)."
+    val = f"{format_euro(valore)}{unita}"
+    if mediana is None or pd.isna(mediana):
+        testa = f"{nome_con_articolo} si attesta {con_articolo(val, 'a')} nel 2024."
+    else:
+        med = f"{format_euro(mediana)}{unita}"
+        favorevole = (valore <= mediana) if inverso else (valore >= mediana)
+        minuscolo = nome_con_articolo[0].lower() + nome_con_articolo[1:]
+        aperture = [
+            f"{nome_con_articolo} si attesta {con_articolo(val, 'a')}, "
+            f"{'meglio' if favorevole else 'peggio'} della mediana di settore ({med}).",
+            f"Nel 2024 {minuscolo} vale {val} contro {con_articolo(med, None)} del settore: "
+            f"il confronto \u00e8 {'a favore' if favorevole else 'a sfavore'} dell'impresa.",
+            f"{nome_con_articolo} chiude il 2024 {con_articolo(val, 'a')}; la mediana di "
+            f"settore vale {med}, quindi il confronto "
+            f"{'premia' if favorevole else 'penalizza'} l'impresa.",
+        ]
+        testa = aperture[giro % len(aperture)]
 
-def get_commento_str1_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    soglia = "al di sopra della soglia di sicurezza" if az_val >= 1 else "al di sotto della soglia di sicurezza"
-    t = _raffronto_base(trend, anno_base, val_base)
-    return f"L'Indice primario di struttura si attesta a {format_euro(az_val)}{t}, risultando {soglia} (valore target ≥ 1)."
+    return " ".join(x for x in (testa, frase_percorso, lettura) if x)
 
-def get_commento_str2_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    soglia = "in equilibrio strutturale" if az_val >= 1 else "sotto la soglia di equilibrio"
-    t = _raffronto_base(trend, anno_base, val_base)
-    return f"L'Indice secondario di struttura si attesta a {format_euro(az_val)}{t}, risultando {soglia} (valore target ≥ 1)."
-
-def get_commento_gearing_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    vs = "inferiore" if az_val <= ita_val else "superiore"
-    dipendenza = "contenuta" if az_val <= ita_val else "elevata"
-    t = _raffronto_base(trend, anno_base, val_base, '%')
-    return f"Il Gearing si attesta {con_articolo(format_euro(az_val), 'a')}%{t}, risultando {vs} alla mediana ({format_euro(ita_val)}%) con dipendenza debitoria {dipendenza}."
-
-def get_commento_cr_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    soglia = "in equilibrio corrente" if az_val >= 1 else "in tensione corrente"
-    t = _raffronto_base(trend, anno_base, val_base)
-    return f"Il Current Ratio si attesta a {format_euro(az_val)}{t}, indicando una situazione {soglia} (valore target ≥ 1)."
-
-def get_commento_qr_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    copertura = "senza necessità di smobilizzo delle scorte" if az_val >= 1 else "con parziale dipendenza dal magazzino"
-    t = _raffronto_base(trend, anno_base, val_base)
-    return f"Il Quick Ratio si attesta a {format_euro(az_val)}{t}, garantendo la copertura dei debiti a breve {copertura}."
-
-def get_commento_rotazione_trend(az_val, ita_val, trend='', anno_base=None, val_base=None):
-    vs = "superiore" if az_val >= ita_val else "inferiore"
-    t = _raffronto_base(trend, anno_base, val_base)
-    return f"La Rotazione del Capitale si attesta a {format_euro(az_val)}{t}, risultando {vs} alla mediana settoriale ({format_euro(ita_val)})."
 
 def get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof, reg_ebitda, reg_ebit, reg_prof):
     # Una riga compatta per indicatore (valore + confronto Italia/Regione insieme,
@@ -1135,21 +1291,48 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # =================================================================
     def serie_anni(col_base):
         """Costruisce [(2021, v), (2022, v), (2023, v), (2024, v)] leggendo le 4 colonne
-        annuali: get_trend_e_base sceglie da qui il primo/ultimo anno DAVVERO disponibili,
+        annuali: analizza_percorso sceglie da qui il primo/ultimo anno DAVVERO disponibili,
         invece di assumere sempre 2021 come base (assunzione che fallisce per le aziende
         senza storico 2021)."""
         return [(anno, pd.to_numeric(riga.get(f'{col_base} {anno}', np.nan), errors='coerce')) for anno in (2021, 2022, 2023, 2024)]
 
-    # Trend calcolati una volta sola, riusati sia nel testo che nel badge colorato del box
-    trend_eco_1, anno_base_eco_1, val_base_eco_1 = get_trend_e_base(serie_anni('Margine di Profitto (*) %'))
-    trend_eco_2, anno_base_eco_2, val_base_eco_2 = get_trend_e_base(serie_anni('Margine EBIT (*) %'))
-    trend_eco_3, anno_base_eco_3, val_base_eco_3 = get_trend_e_base(serie_anni('Margine EBITDA (*) %'))
-    trend_patr_1, anno_base_patr_1, val_base_patr_1 = get_trend_e_base(serie_anni('Indice di Struttura 1° livello (*)'))
-    trend_patr_2, anno_base_patr_2, val_base_patr_2 = get_trend_e_base(serie_anni('Indice di Struttura 2° livello (*)'))
-    trend_patr_3, anno_base_patr_3, val_base_patr_3 = get_trend_e_base(serie_anni('Gearing (*) %'), inverso=True)
-    trend_fin_1, anno_base_fin_1, val_base_fin_1 = get_trend_e_base(serie_anni('Current Ratio (*)'))
-    trend_fin_2, anno_base_fin_2, val_base_fin_2 = get_trend_e_base(serie_anni('Quick Ratio (*)'))
-    trend_fin_3, anno_base_fin_3, val_base_fin_3 = get_trend_e_base(serie_anni('Indice di Rotazione del Capitale Investito (*)'))
+    # Percorso 2021-2024 letto una volta sola: l'etichetta serve al badge colorato del
+    # box, la frase e' il racconto che finisce nel commento, l'escursione e il salto
+    # piu' forte alimentano il foglio di alert per chi commenta.
+    # (chiave, colonna base, icona, titolo del box, nome con l'articolo, unita', inverso)
+    PERCORSI_INDICATORI = [
+        ('eco_1',  'Margine di Profitto (*) %',                      '\U0001f4b0', 'Profit Margin',                              'Il Profit Margin',                             '%', False),
+        ('eco_2',  'Margine EBIT (*) %',                             '\U0001f4c8', 'EBIT Margin',                                "L'EBIT Margin",                                '%', False),
+        ('eco_3',  'Margine EBITDA (*) %',                           '\U0001f4ca', 'EBITDA Margin',                              "L'EBITDA Margin",                              '%', False),
+        ('patr_1', 'Indice di Struttura 1\u00b0 livello (*)',            '\U0001f3db\ufe0f', 'Indice di Struttura 1\u00b0 Livello',  "L'Indice di Struttura di 1\u00b0 livello",         '',  False),
+        ('patr_2', 'Indice di Struttura 2\u00b0 livello (*)',            '\U0001f3d7\ufe0f', 'Indice di Struttura 2\u00b0 Livello',  "L'Indice di Struttura di 2\u00b0 livello",         '',  False),
+        ('patr_3', 'Gearing (*) %',                                  '\u2696\ufe0f', 'Gearing',                                  'Il Gearing',                                   '%', True),
+        ('fin_1',  'Current Ratio (*)',                              '\U0001f4a7', 'Current Ratio',                              'Il Current Ratio',                             '',  False),
+        ('fin_2',  'Quick Ratio (*)',                                '\u26a1', 'Quick Ratio',                                    'Il Quick Ratio',                               '',  False),
+        ('fin_3',  'Indice di Rotazione del Capitale Investito (*)',  '\U0001f504', 'Indice di Rotazione del Capitale Investito', "L'Indice di Rotazione del Capitale Investito", '',  False),
+    ]
+    VALORI_INDICATORI = {
+        'eco_1': (az_prof, ita_prof), 'eco_2': (az_ebit, ita_ebit), 'eco_3': (az_ebitda, ita_ebitda),
+        'patr_1': (az_str1, ita_str1), 'patr_2': (az_str2, ita_str2), 'patr_3': (az_gear, ita_gear),
+        'fin_1': (az_cr, ita_cr), 'fin_2': (az_qr, ita_qr), 'fin_3': (az_rot, ita_rot),
+    }
+    percorsi = {}
+    for giro_perc, (chiave_perc, base_perc, icona_perc, titolo_perc,
+                    nome_perc, unita_perc, inverso_perc) in enumerate(PERCORSI_INDICATORI):
+        valore_perc, mediana_perc = VALORI_INDICATORI[chiave_perc]
+        dati_perc = analizza_percorso(serie_anni(base_perc), inverso=inverso_perc, unita=unita_perc)
+        dati_perc.update({
+            'icona': icona_perc, 'titolo': titolo_perc, 'nome': nome_perc,
+            'unita': unita_perc, 'inverso': inverso_perc,
+            'valore': valore_perc, 'mediana': mediana_perc,
+        })
+        dati_perc['commento'] = commento_percorso_ppt(
+            nome_perc, valore_perc, mediana_perc, unita_perc, inverso_perc,
+            lettura_indicatore(chiave_perc, valore_perc, mediana_perc),
+            dati_perc['frase'], giro=giro_perc,
+        )
+        percorsi[chiave_perc] = dati_perc
+
 
     # ECO — img_eco_1=Profit, img_eco_2=EBIT, img_eco_3=EBITDA
     context['commento_barre_eco']     = get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof, reg_ebitda, reg_ebit, reg_prof)
@@ -1163,15 +1346,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # 🎨 Box commento dei grafici andamento (icona + titolo per esteso + trend + testo): card, non {{}} piatti.
     # Formato tupla: (icona_metrica, titolo_per_esteso, trend, testo)
     dati_box_commenti = {
-        'commento_grafico_eco_1': ('💰', 'Profit Margin', trend_eco_1, get_commento_profit_trend(az_prof, ita_prof, trend_eco_1, anno_base_eco_1, val_base_eco_1)),
-        'commento_grafico_eco_2': ('📈', 'EBIT Margin', trend_eco_2, get_commento_ebit_trend(az_ebit, ita_ebit, trend_eco_2, anno_base_eco_2, val_base_eco_2)),
-        'commento_grafico_eco_3': ('📊', 'EBITDA Margin', trend_eco_3, get_commento_ebitda_trend(az_ebitda, ita_ebitda, trend_eco_3, anno_base_eco_3, val_base_eco_3)),
-        'commento_grafico_patr_1': ('🏛️', 'Indice di Struttura 1° Livello', trend_patr_1, get_commento_str1_trend(az_str1, ita_str1, trend_patr_1, anno_base_patr_1, val_base_patr_1)),
-        'commento_grafico_patr_2': ('🏗️', 'Indice di Struttura 2° Livello', trend_patr_2, get_commento_str2_trend(az_str2, ita_str2, trend_patr_2, anno_base_patr_2, val_base_patr_2)),
-        'commento_grafico_patr_3': ('⚖️', 'Gearing', trend_patr_3, get_commento_gearing_trend(az_gear, ita_gear, trend_patr_3, anno_base_patr_3, val_base_patr_3)),
-        'commento_grafico_fin_1': ('💧', 'Current Ratio', trend_fin_1, get_commento_cr_trend(az_cr, ita_cr, trend_fin_1, anno_base_fin_1, val_base_fin_1)),
-        'commento_grafico_fin_2': ('⚡', 'Quick Ratio', trend_fin_2, get_commento_qr_trend(az_qr, ita_qr, trend_fin_2, anno_base_fin_2, val_base_fin_2)),
-        'commento_grafico_fin_3': ('🔄', 'Indice di Rotazione del Capitale Investito', trend_fin_3, get_commento_rotazione_trend(az_rot, ita_rot, trend_fin_3, anno_base_fin_3, val_base_fin_3)),
+        f'commento_grafico_{chiave}': (dati['icona'], dati['titolo'], dati['trend'], dati['commento'])
+        for chiave, dati in percorsi.items()
     }
 
     # =================================================================
@@ -1406,6 +1582,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             formatta_box_commento_grafico(slide, chiave, icona_metrica, titolo, trend_word, testo)
 
     normalizza_etichette_orbis_pptx(prs)
+    aggiungi_logo_slide(prs)
 
     output_ppt = io.BytesIO()
     prs.save(output_ppt)
