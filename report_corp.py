@@ -399,10 +399,12 @@ def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
 _RE_ASTERISCO_ORBIS = re.compile(r'\s*\(\*\)')
 
 # Le migliaia di euro compaiono nell'estrazione ora come "migl" ora come "mil":
-# nel documento si usa sempre "mgl". Il contesto (EUR, il simbolo di euro o la
-# parentesi che chiude) evita di toccare parole che iniziano allo stesso modo o
-# ragioni sociali come "MIL SERVICE".
-_RE_MIGLIAIA = re.compile(r'\b(?:migl|mil)\b(?=\s*(?:EUR|\u20ac|\)))', re.IGNORECASE)
+# nel documento si usa sempre "mgl". La sostituzione scatta solo davanti a "EUR"
+# come parola intera o al simbolo di euro, cioe' dove l'abbreviazione e' davvero
+# un'unita' di misura. Fuori da li' non si tocca niente: nel panel ci sono
+# ragioni sociali come "MGL COSTRUZIONI SRL", e nomi del tipo "MIL EUROPA SRL" o
+# "COSTRUZIONI (MIL) SRL" non c'entrano con le migliaia.
+_RE_MIGLIAIA = re.compile(r'\b(?:migl|mil)\b(?=\s*(?:EUR\b|\u20ac))', re.IGNORECASE)
 
 
 def pulisci_nome_orbis(testo):

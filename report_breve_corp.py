@@ -165,11 +165,11 @@ def elabora_shape_per_testo(shape, context):
 
 # ORBIS accoda "(*)" ai nomi dei campi che calcola lui ("Margine di Profitto (*) %"):
 # serve a leggere l'estrazione, ma nelle slide e' un refuso che non rimanda a nulla.
-# Le migliaia di euro, scritte ora "migl" ora "mil", si uniformano in "mgl"; il
-# contesto (EUR, il simbolo di euro o la parentesi che chiude) evita di toccare le
-# ragioni sociali.
+# Le migliaia di euro, scritte ora "migl" ora "mil", si uniformano in "mgl", ma
+# solo davanti a "EUR" come parola intera o al simbolo di euro: fuori da li'
+# l'abbreviazione non e' un'unita' di misura e le ragioni sociali restano intatte.
 _RE_ASTERISCO_ORBIS = re.compile(r'\s*\(\*\)')
-_RE_MIGLIAIA = re.compile(r'\b(?:migl|mil)\b(?=\s*(?:EUR|\u20ac|\)))', re.IGNORECASE)
+_RE_MIGLIAIA = re.compile(r'\b(?:migl|mil)\b(?=\s*(?:EUR\b|\u20ac))', re.IGNORECASE)
 
 
 def pulisci_nome_orbis(testo):
