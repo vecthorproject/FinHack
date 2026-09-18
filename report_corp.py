@@ -660,6 +660,33 @@ CORREZIONI_TEMPLATE = [
      'I valori dell\u2019azienda sono poi confrontati con quelli del settore, sia lungo tutto il '
      'periodo 2021-2024 sia con attenzione particolare al 2024, che è l\u2019anno su cui viene '
      'costruito il posizionamento.'),
+    # "tre benchmark – Benchmark Economico, Benchmark Patrimoniale e Benchmark
+    # Finanziario": la parola compare quattro volte in una riga sola
+    (re.escape("L\u2019analisi è stata sviluppata sulla base di tre benchmark – Benchmark Economico, "
+               "Benchmark Patrimoniale e Benchmark Finanziario - costruiti applicando il metodo dei "
+               "terzili alle distribuzioni degli indicatori rappresentativi dei rispettivi equilibri, "
+               "come descritti nella sezione Obiettivi, con riguardo all\u2019anno 2024."),
+     "L\u2019analisi poggia su tre benchmark \u2013 Economico, Patrimoniale e Finanziario \u2013 "
+     "costruiti con il metodo dei terzili sulle distribuzioni 2024 degli indicatori descritti negli "
+     "Obiettivi. Il 2024 determina quindi il posizionamento, mentre il quadriennio 2021-2024 ne "
+     "mostra la direzione."),
+    (re.escape("I terzili costituiscono il criterio di confronto adottato per valutare il "
+               "posizionamento della società rispetto a ciascun indicatore. In funzione del valore "
+               "assunto da ogni variabile e del relativo terzile di appartenenza, "
+               "{{ ragione_sociale }} e le altre imprese del panel sono classificate secondo le "
+               "seguenti categorie:"),
+     "Per ogni indicatore il valore della società viene collocato nel terzile che gli compete. "
+     "Le classi A, B e C corrispondono alla fascia superiore, intermedia e inferiore della "
+     "distribuzione; per il Gearing l\u2019ordine si inverte, perché un valore più contenuto "
+     "segnala meno debito. Ne derivano le categorie seguenti:"),
+    # La riga del Benchmark Totale mostrava la somma delle tre lettere e il risultato
+    # in lettera unica: resta il solo Rating Combinato.
+    ("Benchmark Totale \uf0de \{\{ rating_eco \}\} \+ \{\{ rating_patr \}\} \+ "
+     "\{\{ rating_fin \}\} = \{\{ rating_comb \}\}",
+     "Rating Combinato \uf0de {{ rating_tot }}"),
+    # Capoverso di chiusura dell'Equilibrio Finanziario: giro di parole che non
+    # aggiungeva nulla ai commenti per indicatore appena sopra.
+    (re.escape("A livello territoriale: {{ analisi_posizionamento_fin }}"), ""),
     # Il Rating Combinato è la sigla a tre lettere: la lettera unica di sintesi non
     # viene più presentata come "il rating"
     (re.escape('un Rating Combinato ({{ rating_comb }}) di classe "{{ rating_tot }}".'),
@@ -708,10 +735,10 @@ CORREZIONI_TEMPLATE = [
      "capacità di far fronte agli impegni di breve periodo, e restituiscono i punti di forza e le "
      "aree che meritano attenzione. Il raffronto con il settore offre così una base concreta per le "
      "decisioni di gestione."),
-    # "maggiore o uguale DI" regge la preposizione sbagliata, e la valuta va nella
-    # stessa forma usata nel resto del report
+    # "maggiore o uguale di" regge la preposizione sbagliata ed è pesante da leggere:
+    # per una soglia basta "almeno"
     (re.escape("con un totale valore della produzione al 2024 maggiore o uguale di 1 mln di Euro"),
-     "con un totale valore della produzione 2024 maggiore o uguale a € 1 mln"),
+     "con un totale valore della produzione 2024 di almeno € 1 mln"),
     # Capoverso territoriale: formulazione diretta e valuta in forma "€ 8.050,85 mln"
     (re.escape("Rispetto all'area {{ macroregione }}, l'azienda si colloca in {{ regione_target }}, "
                "territorio che contribuisce per il {{ perc_imprese_regione }}% al totale delle imprese "
@@ -1788,12 +1815,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "il livello dei debiti a breve eccede le disponibilità di pari durata, svalutando l'equilibrio della liquidità d'impresa"
 
     def get_capacita_generazione_liquidita(az_cr):
-        if az_cr >= 1.0: return "conferma una situazione di pieno equilibrio finanziario di breve termine (Current Ratio >= 1)."
-        else: return "configura l'incapacità temporanea delle attività correnti di estinguere le scadenze (Current Ratio < 1)."
+        # Niente "maggiore o uguale": si dice come sta il valore, non come potrebbe stare.
+        if az_cr > 1.0: return "conferma un equilibrio finanziario di breve termine: le attività correnti superano le passività di pari scadenza."
+        if az_cr == 1.0: return "mostra attività correnti esattamente pari alle passività di pari scadenza."
+        return "segnala attività correnti insufficienti a coprire le passività di pari scadenza."
 
     def get_analisi_quick_ratio_soglia(az_qr):
-        if az_qr >= 1.0: return "Valori uguali o superiori all'unità indicano che la cassa copre gli impegni senza dover smobilizzare il magazzino."
-        else: return "Valori inferiori ad uno evidenziano una dipendenza dalla vendita delle scorte per non fallire gli impegni di breve periodo."
+        if az_qr > 1.0: return "Il valore supera l'unità: la cassa copre gli impegni senza smobilizzare il magazzino."
+        if az_qr == 1.0: return "Il valore è pari all'unità: la copertura degli impegni non lascia margine."
+        return "Il valore resta sotto l'unità: la copertura dipende dalla vendita delle scorte."
 
     def get_implicazione_liquidita_immediata(az_qr):
         if az_qr >= 1.0: return "la flessibilità immediata garantisce la copertura integrale senza vendite forzate a sconto (Quick Ratio)."
@@ -1809,7 +1839,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return f"al di sotto della mediana di mercato nel Quick Ratio ({format_euro(set_qr)}), forzando l'impresa verso un realizzo più intensivo delle scorte per onorare gli impegni a breve."
 
     def get_copertura_debiti_breve_quick(az_qr):
-        if az_qr >= 1.0: return "risultano ampiamente sufficienti per coprire gli esborsi immediati (Quick Ratio >= 1)."
+        if az_qr >= 1.0: return "bastano a coprire gli esborsi immediati senza toccare il magazzino."
         else: return "risultano parziali, confermando lo squilibrio e la debolezza del Quick Ratio inferiore all'unità."
 
     def get_interpretazione_flussi_cassa_quick(az_qr):
@@ -1845,8 +1875,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "debolezze su più fronti: l'indice segnala tensioni di cassa correnti unite a un'inefficienza nella rotazione operativa del capitale."
 
     def get_motivazione_rating_fin(az_cr, az_qr):
-        if az_cr >= 1.0 and az_qr >= 1.0: return "l'azienda dispone di risorse sufficienti a coprire i debiti (Current Ratio >= 1) senza svendere rimanenze (Quick Ratio >= 1)."
-        elif az_cr >= 1.0: return "l'azienda copre i debiti a breve con le attività correnti nel loro complesso (Current Ratio >= 1), ma tale copertura dipende in parte dallo smobilizzo delle rimanenze (Quick Ratio < 1)."
+        if az_cr >= 1.0 and az_qr >= 1.0: return "l'azienda copre i debiti a breve anche senza contare le rimanenze."
+        elif az_cr >= 1.0: return "l'azienda copre i debiti a breve con le attività correnti nel loro complesso, ma la copertura dipende in parte dallo smobilizzo delle rimanenze."
         else: return "l'azienda risente di un'incapacità parziale di estinguere le passività a breve senza attingere al magazzino."
 
     def get_gestione_tesoreria_fin(az_cr, az_qr):
