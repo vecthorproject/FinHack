@@ -16,7 +16,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Pt, Mm
+from docx.shared import Pt, Mm, RGBColor
 from docx.text.paragraph import Paragraph
 import tempfile
 import matplotlib.image as mpimg
@@ -293,10 +293,10 @@ def _traiettoria(az, unita, dec, giro):
             f"Era salito {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
             f"ma nel {aN} scende {_va(vN, unita, dec, 'a')}",
             f"Il valore più alto è quello del {picco[0]} ({_v(picco[1], unita, dec)}); nel {aN} "
-            f"si torna {_va(vN, unita, dec, 'a')}, sopra il {_v(v0, unita, dec)} di partenza"
+            f"si torna {_va(vN, unita, dec, 'a')}, sopra {_va(v0, unita, dec)} di partenza"
             if vN > v0 else
             f"Il valore più alto è quello del {picco[0]} ({_v(picco[1], unita, dec)}); nel {aN} "
-            f"si scende {_va(vN, unita, dec, 'a')}, sotto il {_v(v0, unita, dec)} di partenza",
+            f"si scende {_va(vN, unita, dec, 'a')}, sotto {_va(v0, unita, dec)} di partenza",
             f"Dopo la crescita {_va(v0, unita, dec, 'da')} del {a0} {_va(picco[1], unita, dec, 'a')} del {picco[0]}, "
             f"l'ultimo anno riporta il valore {_va(vN, unita, dec, 'a')}",
         ]
@@ -380,8 +380,14 @@ def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
                         "Il confronto con il settore è quindi a favore dell'azienda."]
         else:
             scarto = _v(abs(v_az - v_set), '', dec) + _punti(unita)
-            chiusure = [f"La distanza dal settore è di {scarto}.",
-                        f"Restano {scarto} da recuperare."]
+            # Sugli indicatori inversi (il Gearing) lo scarto sfavorevole è un
+            # eccesso da ridurre, non un ritardo da recuperare.
+            if inverso:
+                chiusure = [f"Il divario rispetto al settore è di {scarto}.",
+                            f"Restano {scarto} da riassorbire."]
+            else:
+                chiusure = [f"La distanza dal settore è di {scarto}.",
+                            f"Restano {scarto} da recuperare."]
         frasi.append(chiusure[giro % len(chiusure)])
 
     return " ".join(x for x in frasi if x)
@@ -502,69 +508,6 @@ def get_intro_margini(descr_settore):
     # Segue sempre i due punti di get_intro_benchmark_eco (vedi context['intro_margini']):
     # in italiano, dopo i due punti che proseguono lo stesso periodo si prosegue in minuscolo.
     return f"le risultanze relative al tessuto competitivo del mercato ({descr_settore}) evidenziano che:"
-
-def get_analisi_ebitda(az_ebitda, set_ebitda):
-    if az_ebitda < set_ebitda:
-        return f"• Il Margine EBITDA ({format_euro(az_ebitda)}%) risulta inferiore alla mediana settoriale ({format_euro(set_ebitda)}%). Valori più contenuti segnalano una minore capacità di trasformare i ricavi in margine operativo lordo, denotando una minore efficienza della gestione caratteristica prima degli ammortamenti e delle svalutazioni."
-    else:
-        return f"• Il Margine EBITDA ({format_euro(az_ebitda)}%) supera la mediana settoriale ({format_euro(set_ebitda)}%). Valori più elevati indicano una maggiore capacità dell'impresa di generare reddito dalla gestione caratteristica prima di ammortamenti e svalutazioni, evidenziando una superiore efficienza operativa."
-
-def get_analisi_ebit(az_ebit, set_ebit):
-    if az_ebit < set_ebit:
-        return f"• Il Margine EBIT ({format_euro(az_ebit)}%) si colloca al di sotto del target mediano ({format_euro(set_ebit)}%). Tale dato segnala una minore capacità di generare reddito operativo in relazione ai ricavi conseguiti a valle dell'assorbimento dei costi fissi operativi e degli ammortamenti."
-    else:
-        return f"• Il Margine EBIT ({format_euro(az_ebit)}%) si posiziona al di sopra della mediana di settore ({format_euro(set_ebit)}%). Questo livello indica una maggiore capacità di conseguire un risultato operativo soddisfacente dopo aver considerato gli ammortamenti e le svalutazioni."
-
-def get_analisi_margine_profitto_tag(az_prof, set_prof):
-    if az_prof < set_prof:
-        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) risulta inferiore alla mediana settoriale ({format_euro(set_prof)}%). Tale andamento denota una minore capacità di trasformare i ricavi in risultato ante imposte, evidenziando criticità nell'assorbimento della gestione straordinaria e degli oneri finanziari."
-    else:
-        return f"• Il Margine di Profitto ({format_euro(az_prof)}%) supera il parametro mediano del settore ({format_euro(set_prof)}%). Valori più elevati indicano una maggiore capacità dell'impresa di convertire i ricavi in risultato ante imposte, confermando un'efficace gestione degli oneri extra-caratteristici."
-
-# =================================================================
-# 🟠 INDICATORI PATRIMONIALI (100% SEPARATI)
-# =================================================================
-
-def get_analisi_struttura1(az_str1):
-    if az_str1 >= 1:
-        return f"• L'Indice primario di struttura ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi."
-    else:
-        return f"• L'Indice primario di struttura ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine."
-
-def get_analisi_struttura2(az_str2):
-    if az_str2 >= 1:
-        return f"• L'Indice secondario di struttura ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati."
-    else:
-        return f"• L'Indice secondario di struttura ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi."
-
-def get_analisi_gearing_tag(az_gear, set_gear):
-    if az_gear <= set_gear:
-        return f"• Il Gearing ({format_euro(az_gear)}%) si attesta al di sotto del parametro mediano del comparto ({format_euro(set_gear)}%). Tali valori contenuti indicano una limitata dipendenza dall'indebitamento oneroso e una solida autonomia rispetto ai creditori."
-    else:
-        return f"• Il Gearing ({format_euro(az_gear)}%) supera la mediana di settore ({format_euro(set_gear)}%). Valori più elevati segnalano un maggiore ricorso al capitale di terzi per il finanziamento aziendale, determinando un incremento del rischio finanziario e una minore autonomia."
-
-# =================================================================
-# 🔵 INDICATORI FINANZIARI (100% SEPARATI)
-# =================================================================
-
-def get_analisi_current_ratio_tag(az_cr, set_cr):
-    if az_cr >= 1:
-        return f"• Il Current Ratio ({format_euro(az_cr)}), superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio."
-    else:
-        return f"• Il Current Ratio ({format_euro(az_cr)}), inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio."
-
-def get_analisi_quick_ratio_tag(az_qr, set_qr):
-    if az_qr >= 1:
-        return f"• Il Quick Ratio ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita delle rimanenze di magazzino."
-    else:
-        return f"• Il Quick Ratio ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati."
-
-def get_analisi_rotazione_tag(az_rot, set_rot):
-    if az_rot < set_rot:
-        return f"• L'Indice di rotazione del capitale investito ({format_euro(az_rot)}) risulta inferiore alla mediana del comparto ({format_euro(set_rot)}). Valori più contenuti segnalano una minore capacità del capitale investito di tradursi in ricavi, denotando un impiego meno efficiente degli asset operativi."
-    else:
-        return f"• L'Indice di rotazione del capitale investito ({format_euro(az_rot)}) supera la mediana settoriale ({format_euro(set_rot)}). Valori più elevati indicano una maggiore capacità dell'impresa di generare ricavi attraverso le risorse investite, evidenziando un efficiente utilizzo del capitale."
-
 
 # =====================================================================
 # ☢️ LA LAVATRICE NUCLEARE (Ricostruisce l'XML di Word da zero)
@@ -807,6 +750,50 @@ CORREZIONI_TEMPLATE = [
                'di classe {{ rating_fin }}.'),
      'Nel Benchmark Finanziario {{ nr_rating_fin }} società, pari al {{ perc_rating_fin }}% del '
      'campione, appartengono alla classe {{ rating_fin }}.'),
+    # "applicate le variabili di statistica descrittiva ad evidenziata la mediana":
+    # la frase e' rotta, e compare due volte
+    (re.escape('Una volta applicate le variabili di statistica descrittiva ad evidenziata la '
+               'mediana come indicatore di sintesi più consono, è stato possibile confrontare i '
+               'dati di settore con quelli dell\u2019impresa.'),
+     'Applicati gli strumenti di statistica descrittiva, la mediana si conferma l\u2019indicatore '
+     'di sintesi più adatto: su quella base i dati di settore sono confrontati con quelli '
+     'dell\u2019impresa.'),
+    (re.escape('Applicate nuovamente le variabili di statistica descrittiva ad evidenziata la '
+               'mediana come indicatore da considerare, si è proceduto al medesimo confronto '
+               'condotto per l\u2019equilibrio economico.'),
+     'Anche qui la mediana resta l\u2019indicatore di riferimento e il confronto segue lo stesso '
+     'schema usato per l\u2019equilibrio economico.'),
+    # "valutare come l'impatto ... incidano": soggetto singolare, verbo plurale
+    (re.escape('In questo equilibrio, in particolar modo, è stata predisposta anche '
+               'un\u2019analisi di composizione percentuale del Totale Valore della Produzione, al '
+               'fine di valutare come l\u2019impatto delle singole componenti di bilancio sulla '
+               'macro-voce incidano sull\u2019andamento dei margini, del settore e dell\u2019impresa:'),
+     'Per questo equilibrio si aggiunge la composizione percentuale del Totale Valore della '
+     'Produzione, che mostra quanto pesa ogni voce di bilancio sulla macro-voce e come quel peso '
+     'si rifletta sui margini, nel settore e nell\u2019impresa:'),
+    # "In confronto alle dinamiche storiche di settore, L'assetto patrimoniale...":
+    # il segnaposto porta una frase compiuta, quindi l'incipit apriva una maiuscola
+    # in mezzo al periodo
+    (re.escape('In confronto alle dinamiche storiche di settore, '
+               '{{ confronto_struttura_settore }}'),
+     '{{ confronto_struttura_settore }}'),
+    # Current Ratio: il confronto con la mediana e la copertura in valore assoluto
+    # sono due piani diversi, ma "Questo quadro evidenzia come" li presentava come
+    # la stessa cosa, con due frasi di fila che si smentivano
+    (re.escape('Questo quadro evidenzia come {{ rapporto_attivita_passivita_brevi }}.'),
+     'Sul piano assoluto, {{ rapporto_attivita_passivita_brevi }}.'),
+    # Tre giri di parole diversi per dire tre volte la stessa cosa
+    (re.escape('Scendendo nel dettaglio dei singoli ambiti di valutazione, il quadro si struttura '
+               'come segue: la Categoria {{ rat_eco_piu_pres }} risulta la più diffusa per il '
+               'Benchmark Economico (con {{ num_eco_piu_pres }} imprese), la Categoria '
+               '{{ rat_patr_piu_pres }} domina nel Benchmark Patrimoniale (con '
+               '{{ num_patr_piu_pres }} imprese), mentre la Categoria {{ rat_fin_piu_pres }} si '
+               'posiziona come la più frequente nel Benchmark Finanziario (con '
+               '{{ num_fin_piu_pres }} imprese).'),
+     'Nei singoli ambiti la categoria più numerosa è la {{ rat_eco_piu_pres }} nel Benchmark '
+     'Economico ({{ num_eco_piu_pres }} imprese), la {{ rat_patr_piu_pres }} nel Patrimoniale '
+     '({{ num_patr_piu_pres }}) e la {{ rat_fin_piu_pres }} nel Finanziario '
+     '({{ num_fin_piu_pres }}).'),
 ]
 
 
@@ -848,9 +835,98 @@ def correggi_testi_template(doc_temp):
     return totale
 
 
+# Titoli di terzo livello: nel template tre sezioni sorelle portano tre stili
+# diversi ("Benchmark Patrimoniale" e' Body Text, "Equilibrio Economico" e
+# "Equilibrio Finanziario" sono Normal formattati a mano, "Equilibrio
+# Patrimoniale" e' Heading 2), mentre il Sommario le elenca tutte allo stesso
+# livello. Qui vengono riportate allo stile dei titoli gia' corretti
+# ("Benchmark Economico", "Panoramica generale").
+TITOLI_LIVELLO_3 = (
+    'Benchmark Patrimoniale',
+    'Equilibrio Economico',
+    'Equilibrio Patrimoniale',
+    'Equilibrio Finanziario',
+)
+COLORE_TITOLI = '002060'
+
+
+def uniforma_titoli(doc_temp):
+    """Porta a Heading 3 i titoli di sezione rimasti con stili diversi."""
+    sistemati = 0
+    for p in doc_temp.paragraphs:
+        try:
+            stile = p.style.name if p.style is not None else ''
+        except Exception:
+            continue
+        if stile.lower().startswith('toc') or stile == 'Heading 3':
+            continue
+        if p.text.strip() not in TITOLI_LIVELLO_3:
+            continue
+        p.style = doc_temp.styles['Heading 3']
+        pPr = p._p.find(qn('w:pPr'))
+        if pPr is not None:
+            # Il rientro di prima riga e la giustificazione sono buoni per un
+            # capoverso, non per un titolo.
+            ind = pPr.find(qn('w:ind'))
+            if ind is not None and ind.get(qn('w:firstLine')):
+                ind.attrib.pop(qn('w:firstLine'))
+            jc = pPr.find(qn('w:jc'))
+            if jc is not None:
+                pPr.remove(jc)
+        for r in p.runs:
+            if not r.text:
+                continue
+            rPr = r._r.get_or_add_rPr()
+            # Via le forzature di font, corpo e grassetto: decide lo stile.
+            for tag in ('w:rFonts', 'w:b', 'w:bCs', 'w:sz', 'w:szCs'):
+                vecchio = rPr.find(qn(tag))
+                if vecchio is not None:
+                    rPr.remove(vecchio)
+            r.font.color.rgb = RGBColor.from_string(COLORE_TITOLI)
+        sistemati += 1
+    return sistemati
+
+
+# La Nota Metodologica numera le sue tabelle "Tabella M1...": va coperta anche quella serie.
+_RE_DIDASCALIA = re.compile(r'^(Tabella|Figura)\s*M?\d+\.')
+
+
+def uniforma_didascalie(doc_temp):
+    """
+    Didascalie di tabelle e figure tutte con lo stesso stile e col punto finale.
+
+    Nel template sei didascalie di figura su venti sono Body Text invece che
+    Normal, e in alcune manca il punto di chiusura o quello dopo la parentesi
+    prima di "Anni".
+    """
+    sistemate = 0
+    for p in doc_temp.paragraphs:
+        testo = p.text.strip()
+        if not _RE_DIDASCALIA.match(testo):
+            continue
+        try:
+            if p.style is not None and p.style.name == 'Body Text':
+                p.style = doc_temp.styles['Normal']
+                sistemate += 1
+        except Exception:
+            pass
+        # "(valori mediani in %) Anni 2021-2024." -> punto dopo la parentesi
+        _sostituisci_testo_paragrafo(p, r'(\)) (Anni\b)', r'\1. \2')
+        # punto di chiusura, aggiunto all'ultimo run che contiene testo
+        if not p.text.rstrip().endswith('.'):
+            for r in reversed(p.runs):
+                if r.text and r.text.strip():
+                    r.text = r.text.rstrip() + '.'
+                    sistemate += 1
+                    break
+    return sistemate
+
+
 def lavatrice_nucleare(template_path):
     doc_temp = docx.Document(template_path)
     correggi_testi_template(doc_temp)
+    uniforma_titoli(doc_temp)
+    uniforma_didascalie(doc_temp)
     
     def ripara_paragrafo(p):
         testo = p.text
@@ -1428,10 +1504,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         coda = ""
         v23, v24 = serie_ebitda.get('2023'), serie_ebitda.get('2024')
         if v23 is not None and v24 is not None:
-            plurale = len(sotto) != 1
-            verbo = "si accompagnano" if plurale else "si accompagna"
-            coda = (f", e la distanza {verbo} a una contrazione rispetto al 2023" if v24 < v23
-                    else ", in miglioramento rispetto al 2023")
+            if v24 >= v23:
+                coda = ", in miglioramento rispetto al 2023"
+            elif sotto:
+                coda = ", e il divario si accompagna a una contrazione rispetto al 2023"
+            else:
+                coda = ", pur in arretramento rispetto al 2023"
         return (f"{testa}{coda}. L'elemento da approfondire riguarda la capacità della gestione "
                 f"caratteristica di trasformare il Valore della Produzione in reddito operativo.")
 
@@ -1552,19 +1630,6 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                      "indebitamento allineato al comparto")
         return f'Nel 2024 il Benchmark Patrimoniale appartiene alla classe "{rating}". {corpo}.'
 
-    def get_analisi_indici_struttura(az_str1, set_str1, az_str2, set_str2):
-        if az_str1 >= 1:
-            txt_s1 = f"• L'**Indice primario di struttura** ({format_euro(az_str1)}), superiore o uguale all'unità, indica che il capitale proprio, il quale non ha vincoli di scadenza, ha finanziato interamente le immobilizzazioni, caratterizzate da tempi di disinvestimento medio-lunghi.\n"
-        else:
-            txt_s1 = f"• L'**Indice primario di struttura** ({format_euro(az_str1)}), risultando inferiore ad uno, segnala che una parte delle immobilizzazioni è stata finanziata mediante capitale di terzi, con potenziale obbligo di rimborso nel breve termine.\n"
-
-        if az_str2 >= 1:
-            txt_s2 = f"• L'**Indice secondario di struttura** ({format_euro(az_str2)}), superiore o uguale all'unità, conferma che il capitale permanente, costituito dal capitale proprio e dai debiti a medio-lunga scadenza, ha finanziato interamente gli asset immobilizzati."
-        else:
-            txt_s2 = f"• L'**Indice secondario di struttura** ({format_euro(az_str2)}), essendo inferiore ad uno, indica che una parte dell'attivo immobilizzato è finanziata attraverso capitale di terzi a breve scadenza, determinando uno squilibrio temporale tra fonti e impieghi."
-
-        return f"Analizzando la provvista allargata:\n{txt_s1}{txt_s2}"
-
     def get_analisi_gearing(az_gear, set_gear):
         if az_gear <= set_gear:
             return f"\n• Il **Gearing** ({format_euro(az_gear)}%) si attesta al di sotto del parametro mediano del comparto ({format_euro(set_gear)}%). Tali valori più contenuti indicano una limitata dipendenza dell'impresa dall'indebitamento oneroso e una solida autonomia rispetto ai creditori."
@@ -1591,18 +1656,6 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else:
             corpo += ", con una rotazione del capitale investito inferiore al riferimento di settore"
         return f'Nel 2024 il Benchmark Finanziario appartiene alla classe "{rating}". {corpo}.'
-
-    def get_analisi_current_ratio(az_cr, set_cr):
-        if az_cr >= 1:
-            return f"• Il **Current Ratio** ({format_euro(az_cr)}), essendo superiore o uguale all'unità, indica che le attività a breve termine sono sufficienti a coprire integralmente i debiti esigibili nel breve periodo, evidenziando una situazione di equilibrio d'esercizio.\n"
-        else:
-            return f"• Il **Current Ratio** ({format_euro(az_cr)}), risultando inferiore ad uno, segnala l'incapacità delle attività correnti di far fronte alle passività correnti, configurando una potenziale tensione di liquidità all'interno della struttura d'esercizio.\n"
-
-    def get_analisi_quick_ratio(az_qr, set_qr):
-        if az_qr >= 1:
-            return f"• Il **Quick Ratio** ({format_euro(az_qr)}), superiore o uguale all'unità, indica che le risorse prontamente liquidabili sono sufficienti a garantire la copertura dei debiti a breve termine senza ricorrere alla vendita forzata delle rimanenze di magazzino.\n"
-        else:
-            return f"• Il **Quick Ratio** ({format_euro(az_qr)}), essendo inferiore ad uno, evidenzia una dipendenza, almeno parziale, dalla monetizzazione delle scorte o da ulteriori fonti di finanziamento esterne per soddisfare gli impegni immediati.\n"
 
     def get_analisi_rotazione(az_rot, set_rot, descr_settore):
         if az_rot < set_rot:
@@ -1761,7 +1814,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return f"L'azienda sconta un ritardo nella solidità del proprio Indice rispetto ai parametri mediani di settore (attestati a {format_euro(set_str1)})."
 
     def get_implicazione_copertura_attivo(az_str1):
-        if az_str1 >= 1.0: return "gode di un assetto bilanciato e immune ai tempi di disinvestimento medio-lunghi delle immobilizzazioni."
+        if az_str1 >= 1.0: return "copre gli impieghi durevoli con fonti prive di vincoli di scadenza, senza doverne rincorrere il rimborso."
         else: return "è soggetta a forte pressione temporale sui rimborsi dei capitali prestati da terzi a causa dello squilibrio d'impiego."
 
     def get_analisi_trend_struttura2(az_str2):
@@ -1789,8 +1842,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "una rigidità nel finanziare nuovi progetti di rinnovamento degli asset e degli impianti fisici."
 
     def get_intro_analisi_gearing(az_gear, set_gear):
-        if az_gear <= set_gear: return "L'analisi conferma un contenimento del Gearing coerente con la solidità della struttura patrimoniale."
-        else: return "L'analisi evidenzia una marcata esposizione verso il capitale di terzi per il finanziamento aziendale."
+        if az_gear <= set_gear: return "il ricorso al capitale di terzi resta contenuto, coerente con la solidità della struttura patrimoniale."
+        else: return "emerge una marcata esposizione verso il capitale di terzi nel finanziamento dell'attività."
 
     def get_andamento_storico_gearing(az_gear, set_gear):
         if az_gear <= set_gear: return "Valori contenuti indicano una limitata dipendenza dall'indebitamento bancario e una maggiore solidità complessiva."
@@ -1822,7 +1875,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_impatto_rischio_sistemico(az_gear, set_gear):
         if az_gear <= set_gear: return "riduce i rischi derivanti dall'irrigidimento del mercato creditizio o dall'aumento dei tassi"
-        else: return "amplifica la vulnerabilità dell'azienda nei confronti delle variazioni dei tassi di interesse applicati dal sistema bancario"
+        else: return "amplifica la vulnerabilità nei confronti delle variazioni dei tassi di interesse applicati dal sistema bancario"
 
     def get_posizionamento_competitivo_patr(az_str1, set_str1):
         if az_str1 >= set_str1: return "si colloca favorevolmente nelle classifiche settoriali in termini di stabilità strutturale a medio-lungo termine,"
@@ -1872,9 +1925,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "una chiara carenza monetaria immediata che espone l'equilibrio d'esercizio alla rotazione dei magazzini fisici."
 
     def get_confronto_quick_ratio_settore(az_qr, set_qr):
-        if az_qr >= set_qr: return f"superiore ai livelli mediani del Quick Ratio ({format_euro(set_qr)}), proteggendo le casse dall'obbligo di smobilizzo coatto delle merci."
-        elif az_qr >= 1.0: return f"al di sotto della mediana di mercato nel Quick Ratio ({format_euro(set_qr)}), un divario da monitorare rispetto ai competitor pur restando la liquidità immediata su livelli di per sé adeguati."
-        else: return f"al di sotto della mediana di mercato nel Quick Ratio ({format_euro(set_qr)}), forzando l'impresa verso un realizzo più intensivo delle scorte per onorare gli impegni a breve."
+        if az_qr >= set_qr: return f"sopra la mediana di settore ({format_euro(set_qr)}), proteggendo le casse dall'obbligo di smobilizzo coatto delle merci."
+        elif az_qr >= 1.0: return f"sotto la mediana di settore ({format_euro(set_qr)}), un divario da monitorare rispetto ai competitor pur restando la liquidità immediata su livelli di per sé adeguati."
+        else: return f"sotto la mediana di settore ({format_euro(set_qr)}), forzando l'impresa verso un realizzo più intensivo delle scorte per onorare gli impegni a breve."
 
     def get_copertura_debiti_breve_quick(az_qr):
         if az_qr >= 1.0: return "bastano a coprire gli esborsi immediati senza toccare il magazzino."
@@ -1971,11 +2024,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         """Chiude indicando la priorità che i numeri suggeriscono, non una formula di rito."""
         priorita = []
         if pd.notna(az_ebitda) and pd.notna(set_ebitda) and az_ebitda < set_ebitda:
-            priorita.append("il recupero dei margini operativi")
+            priorita.append("sul recupero dei margini operativi")
         if pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear:
-            priorita.append("il controllo dell'indebitamento")
+            priorita.append("sul controllo dell'indebitamento")
         if not (pd.notna(az_cr) and pd.notna(az_qr) and az_cr >= 1 and az_qr >= 1):
-            priorita.append("il presidio della liquidità di breve periodo")
+            priorita.append("sul presidio della liquidità di breve periodo")
         if not priorita:
             return ("può consolidare la posizione raggiunta, mantenendo il presidio su margini, "
                     "indebitamento e liquidità.")
@@ -1983,7 +2036,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             elenco = priorita[0]
         else:
             elenco = ", ".join(priorita[:-1]) + f" e {priorita[-1]}"
-        return f"può concentrare l'attenzione gestionale su {elenco}."
+        return f"può concentrare l'attenzione gestionale {elenco}."
 
 
     # Le descrizioni dell'Executive Summary usano i valori e le serie: vengono
@@ -2027,13 +2080,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     context['analisi_margine_profitto'] = get_analisi_margine_profitto(val_az_profitto_24, val_set_profitto_24, desc_nace_pulita)
 
     context['intro_benchmark_patr'] = get_intro_benchmark_patr(context['rating_patr'], val_az_strut1_24, val_az_strut2_24, val_az_gearing_24, val_set_gearing_24)
-    context['analisi_indici_struttura'] = get_analisi_indici_struttura(val_az_strut1_24, val_set_strut1_24, val_az_strut2_24, val_set_strut2_24)
     context['analisi_gearing'] = get_analisi_gearing(val_az_gearing_24, val_set_gearing_24)
 
     context['intro_benchmark_fin'] = get_intro_benchmark_fin(context['rating_fin'], val_az_cr_24, val_az_qr_24, val_az_rot_24, val_set_rot_24)
     context['analisi_rotazione'] = get_analisi_rotazione(val_az_rot_24, val_set_rot_24, desc_nace_pulita)
-    context['analisi_current_ratio'] = get_analisi_current_ratio(val_az_cr_24, val_set_cr_24)
-    context['analisi_quick_ratio'] = get_analisi_quick_ratio(val_az_qr_24, val_set_qr_24)
     context['analisi_posizionamento_fin'] = get_analisi_posizionamento_fin(val_az_cr_24, val_az_qr_24, val_set_cr_24, val_set_qr_24)
 
     # -----------------------------------------------------
