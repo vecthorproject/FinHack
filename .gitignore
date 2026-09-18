@@ -9,3 +9,6 @@ __pycache__/
 /*.xlsx
 /CHATGPT*.docx
 prove/
+
+# Generatore del report sintetico: era una prova, resta in locale e fuori dal repo.
+report_sintetico.py

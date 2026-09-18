@@ -439,9 +439,10 @@ def costruisci_catena_filtri(info_filtri):
             if nome:
                 etichette.append(nome)
         elenco = (", ".join(etichette[:-1]) + f" e {etichette[-1]}") if len(etichette) > 1 else "".join(etichette)
+        # Il foglio di provenienza dei criteri non interessa a chi legge il report:
+        # conta quali filtri sono stati applicati e a quante societa' portano.
         frase = (
-            f"Alla selezione per codice NACE la strategia di ricerca documentata nel foglio "
-            f"\u00abSommario ricerca\u00bb dell'estrazione applica in sequenza altri "
+            f"Alla selezione per codice NACE si aggiungono in sequenza altri "
             f"{len(residui)} criteri ({elenco})"
         )
         if estratte:
@@ -449,7 +450,7 @@ def costruisci_catena_filtri(info_filtri):
         frasi.append(frase + ".")
     elif estratte:
         frasi.append(
-            f"L'estrazione risultante dalla strategia di ricerca ORBIS conta "
+            f"I criteri di ricerca applicati restituiscono un'estrazione di "
             f"{f'{estratte:,}'.replace(',', '.')} societ\u00e0."
         )
 
