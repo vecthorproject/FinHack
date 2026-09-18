@@ -2980,8 +2980,130 @@ if uploaded_file is not None:
                     if col_g in df_orbis.columns:
                         df_orbis[col_g] = df_orbis[col_g].replace(0, np.nan)
 
+        righe_post_gearing = len(df_orbis)
+        scartate_gearing = righe_post_rotazione - righe_post_gearing
+
+        # --- FILTRO 3 (opzionale): VALORI ANOMALI SULLE NOVE VARIABILI ---
+        # Le distribuzioni degli indicatori hanno code lunghissime: sul NACE 41.20 il
+        # Gearing 2024 arriva a 545.909% e la Rotazione del Capitale Investito a 489.597,
+        # valori che nascono da denominatori vicini a zero e non da imprese reali. Non
+        # spostano la mediana, ma travolgono media, deviazione standard, asimmetria e
+        # curtosi, cioe' proprio le statistiche descrittive della Nota Metodologica.
+        #
+        # Il criterio e' il trimming percentile, il piu' usato in finanza aziendale:
+        # per ogni variabile e ogni esercizio si scartano le imprese che stanno oltre le
+        # code. Non si usano le barriere di Tukey (1,5*IQR) ne' il MAD, che presuppongono
+        # distribuzioni quasi simmetriche: qui toglierebbero il 44-48% del campione.
+        BASI_OUTLIER = [
+            'Margine EBITDA (*) %', 'Margine EBIT (*) %', 'Margine di Profitto (*) %',
+            'Indice di Struttura 1° livello (*)', 'Indice di Struttura 2° livello (*)',
+            'Gearing (*) %', 'Current Ratio (*)', 'Quick Ratio (*)',
+            'Indice di Rotazione del Capitale Investito (*)',
+        ]
+
+        def calcola_outlier(df_in, percentile, anni):
+            """Indici delle righe con almeno un valore oltre le code, e il dettaglio."""
+            fuori = pd.Series(False, index=df_in.index)
+            dettaglio = []
+            for base in BASI_OUTLIER:
+                colpite = pd.Series(False, index=df_in.index)
+                for anno in anni:
+                    col = f"{base} {anno}"
+                    if col not in df_in.columns:
+                        continue
+                    serie = pd.to_numeric(df_in[col], errors='coerce')
+                    validi = serie.dropna()
+                    if len(validi) < 50:      # campione troppo piccolo per i percentili
+                        continue
+                    basso = validi.quantile(percentile / 100)
+                    alto = validi.quantile(1 - percentile / 100)
+                    oltre = serie.notna() & ((serie < basso) | (serie > alto))
+                    colpite |= oltre
+                if colpite.any():
+                    dettaglio.append((base.replace(' (*)', ''), int(colpite.sum())))
+                fuori |= colpite
+            return fuori, dettaglio
+
+        attiva_filtro_outlier = False
+        percentile_outlier = 1.0
+        perimetro_outlier = '2021-2024'
+        scartate_outlier = 0
+        with st.expander("📉 Filtro valori anomali (outlier) — opzionale"):
+            st.caption(
+                "Scarta le imprese con valori estremi sulle nove variabili, con il criterio "
+                "dei percentili. Serve a togliere dal campione i casi che nascono da "
+                "denominatori vicini a zero e che rendono illeggibili media, deviazione "
+                "standard, asimmetria e curtosi nella Nota Metodologica. Le mediane e i "
+                "terzili, che sono gia' robusti, cambiano poco."
+            )
+            attiva_filtro_outlier = st.toggle(
+                "✂️ Attiva il taglio dei valori anomali",
+                value=False,
+                help="Disattivato per default: il campione resta quello di sempre.",
+                key="attiva_filtro_outlier",
+            )
+            if attiva_filtro_outlier:
+                percentile_outlier = st.slider(
+                    "Ampiezza delle code da scartare (percentile)",
+                    min_value=0.1, max_value=5.0, value=1.0, step=0.1,
+                    help="Con 1,0 restano fuori i valori sotto l'1° percentile e sopra il 99°. "
+                         "Piu' il valore e' alto, piu' il taglio e' severo.",
+                    key="percentile_outlier",
+                )
+                perimetro_outlier = st.radio(
+                    "Su quali esercizi applicarlo",
+                    options=['2021-2024', 'solo 2024'],
+                    horizontal=True,
+                    help="'2021-2024' ripulisce anche le statistiche storiche della Nota "
+                         "Metodologica; 'solo 2024' tocca solo l'anno che determina il "
+                         "posizionamento e scarta molte meno imprese.",
+                    key="perimetro_outlier",
+                )
+                anni_outlier = ['2024'] if perimetro_outlier == 'solo 2024' else ['2021', '2022', '2023', '2024']
+                maschera_fuori, dettaglio_outlier = calcola_outlier(
+                    df_orbis, percentile_outlier, anni_outlier
+                )
+
+                # L'azienda analizzata non esce mai dal campione: se e' lei l'anomalia,
+                # il report non avrebbe piu' nessuno di cui parlare.
+                testo_target_corrente = st.session_state.get('ricerca_azienda_target', '')
+                indice_target_protetto = None
+                if str(testo_target_corrente).strip():
+                    idx_prot, _chiave_prot, _n_prot = risolvi_ricerca(df_orbis, testo_target_corrente)
+                    if idx_prot is not None:
+                        indice_target_protetto = idx_prot
+                        maschera_fuori.loc[idx_prot] = False
+
+                indici_fuori = df_orbis.index[maschera_fuori].tolist()
+                etichette_outlier = {
+                    idx: etichetta_azienda(df_orbis.loc[idx], df_orbis) for idx in indici_fuori
+                }
+                indici_esenti_outlier = st.multiselect(
+                    "Tieni comunque nel campione una o più di queste imprese",
+                    options=indici_fuori,
+                    format_func=lambda idx: etichette_outlier.get(idx, str(idx)),
+                    default=[],
+                    key="indici_esenti_outlier",
+                )
+                if indici_esenti_outlier:
+                    maschera_fuori.loc[indici_esenti_outlier] = False
+
+                scartate_outlier = int(maschera_fuori.sum())
+                st.info(
+                    f"Con queste impostazioni escono **{scartate_outlier}** imprese su "
+                    f"{len(df_orbis)} (**{scartate_outlier / max(len(df_orbis), 1) * 100:.1f}%** "
+                    f"del campione)."
+                )
+                if indice_target_protetto is not None:
+                    st.caption("L'azienda analizzata è esclusa dal taglio: resta nel campione in ogni caso.")
+                if dettaglio_outlier:
+                    st.caption("Imprese colpite per variabile: " + " · ".join(
+                        f"{nome} {quante}" for nome, quante in dettaglio_outlier
+                    ))
+
+                df_orbis = df_orbis[~maschera_fuori]
+
         righe_finali = len(df_orbis)
-        scartate_gearing = righe_post_rotazione - righe_finali
         
         # Calcolo dei totali per la dashboard
         righe_scartate = righe_iniziali - righe_finali
@@ -3046,7 +3168,8 @@ if uploaded_file is not None:
         st.markdown("### 🎯 Impostazione Azienda Target")
         ricerca_manuale = st.text_input(
             "Vuoi analizzare un'azienda specifica? (Opzionale)",
-            placeholder="Es: Ragione Sociale, Partita IVA o Codice BvD ID... Lascia vuoto per l'auto-selezione intelligente."
+            placeholder="Es: Ragione Sociale, Partita IVA o Codice BvD ID... Lascia vuoto per l'auto-selezione intelligente.",
+            key="ricerca_azienda_target"
         )
 
         azienda_target = None
@@ -3152,7 +3275,8 @@ if uploaded_file is not None:
         st.metric(
             label="🗑️ Aziende Scartate", 
             value=righe_scartate, 
-            delta=f"-{scartate_rotazione} Rotazione | -{scartate_gearing} Gearing", 
+            delta=(f"-{scartate_rotazione} Rotazione | -{scartate_gearing} Gearing"
+                   + (f" | -{scartate_outlier} Outlier" if scartate_outlier else "")), 
             delta_color="inverse"
         )
             
@@ -3404,6 +3528,9 @@ if uploaded_file is not None:
                                 'estratte': righe_iniziali,
                                 'scartate_dati': scartate_rotazione,
                                 'scartate_gearing': scartate_gearing,
+                                'scartate_outlier': scartate_outlier,
+                                'percentile_outlier': percentile_outlier if scartate_outlier else None,
+                                'perimetro_outlier': perimetro_outlier if scartate_outlier else None,
                                 'finali': righe_finali,
                             }
 

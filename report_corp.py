@@ -476,6 +476,24 @@ def costruisci_catena_filtri(info_filtri):
             f"{f'{n_gearing:,}'.replace(',', '.')} imprese il cui Gearing 2024 non "
             f"risulta valorizzato"
         )
+    n_outlier = info_filtri.get('scartate_outlier') or 0
+    if n_outlier:
+        soglia = info_filtri.get('percentile_outlier')
+        perimetro = info_filtri.get('perimetro_outlier') or '2021-2024'
+        soglia = 1.0 if soglia is None else float(soglia)
+        # "inferiori al 1° percentile" vuole l'articolo elidibile: "all'1°".
+        def _percentile(valore):
+            testo = format_euro(valore, 1)
+            if testo.endswith(',0'):
+                testo = testo[:-2]
+            return con_articolo(testo, 'a')
+        scarti.append(
+            f"{f'{n_outlier:,}'.replace(',', '.')} imprese con almeno un valore anomalo "
+            f"fra le nove variabili, individuate con il criterio dei percentili estremi: "
+            f"per ogni variabile e ogni esercizio del periodo {perimetro} restano fuori i "
+            f"valori inferiori {_percentile(soglia)}\u00b0 percentile o superiori "
+            f"{_percentile(100 - soglia)}\u00b0"
+        )
     if scarti:
         elenco_scarti = (" e ".join(scarti) if len(scarti) < 3
                          else ", ".join(scarti[:-1]) + f" e {scarti[-1]}")
