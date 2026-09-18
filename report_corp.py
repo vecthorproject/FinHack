@@ -20,6 +20,7 @@ from docx.shared import Pt, Mm
 from docx.text.paragraph import Paragraph
 import tempfile
 import matplotlib.image as mpimg
+from PIL import Image
 import matplotlib.patches as patches
 
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
@@ -146,6 +147,15 @@ _SEQUENZE_OOXML = {
         'w:tblCellSpacing', 'w:tblInd', 'w:tblBorders', 'w:shd', 'w:tblLayout',
         'w:tblCellMar', 'w:tblLook', 'w:tblCaption', 'w:tblDescription',
         'w:tblPrChange',
+    ),
+    'w:rPr': (
+        'w:rStyle', 'w:rFonts', 'w:b', 'w:bCs', 'w:i', 'w:iCs', 'w:caps',
+        'w:smallCaps', 'w:strike', 'w:dstrike', 'w:outline', 'w:shadow', 'w:emboss',
+        'w:imprint', 'w:noProof', 'w:snapToGrid', 'w:vanish', 'w:webHidden',
+        'w:color', 'w:spacing', 'w:w', 'w:kern', 'w:position', 'w:sz', 'w:szCs',
+        'w:highlight', 'w:u', 'w:effect', 'w:bdr', 'w:shd', 'w:fitText',
+        'w:vertAlign', 'w:rtl', 'w:cs', 'w:em', 'w:lang', 'w:eastAsianLayout',
+        'w:specVanish', 'w:oMath',
     ),
     'w:tcPr': (
         'w:cnfStyle', 'w:tcW', 'w:gridSpan', 'w:hMerge', 'w:vMerge', 'w:tcBorders',
@@ -683,7 +693,9 @@ CORREZIONI_TEMPLATE = [
     # in lettera unica: resta il solo Rating Combinato.
     ("Benchmark Totale \uf0de \{\{ rating_eco \}\} \+ \{\{ rating_patr \}\} \+ "
      "\{\{ rating_fin \}\} = \{\{ rating_comb \}\}",
-     "Rating Combinato \uf0de {{ rating_tot }}"),
+     # La freccia \uf0de esiste solo nel font Symbol: scritta nel run Calibri della
+     # riga diventa un punto interrogativo, quindi al suo posto va un trattino lungo.
+     "Rating Combinato \u2014 {{ rating_tot }}"),
     # Capoverso di chiusura dell'Equilibrio Finanziario: giro di parole che non
     # aggiungeva nulla ai commenti per indicatore appena sopra.
     (re.escape("A livello territoriale: {{ analisi_posizionamento_fin }}"), ""),
@@ -769,6 +781,32 @@ CORREZIONI_TEMPLATE = [
     (re.escape('Sulla base di ciò, è stato creato il campione finale di '
                '{{ num_soc_valide }} imprese'),
      '{{ catena_filtri }} Il campione finale conta {{ num_soc_valide }} imprese'),
+    # "in Classe X" / "di classe X": la formula usata nel report e' "appartiene alla classe X"
+    (re.escape('{{ ragione_sociale }} raggiunge il posizionamento in Classe '
+               '"{{ rating_patr }}" per il suo Equilibrio Patrimoniale.'),
+     '{{ ragione_sociale }} appartiene alla classe "{{ rating_patr }}" per l\u2019Equilibrio '
+     'Patrimoniale.'),
+    (re.escape('Il giudizio complessivo, che posiziona l\'impresa in Classe '
+               '"{{ rating_fin }}", riflette il fatto che'),
+     'Il giudizio complessivo, per cui l\u2019impresa appartiene alla classe '
+     '"{{ rating_fin }}", riflette il fatto che'),
+    # "N societa' di categoria C ... conseguono un Benchmark Economico di classe C":
+    # la lettera compariva due volte nella stessa frase
+    (re.escape('{{ nr_rating_eco }} società di categoria {{ rating_eco }} '
+               '({{ perc_rating_eco }}% del campione) conseguono un Benchmark Economico '
+               'di classe {{ rating_eco }}.'),
+     'Nel Benchmark Economico {{ nr_rating_eco }} società, pari al {{ perc_rating_eco }}% del '
+     'campione, appartengono alla classe {{ rating_eco }}.'),
+    (re.escape('{{ nr_rating_patr }} società di categoria {{ rating_patr }} '
+               '({{ perc_rating_patr }}% del campione) conseguono un Benchmark Patrimoniale '
+               'di classe {{ rating_patr }}.'),
+     'Nel Benchmark Patrimoniale {{ nr_rating_patr }} società, pari al {{ perc_rating_patr }}% del '
+     'campione, appartengono alla classe {{ rating_patr }}.'),
+    (re.escape('{{ nr_rating_fin }} società di categoria {{ rating_fin }} '
+               '({{ perc_rating_fin }}% del campione) conseguono un Benchmark Finanziario '
+               'di classe {{ rating_fin }}.'),
+     'Nel Benchmark Finanziario {{ nr_rating_fin }} società, pari al {{ perc_rating_fin }}% del '
+     'campione, appartengono alla classe {{ rating_fin }}.'),
 ]
 
 
@@ -1468,7 +1506,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         cifre = (f"EBITDA {format_euro(az_ebitda)}% contro {format_euro(set_ebitda)}%, "
                  f"EBIT {format_euro(az_ebit)}% contro {format_euro(set_ebit)}% e "
                  f"Margine di Profitto {format_euro(az_prof)}% contro {format_euro(set_prof)}%")
-        return f'Nel 2024 il Benchmark Economico è classificato in Classe "{rating}". {apertura}: {cifre}.'
+        return f'Nel 2024 il Benchmark Economico appartiene alla classe "{rating}". {apertura}: {cifre}.'
 
     # =================================================================
     # 🟢 INDICATORI ECONOMICI (Valore vs Mediana) - Formattati a Bullet Points
@@ -1512,7 +1550,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else:
             corpo = ("Gli indici di struttura restano al di sotto dell'unità, pur con un livello di "
                      "indebitamento allineato al comparto")
-        return f'Nel 2024 il Benchmark Patrimoniale è classificato in Classe "{rating}". {corpo}.'
+        return f'Nel 2024 il Benchmark Patrimoniale appartiene alla classe "{rating}". {corpo}.'
 
     def get_analisi_indici_struttura(az_str1, set_str1, az_str2, set_str2):
         if az_str1 >= 1:
@@ -1552,7 +1590,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                       "alla mediana settoriale")
         else:
             corpo += ", con una rotazione del capitale investito inferiore al riferimento di settore"
-        return f'Nel 2024 il Benchmark Finanziario è classificato in Classe "{rating}". {corpo}.'
+        return f'Nel 2024 il Benchmark Finanziario appartiene alla classe "{rating}". {corpo}.'
 
     def get_analisi_current_ratio(az_cr, set_cr):
         if az_cr >= 1:
@@ -5104,6 +5142,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     output_word = correggi_articoli_percentuali(output_word)
 
+    # =================================================================
+    # 🖼️ POST-PROCESSOR: copertina (logo F&V e titolo su una riga)
+    # =================================================================
+    output_word = sistema_copertina(output_word)
+
     return output_word
 
 
@@ -5197,6 +5240,162 @@ def correggi_articoli_percentuali(output_buffer):
 
     for p in paragrafi_ovunque():
         _sostituisci_testo_paragrafo(p, _RE_ARTICOLO_PERCENTUALE, _correggi_articolo)
+
+    result = io.BytesIO()
+    doc.save(result)
+    result.seek(0)
+    return result
+
+
+# Larghezze di avanzamento di Arial Black (il font dello stile "Title") espresse in
+# millesimi di em. Servono a sapere quanto misura la ragione sociale sulla riga di
+# copertina senza dipendere dai font installati sulla macchina che genera il report.
+LARGHEZZE_TITOLO = {
+    ' ': 333, '!': 333, '"': 500, '#': 660, '%': 1000, '&': 889,
+    "'": 278, '(': 389, ')': 389, '*': 556, '+': 660, ',': 333,
+    '-': 333, '.': 333, '/': 278, '0': 667, '1': 667, '2': 667,
+    '3': 667, '4': 667, '5': 667, '6': 667, '7': 667, '8': 667,
+    '9': 667, ':': 333, ';': 333, '<': 660, '=': 660, '>': 660,
+    '?': 611, '@': 740, 'A': 778, 'B': 778, 'C': 778, 'D': 778,
+    'E': 722, 'F': 667, 'G': 833, 'H': 833, 'I': 389, 'J': 667,
+    'K': 833, 'L': 667, 'M': 944, 'N': 833, 'O': 833, 'P': 722,
+    'Q': 833, 'R': 778, 'S': 722, 'T': 722, 'U': 833, 'V': 778,
+    'W': 1000, 'X': 778, 'Y': 778, 'Z': 722, '[': 389, ']': 389,
+    '_': 500, 'a': 667, 'b': 667, 'c': 667, 'd': 667, 'e': 667,
+    'f': 389, 'g': 667, 'h': 667, 'i': 333, 'j': 333, 'k': 667,
+    'l': 333, 'm': 1000, 'n': 667, 'o': 667, 'p': 667, 'q': 667,
+    'r': 444, 's': 611, 't': 444, 'u': 667, 'v': 611, 'w': 944,
+    'x': 667, 'y': 611, 'z': 556, '£': 667, '°': 400, 'À': 778,
+    'Á': 778, 'È': 722, 'É': 722, 'Ì': 389, 'Ò': 833, 'Ù': 833,
+    'à': 667, 'á': 667, 'â': 667, 'ä': 667, 'ç': 667, 'è': 667,
+    'é': 667, 'ê': 667, 'ë': 667, 'ì': 333, 'í': 333, 'î': 333,
+    'ï': 333, 'ñ': 667, 'ò': 667, 'ó': 667, 'ô': 667, 'ö': 667,
+    'ù': 667, 'ú': 667, 'û': 667, 'ü': 667, '–': 500, '—': 1000,
+    '‘': 278, '’': 278, '“': 500, '”': 500, '€': 667,
+}
+LARGHEZZA_TITOLO_DEFAULT = 833   # prudenziale: il carattere ignoto conta come una "O"
+
+CORPO_TITOLO_MIN = 10.0          # sotto questa misura il nome diventa illeggibile
+LOGO_COPERTINA_LARGHEZZA_PT = 130.0   # ~4,6 cm: sta comodo nel margine sinistro
+
+
+def _larghezza_titolo_pt(testo, corpo_pt):
+    """Larghezza in punti di `testo` scritto in Arial Black al corpo indicato."""
+    millesimi = sum(LARGHEZZE_TITOLO.get(c, LARGHEZZA_TITOLO_DEFAULT) for c in testo)
+    return millesimi * corpo_pt / 1000.0
+
+
+def _altezza_paragrafo_vuoto_pt(p):
+    """Altezza stimata di un paragrafo vuoto, letta dal corpo dichiarato nel pPr."""
+    corpo = 11.0
+    pPr = p._p.find(qn('w:pPr'))
+    if pPr is not None:
+        rPr = pPr.find(qn('w:rPr'))
+        if rPr is not None:
+            sz = rPr.find(qn('w:sz'))
+            if sz is not None and sz.get(qn('w:val')):
+                corpo = float(sz.get(qn('w:val'))) / 2.0
+        spacing = pPr.find(qn('w:spacing'))
+        if spacing is not None:
+            for attr in ('w:before', 'w:after'):
+                valore = spacing.get(qn(attr))
+                if valore:
+                    corpo += float(valore) / 20.0
+    return corpo * 1.15
+
+
+def sistema_copertina(output_buffer, percorso_logo=PERCORSO_LOGO_WATERMARK):
+    """
+    Copertina: logo F&V in alto a sinistra e ragione sociale sempre su una riga.
+
+    Il titolo eredita dallo stile "Title" rientri laterali molto larghi (3,8 cm a
+    sinistra e 3,7 a destra) piu' un rientro di prima riga: al nome restano circa
+    9,7 cm e qualunque ragione sociale un po' lunga va a capo. I rientri vengono
+    azzerati - il paragrafo e' centrato, quindi il nome resta visivamente al centro
+    della pagina - e, se ancora non basta, il corpo scende di mezzo punto per volta
+    fino a farlo stare sulla riga.
+
+    Il logo entra come paragrafo suo, subito sopra il titolo; per non spostare in
+    basso il resto della copertina vengono tolti i paragrafi vuoti immediatamente
+    successivi al titolo fino a recuperare l'altezza occupata dall'immagine.
+    """
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+
+    titolo = None
+    for p in doc.paragraphs[:5]:
+        try:
+            if p.style is not None and p.style.name == 'Title':
+                titolo = p
+                break
+        except Exception:
+            continue
+
+    if titolo is not None:
+        # --- 1. il nome non deve andare a capo -------------------------------
+        sezione = doc.sections[0]
+        larghezza_utile = (sezione.page_width - sezione.left_margin - sezione.right_margin)
+        larghezza_utile_pt = larghezza_utile / 12700.0 - 6.0   # 6 pt di sicurezza
+
+        pf = titolo.paragraph_format
+        pf.left_indent = Pt(0)
+        pf.right_indent = Pt(0)
+        pf.first_line_indent = Pt(0)
+
+        prima_riga = (titolo.text or '').split('\n')[0].strip()
+        corpi = [r.font.size.pt for r in titolo.runs if r.font.size is not None]
+        corpo = max(corpi) if corpi else 22.0
+
+        if prima_riga and larghezza_utile_pt > 0:
+            while (corpo > CORPO_TITOLO_MIN
+                   and _larghezza_titolo_pt(prima_riga, corpo) > larghezza_utile_pt):
+                corpo -= 0.5
+            for r in titolo.runs:
+                r.font.size = Pt(corpo)
+
+            # Se nemmeno al corpo minimo il nome ci sta, si stringe la spaziatura
+            # fra le lettere quanto basta (w:spacing, in ventesimi di punto).
+            eccesso = _larghezza_titolo_pt(prima_riga, corpo) - larghezza_utile_pt
+            if eccesso > 0 and len(prima_riga) > 1:
+                stretta = min(eccesso / (len(prima_riga) - 1), 1.0)
+                for r in titolo.runs:
+                    rPr = r._r.get_or_add_rPr()
+                    sp = rPr.find(qn('w:spacing'))
+                    if sp is None:
+                        sp = OxmlElement('w:spacing')
+                        inserisci_in_ordine(rPr, sp)
+                    sp.set(qn('w:val'), str(-int(round(stretta * 20))))
+
+        # --- 2. logo F&V in alto a sinistra ----------------------------------
+        if percorso_logo and os.path.exists(percorso_logo):
+            riga_logo = titolo.insert_paragraph_before()
+            riga_logo.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+            riga_logo.paragraph_format.left_indent = Pt(0)
+            riga_logo.paragraph_format.first_line_indent = Pt(0)
+            riga_logo.paragraph_format.space_before = Pt(0)
+            riga_logo.paragraph_format.space_after = Pt(6)
+            try:
+                riga_logo.add_run().add_picture(percorso_logo,
+                                                width=Pt(LOGO_COPERTINA_LARGHEZZA_PT))
+            except Exception:
+                riga_logo._p.getparent().remove(riga_logo._p)
+            else:
+                # Altezza occupata dal logo, recuperata dai paragrafi vuoti che
+                # seguono il titolo, cosi' la copertina non scivola verso il basso.
+                with Image.open(percorso_logo) as img:
+                    larghezza_px, altezza_px = img.size
+                altezza_logo = LOGO_COPERTINA_LARGHEZZA_PT * altezza_px / max(larghezza_px, 1) + 6.0
+                corpo_doc = doc.element.body
+                indice = list(corpo_doc).index(titolo._p)
+                recuperata = 0.0
+                for elemento in list(corpo_doc)[indice + 1:indice + 7]:
+                    if elemento.tag != qn('w:p') or recuperata >= altezza_logo:
+                        break
+                    vuoto = Paragraph(elemento, doc)
+                    if vuoto.text.strip():
+                        break
+                    recuperata += _altezza_paragrafo_vuoto_pt(vuoto)
+                    corpo_doc.remove(elemento)
 
     result = io.BytesIO()
     doc.save(result)
