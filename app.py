@@ -3634,3 +3634,49 @@ if uploaded_file is not None:
                             )
                         except Exception as e:
                             st.error(f"⚠️ Errore durante la generazione del PPTX: {str(e)}")
+
+        # ==========================================
+        # 📊 FOGLIO DI ALERT SULLE OSCILLAZIONI
+        # ==========================================
+        # Chi scrive il commento finale deve sapere in fretta dove guardare: quali
+        # indicatori si sono mossi davvero, fra quali anni e di quanto. Sta a parte
+        # perche' serve a chi commenta, non al destinatario del report.
+        st.divider()
+        st.markdown("#### 🔎 Supporto al commento")
+        st.caption(
+            "Foglio di lavoro con le oscillazioni del quadriennio indicatore per indicatore, "
+            "ordinate da quella piu' forte, con lo scalino fra due esercizi da spiegare. "
+            "Non fa parte dei documenti consegnati al cliente."
+        )
+        if st.button("🔎 GENERA FOGLIO ALERT TREND", use_container_width=True, key="btn_alert"):
+            with st.spinner("Lettura delle serie storiche in corso..."):
+                try:
+                    from alert_trend import genera_foglio_alert, calcola_alert
+                    testo_settore_alert = st.session_state.get('settore_estratto', 'N.D.')
+                    codici_alert = re.findall(r'(\d{3,4})\s*-', str(testo_settore_alert))
+                    settore_alert = "_".join(codici_alert) if codici_alert else re.sub(
+                        r'[^a-zA-Z0-9]', '_', str(testo_settore_alert)[:15]).strip('_')
+                    foglio_alert = genera_foglio_alert(
+                        df_orbis, azienda_target, testo_settore_alert, chiave_target=chiave_target
+                    )
+                    righe_alert = calcola_alert(df_orbis, azienda_target, chiave_target)
+                    da_spiegare = [r for r in righe_alert if r['livello'] != 'BASSA']
+                    if da_spiegare:
+                        st.warning(
+                            f"**{len(da_spiegare)} indicatori su {len(righe_alert)}** hanno "
+                            f"oscillazioni da spiegare. Il piu' marcato: "
+                            f"**{da_spiegare[0]['nome']}**, {da_spiegare[0]['salto_anni']} "
+                            f"({da_spiegare[0]['salto_pct']:+.1f}%)."
+                        )
+                    else:
+                        st.success("Nessun indicatore presenta oscillazioni rilevanti nel quadriennio.")
+                    st.download_button(
+                        label="📥 SCARICA FOGLIO ALERT (.xlsx)",
+                        data=foglio_alert,
+                        file_name=f"{settore_alert}_Alert_Trend_{azienda_target}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="dw_alert"
+                    )
+                except Exception as e:
+                    st.error(f"⚠️ Errore nella generazione del foglio di alert: {str(e)}")
