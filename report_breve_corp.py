@@ -8,6 +8,7 @@ import re
 import warnings 
 from pptx import Presentation 
 from identificazione_azienda import riga_target
+from testi_revisione import Serie as SerieRevisione, commento_andamento_ppt
 from pptx.util import Inches, Pt, Cm
 import matplotlib.patheffects as pe
 import copy
@@ -224,8 +225,9 @@ def aggiungi_card_commento(slide, sinistra, alto, larghezza, altezza,
     from pptx.enum.shapes import MSO_SHAPE
     from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 
-    icona_trend, colore_hex = get_trend_style(trend_word)
-    colore = RGBColor.from_string(colore_hex)
+    # La revisione ha tolto il badge "In crescita / Stabile / ...": il percorso lo
+    # racconta il testo, anno per anno. La barra in cima resta, in colore neutro.
+    colore = RGBColor(0x1F, 0x33, 0x52)
 
     riquadro = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, sinistra, alto, larghezza, altezza)
     riquadro.fill.solid()
@@ -255,14 +257,7 @@ def aggiungi_card_commento(slide, sinistra, alto, larghezza, altezza,
     r_titolo.font.size = Pt(17)
     r_titolo.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B)
 
-    p_badge = tf.add_paragraph()
-    p_badge.alignment = PP_ALIGN.CENTER
-    p_badge.space_after = Pt(12)
-    r_badge = p_badge.add_run()
-    r_badge.text = f"{icona_trend}  {'N.D.' if trend_word == 'n.d.' else trend_word.capitalize()}"
-    r_badge.font.bold = True
-    r_badge.font.size = Pt(15)
-    r_badge.font.color.rgb = colore
+    p_titolo.space_after = Pt(14)
 
     p_corpo = tf.add_paragraph()
     p_corpo.alignment = PP_ALIGN.LEFT
@@ -415,6 +410,212 @@ def normalizza_etichette_orbis_pptx(prs):
                         run.text = ripulito
 
 
+# =================================================================
+# ✍️ REVISIONE DI SETTEMBRE: SINTESI STRATEGICA E CONCLUSIONI
+# =================================================================
+SENTINELLA_PPT = "⟪ELIMINA⟫"
+ROSSO_CLASSE, VERDE_CLASSE = 'FF0000', '00B050'
+
+
+def bullet_confronto_contesto(az, ita, reg):
+    """
+    Le righe del riquadro "Confronto con il contesto Nazionale e Regionale".
+
+    La revisione ha unito i due riquadri e tenuto solo le differenze che contano,
+    in forma breve ("Redditivita' operativa inferiore."). Una riga compare quando
+    l'impresa sta dallo stesso lato di entrambe le mediane, italiana e regionale:
+    se sta sopra l'una e sotto l'altra non c'e' un messaggio netto da dare.
+    `az`, `ita`, `reg` sono dizionari con ebitda, gearing, cr, qr, str1.
+    """
+    def lato(chiave):
+        a, i, r = az.get(chiave), ita.get(chiave), reg.get(chiave)
+        if not all(pd.notna(x) for x in (a, i, r)):
+            return 0
+        if a < i and a < r:
+            return -1
+        if a > i and a > r:
+            return 1
+        return 0
+
+    righe = []
+    if lato('ebitda') == -1:
+        righe.append("Redditività operativa inferiore.")
+    elif lato('ebitda') == 1:
+        righe.append("Redditività operativa superiore.")
+    if lato('gearing') == 1:
+        righe.append("Maggiore dipendenza finanziaria.")
+    elif lato('gearing') == -1:
+        righe.append("Minore dipendenza finanziaria.")
+    liquidita = (lato('cr'), lato('qr'))
+    if liquidita == (1, 1):
+        righe.append("Liquidità di breve periodo superiore.")
+    elif liquidita == (-1, -1):
+        righe.append("Liquidità di breve periodo inferiore.")
+    if pd.notna(az.get('str1')) and az['str1'] < 1:
+        righe.append("Copertura delle immobilizzazioni con capitale proprio non piena.")
+    if not righe:
+        righe.append("Profilo allineato ai riferimenti nazionali e regionali.")
+    return righe
+
+
+def testo_aree_attenzione(az, ita):
+    """"Le maggiori criticita' si riscontrano in ambito economico, ... e in ambito patrimoniale ..." """
+    parti = []
+    margini = [(az.get(k), ita.get(k)) for k in ('ebitda', 'ebit', 'profitto')]
+    if all(pd.notna(a) and pd.notna(m) and a < m for a, m in margini):
+        parti.append("in ambito economico, stante la minore marginalità rispetto al settore")
+    struttura_ok = all(pd.notna(az.get(k)) and az[k] >= 1 for k in ('str1', 'str2'))
+    leva_alta = pd.notna(az.get('gearing')) and pd.notna(ita.get('gearing')) and az['gearing'] > ita['gearing']
+    if leva_alta and struttura_ok:
+        parti.append("in ambito patrimoniale limitatamente all'eccessiva dipendenza finanziaria")
+    elif leva_alta:
+        parti.append("in ambito patrimoniale, per la copertura delle immobilizzazioni e la dipendenza finanziaria")
+    elif not struttura_ok:
+        parti.append("in ambito patrimoniale, per la copertura delle immobilizzazioni")
+    if any(pd.notna(az.get(k)) and az[k] < 1 for k in ('cr', 'qr')):
+        parti.append("in ambito finanziario, per la copertura delle passività correnti")
+    if not parti:
+        return "Non emergono criticità rilevanti rispetto al settore."
+    if len(parti) == 1:
+        elenco = parti[0]
+    elif len(parti) == 2:
+        elenco = f"{parti[0]}, e {parti[1]}"
+    else:
+        elenco = ", ".join(parti[:-1]) + f" e {parti[-1]}"
+    return f"Le maggiori criticità si riscontrano {elenco}."
+
+
+def testo_distribuzione_territoriale(conteggi_istat, valori_panel):
+    """
+    Riga della slide sulla distribuzione del settore: dove si concentrano le imprese.
+
+    Il numero di imprese per macroarea viene dall'ISTAT, il valore economico dal
+    panel. Se le due classifiche indicano le stesse due macroaree lo si dice in una
+    frase sola, come nella revisione; altrimenti le due letture si tengono separate.
+    """
+    top = lambda d: [k for k, v in sorted(d.items(), key=lambda x: x[1], reverse=True) if v > 0][:2]
+    per_numero = top(conteggi_istat)
+    per_valore = top(valori_panel) if valori_panel else []
+    if not per_numero:
+        return "Dati di distribuzione territoriale non disponibili per questo settore."
+    if len(per_numero) == 1:
+        return f"Il settore presenta una forte concentrazione geografica nel {per_numero[0]}."
+    if set(per_numero) == set(per_valore):
+        return (f"Il settore è radicato su tutto il territorio nazionale, con una maggiore concentrazione di "
+                f"imprese — sia per numero di aziende sia per valore economico — nel {per_numero[0]} e "
+                f"nel {per_numero[1]}.")
+    testo = (f"Il settore è radicato su tutto il territorio nazionale, con una maggiore concentrazione di "
+             f"imprese nel {per_numero[0]} e nel {per_numero[1]}")
+    if len(per_valore) == 2:
+        testo += f"; per valore economico prevalgono il {per_valore[0]} e il {per_valore[1]}"
+    return testo + "."
+
+
+def _ricolora_lettere(paragrafo, pezzi):
+    """Riscrive il paragrafo come sequenza di run, colorando quelli indicati."""
+    from pptx.text.text import _Run
+    runs = paragrafo.runs
+    if not runs:
+        return
+    modello = copy.deepcopy(runs[0]._r)
+    for r in runs:
+        r._r.getparent().remove(r._r)
+    fine = paragrafo._p.find('{http://schemas.openxmlformats.org/drawingml/2006/main}endParaRPr')
+    for testo, colore in pezzi:
+        nuovo = copy.deepcopy(modello)
+        run = _Run(nuovo, paragrafo)
+        run.text = testo
+        if colore:
+            run.font.color.rgb = RGBColor.from_string(colore)
+        if fine is not None:
+            fine.addprevious(nuovo)
+        else:
+            paragrafo._p.append(nuovo)
+
+
+def colora_classi_ppt(prs):
+    """C in rosso e A in verde dove la presentazione scrive le classi, come nella revisione."""
+    colori = {'A': VERDE_CLASSE, 'C': ROSSO_CLASSE}
+    for slide in prs.slides:
+        for forma in slide.shapes:
+            if not forma.has_text_frame:
+                continue
+            for par in forma.text_frame.paragraphs:
+                testo = par.text
+                m = re.match(r'^(Rating Complessivo: )([ABC]{3})\s*$', testo)
+                if m:
+                    _ricolora_lettere(par, [(m.group(1), None)] + [(l, colori.get(l)) for l in m.group(2)])
+                    continue
+                m = re.match(r'^(CLASSE )([ABC])\s*$', testo)
+                if m:
+                    _ricolora_lettere(par, [(m.group(1), None), (m.group(2), colori.get(m.group(2)))])
+                    continue
+                m = re.match(r'^([ABC])( – (?:Critico|Adeguato|Forte))\s*$', testo)
+                if m:
+                    _ricolora_lettere(par, [(m.group(1), colori.get(m.group(1))), (m.group(2), None)])
+
+
+# Testi fissi del template corretti nella revisione.
+CORREZIONI_TESTO_PPT = {
+    'DISTRIBUZIONE SOCIETÀ PER AREA GEOGRAFICA': 'DISTRIBUZIONE DEL SETTORE PER AREA GEOGRAFICA',
+    'corregendo': 'correggendo',
+}
+
+
+def revisione_layout_ppt(prs):
+    """Ritocchi di impaginazione della revisione, prima di riempire i segnaposto."""
+    for slide in prs.slides:
+        testi = [f.text_frame.text for f in slide.shapes if f.has_text_frame]
+        for forma in slide.shapes:
+            if not forma.has_text_frame:
+                continue
+            for par in forma.text_frame.paragraphs:
+                for run in par.runs:
+                    for vecchio, nuovo in CORREZIONI_TESTO_PPT.items():
+                        if vecchio in run.text:
+                            run.text = run.text.replace(vecchio, nuovo)
+        if not any('Sintesi Strategica' in t for t in testi):
+            continue
+        # Sintesi Strategica: un solo riquadro "nazionale e regionale"; quello
+        # regionale sparisce con tutto il suo sfondo.
+        limite_regionale = Emu(int(5.8 * 914400))
+        colonna_sinistra = Emu(int(12.0 * 914400))
+        for forma in list(slide.shapes):
+            if forma.has_text_frame and forma.text_frame.text.strip().startswith('Confronto Nazionale'):
+                par = forma.text_frame.paragraphs[0]
+                if par.runs:
+                    par.runs[0].text = "Confronto con il contesto Nazionale e Regionale ({{ regione_target }})"
+                    for r in par.runs[1:]:
+                        r.text = ''
+                forma.width = Emu(int(9.4 * 914400))
+                continue
+            alta = forma.top is not None and forma.top >= limite_regionale
+            a_sinistra = forma.left is not None and forma.left < colonna_sinistra
+            sfondo_pagina = forma.width and forma.width > Emu(int(19 * 914400))
+            if alta and a_sinistra and not sfondo_pagina:
+                forma._element.getparent().remove(forma._element)
+
+
+def pulisci_sentinelle_ppt(prs):
+    """Via i paragrafi rimasti vuoti di proposito (righe di elenco inutilizzate, titoli tolti)."""
+    for slide in prs.slides:
+        for forma in slide.shapes:
+            if not forma.has_text_frame:
+                continue
+            tf = forma.text_frame
+            for par in list(tf.paragraphs):
+                if SENTINELLA_PPT in par.text and len(tf.paragraphs) > 1:
+                    par._p.getparent().remove(par._p)
+
+
+# chiavi della presentazione -> chiavi del motore dei testi della revisione
+CHIAVI_REVISIONE = {
+    'eco_1': 'profitto', 'eco_2': 'ebit', 'eco_3': 'ebitda',
+    'patr_1': 'strut1', 'patr_2': 'strut2', 'patr_3': 'gearing',
+    'fin_1': 'cr', 'fin_2': 'qr', 'fin_3': 'rotazione',
+}
+
+
 def get_shape_and_coords(shapes, placeholder):
     """Ricerca ricorsiva anti-errore per trovare la casella esatta anche se raggruppata o scritta male"""
     placeholder_clean = placeholder.replace(" ", "").lower()
@@ -528,7 +729,8 @@ def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
     # riflettere il rating effettivo, non solo la posizione relativa tra le tre aree.
     if migliore[1] == 'A':
         forza_titolo = f"Punto di forza in ambito {migliore[0]} (Classe {migliore[1]})"
-        forza_testo = f"L'azienda presenta un posizionamento superiore alla mediana di settore nell'equilibrio {migliore[0].lower()}, a supporto della stabilità strategica."
+        forza_testo = (f"L'azienda presenta indicatori di equilibrio {migliore[0].lower()} superiori alla "
+                       f"mediana di settore; ciò costituisce una leva a supporto della strategia aziendale.")
     elif migliore[1] == 'B':
         forza_titolo = f"Area più solida: {migliore[0]} (Classe {migliore[1]})"
         forza_testo = f"Rispetto alle altre due aree, l'equilibrio {migliore[0].lower()} risulta il più allineato ai parametri mediani di settore."
@@ -785,6 +987,22 @@ def get_commento_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, it
         sintesi = f"Redditività superiore alla mediana nazionale, tranne per {nomi}, che {verbo} sotto benchmark."
 
     return f"{dati} {sintesi}"
+
+def raccomandazione_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof):
+    """Riga operativa della revisione sotto il commento dell'Equilibrio Economico."""
+    sotto = [a < m for a, m in ((az_ebitda, ita_ebitda), (az_ebit, ita_ebit), (az_prof, ita_prof))
+             if pd.notna(a) and pd.notna(m)]
+    if sotto and all(sotto):
+        return "Verifica della struttura dei costi dell'azienda per migliorare l'efficienza aziendale."
+    return ""
+
+
+def raccomandazione_barre_patr(az_gear, ita_gear):
+    """Riga operativa della revisione sotto il commento dell'Equilibrio Patrimoniale."""
+    if pd.notna(az_gear) and pd.notna(ita_gear) and az_gear > ita_gear:
+        return "Necessit\u00e0 di ridurre il ricorso all'indebitamento."
+    return ""
+
 
 def get_commento_barre_patr(az_str1, az_str2, az_gear, ita_str1, ita_str2, ita_gear, reg_str1, reg_str2, reg_gear):
     dati = (f"Ind. Struttura 1° {format_euro(az_str1)} (Italia {format_euro(ita_str1)}, Regione {format_euro(reg_str1)}); "
@@ -1082,6 +1300,24 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         ('Sud e Isole', dati_istat['su_num'])
     ], key=lambda x: x[1], reverse=True)
     
+    def _macroarea_da_regione(nome):
+        r = str(nome).lower()
+        if any(x in r for x in ['piemonte', "valle d'aosta", 'vallee', 'lombardia', 'liguria']): return 'Nord Ovest'
+        if any(x in r for x in ['trentino', 'bolzano', 'bozen', 'trento', 'veneto', 'friuli', 'emilia']): return 'Nord Est'
+        if any(x in r for x in ['toscana', 'umbria', 'marche', 'lazio']): return 'Centro'
+        if any(x in r for x in ['abruzzo', 'molise', 'campania', 'puglia', 'basilicata', 'calabria',
+                                'sicilia', 'sardegna']): return 'Sud e Isole'
+        return None
+    valori_macro_panel = {}
+    if col_regione and 'Totale valore della produzione migl EUR 2024' in df_raw.columns:
+        vdp_panel = pd.to_numeric(df_raw['Totale valore della produzione migl EUR 2024'], errors='coerce')
+        macro_panel = df_raw[col_regione].map(_macroarea_da_regione)
+        valori_macro_panel = vdp_panel.groupby(macro_panel).sum().to_dict()
+    testo_rilevanza_revisione = testo_distribuzione_territoriale(
+        {'Nord Ovest': dati_istat['no_num'], 'Nord Est': dati_istat['ne_num'],
+         'Centro': dati_istat['ce_num'], 'Sud e Isole': dati_istat['su_num']} if ha_dati_istat else {},
+        valori_macro_panel)
+
     if ha_dati_istat and aree_sort[0][1] > 0:
         top1_area = aree_sort[0][0]
         top2_area = aree_sort[1][0] if aree_sort[1][1] > 0 else ""
@@ -1139,7 +1375,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         'su_num': str_su_num, 
         'su_perc': istat_su_perc,
 
-        'testo_rilevanza': testo_rilevanza
+        'testo_rilevanza': testo_rilevanza_revisione
     }
 
     # =================================================================
@@ -1452,8 +1688,13 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             nome_perc, valore_perc, mediana_perc, unita_perc, inverso_perc,
             lettura_perc, giro=giro_perc,
         )
-        dati_perc['commento_trend'] = commento_trend_ppt(
-            nome_perc, dati_perc['frase'], dati_perc, unita_perc,
+        # Il commento dell'andamento segue la revisione di settembre, con lo stesso
+        # motore che scrive i bullet del report: le due uscite non possono divergere.
+        serie_az_perc, serie_it_perc, _serie_rg = get_dati_grafico(base_perc)
+        dati_perc['commento_trend'] = commento_andamento_ppt(
+            CHIAVI_REVISIONE[chiave_perc],
+            SerieRevisione(dict(zip(('2021', '2022', '2023', '2024'), serie_az_perc))),
+            SerieRevisione(dict(zip(('2021', '2022', '2023', '2024'), serie_it_perc))),
         )
         dati_perc['commento'] = commento_percorso_ppt(
             nome_perc, valore_perc, mediana_perc, unita_perc, inverso_perc,
@@ -1467,6 +1708,24 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
 
     # PATR — img_patr_1=Strut1, img_patr_2=Strut2, img_patr_3=Gearing
     context['commento_barre_patr']     = get_commento_barre_patr(az_str1, az_str2, az_gear, ita_str1, ita_str2, ita_gear, reg_str1, reg_str2, reg_gear)
+
+    # --- revisione di settembre -------------------------------------------------
+    for chiave_barre, riga_op in (
+            ('commento_barre_eco', raccomandazione_barre_eco(az_ebitda, az_ebit, az_prof, ita_ebitda, ita_ebit, ita_prof)),
+            ('commento_barre_patr', raccomandazione_barre_patr(az_gear, ita_gear))):
+        if riga_op:
+            context[chiave_barre] = f"{context[chiave_barre]} {riga_op}"
+    valori_az_ctx = {'ebitda': az_ebitda, 'ebit': az_ebit, 'profitto': az_prof, 'gearing': az_gear,
+                     'cr': az_cr, 'qr': az_qr, 'str1': az_str1, 'str2': az_str2}
+    valori_it_ctx = {'ebitda': ita_ebitda, 'ebit': ita_ebit, 'profitto': ita_prof, 'gearing': ita_gear,
+                     'cr': ita_cr, 'qr': ita_qr, 'str1': ita_str1, 'str2': ita_str2}
+    valori_rg_ctx = {'ebitda': reg_ebitda, 'ebit': reg_ebit, 'profitto': reg_prof, 'gearing': reg_gear,
+                     'cr': reg_cr, 'qr': reg_qr, 'str1': reg_str1, 'str2': reg_str2}
+    righe_contesto = bullet_confronto_contesto(valori_az_ctx, valori_it_ctx, valori_rg_ctx)
+    righe_contesto += [SENTINELLA_PPT] * (3 - len(righe_contesto))
+    context['naz_1'], context['naz_2'], context['naz_3'] = righe_contesto[:3]
+    context['area_attenzione_titolo'] = SENTINELLA_PPT
+    context['area_attenzione_testo'] = testo_aree_attenzione(valori_az_ctx, valori_it_ctx)
 
     # FIN — img_fin_1=CurrentRatio, img_fin_2=QuickRatio, img_fin_3=Rotazione
     context['commento_barre_fin']     = get_commento_barre_fin(az_cr, az_qr, az_rot, ita_cr, ita_qr, ita_rot, reg_cr, reg_qr, reg_rot)
@@ -1665,6 +1924,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # 🖨️ ELABORAZIONE DEL FILE POWERPOINT
     # =================================================================
     prs = Presentation(template_path)
+    revisione_layout_ppt(prs)
 
     for slide in prs.slides:
         for shape in slide.shapes:
@@ -1774,6 +2034,14 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         sposta_slide(prs, slide_nuova, posizione)
 
 
+    pulisci_sentinelle_ppt(prs)
+    colora_classi_ppt(prs)
+    # la revisione anticipa la slide sulla distribuzione del settore prima dei criteri
+    for posizione_slide, slide_ordine in enumerate(prs.slides):
+        testi_slide = ' '.join(f.text_frame.text for f in slide_ordine.shapes if f.has_text_frame)
+        if 'IN SINTESI' in testi_slide and posizione_slide == 2:
+            sposta_slide(prs, slide_ordine, 1)
+            break
     normalizza_etichette_orbis_pptx(prs)
     aggiungi_logo_slide(prs)
 

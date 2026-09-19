@@ -8,6 +8,7 @@ __pycache__/
 # prova, non sorgenti del progetto. Gli Istat in fileistat/ restano tracciati.
 /*.xlsx
 /CHATGPT*.docx
+/COLORATO*
 prove/
 
 # Generatore del report sintetico: era una prova, resta in locale e fuori dal repo.

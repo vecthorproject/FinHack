@@ -546,10 +546,10 @@ def relazione_media_mediana(serie):
     scarto = abs(media - mediana)
     riferimento = abs(mediana) if abs(mediana) > 1e-9 else 1.0
     if scarto / riferimento < 0.05:
-        return "dal generale allineamento tra i valori di media e mediana"
+        return "il generale allineamento tra i valori di media e mediana"
     if media > mediana:
-        return "dall'evidente scostamento tra la media (maggiore) e la mediana"
-    return "dall'evidente scostamento tra la media (minore) e la mediana"
+        return "l'evidente scostamento tra la media (maggiore) e la mediana"
+    return "l'evidente scostamento tra la media (minore) e la mediana"
 
 
 def get_intro_margini(descr_settore):
@@ -612,6 +612,12 @@ def _sostituisci_testo_paragrafo(p, pattern, sostituzione, max_iter=20):
     return fatte
 
 
+# Un paragrafo il cui testo diventa esattamente questa stringa viene eliminato: serve
+# a togliere capoversi interi dal template (o dal documento renderizzato, quando un
+# testo generato risulta vuoto) senza lasciare righe bianche al loro posto.
+SENTINELLA_ELIMINA = "\u27eaELIMINA\u27eb"
+
+
 # Correzioni di testo applicate al template a ogni generazione: restano nel codice
 # (e non nel .docx binario) cosi' da sopravvivere a un nuovo export del template.
 CORREZIONI_TEMPLATE = [
@@ -620,13 +626,11 @@ CORREZIONI_TEMPLATE = [
     # 1i — manca lo spazio prima del trattino ("Cap.Inv.\u2013 Andamento")
     (r'\.(?=\u2013 )', '. '),
     # 1h — la sigla del Benchmark Totale veniva usata come classe delle singole aree
+    # La revisione toglie il conteggio delle imprese per classe dopo il Rating Combinato:
+    # il dato sta gia' nelle tabelle della Nota Metodologica.
     (re.escape('Nello specifico, la classe "{{ rating_tot }}" conta {{ num_eco_fascia }} '
                'imprese nella parte Economica, {{ num_patr_fascia }} nella parte '
-               'Patrimoniale e {{ num_fin_fascia }} nella parte Finanziaria'),
-     'Nello specifico, nella parte Economica la classe "{{ rating_eco }}" conta '
-     '{{ num_eco_fascia }} imprese, nella parte Patrimoniale la classe '
-     '"{{ rating_patr }}" ne conta {{ num_patr_fascia }} e nella parte Finanziaria '
-     'la classe "{{ rating_fin }}" ne conta {{ num_fin_fascia }}'),
+               'Patrimoniale e {{ num_fin_fascia }} nella parte Finanziaria') + r'\.?', ''),
     (re.escape('L\u2019analisi integrata dei benchmark delinea un profilo aziendale '
                '{{ sintesi_profilo_integrato }} Il Rating Combinato "{{ rating_comb }}" posiziona '
                'l\u2019azienda come una realtà {{ sintesi_posizionamento_lungo_periodo }}'),
@@ -650,17 +654,17 @@ CORREZIONI_TEMPLATE = [
                "quest'ultima come parametro definitivo. Successivamente, è stata calcolata la "
                'variazione percentuale della mediana per tracciare con precisione i trend evolutivi '
                'del quadriennio analizzato.'),
-     'Per descrivere il settore si usa la mediana e non la media, perché la mediana non viene '
-     'spostata dai pochi valori estremi presenti nel campione. Sulle mediane è stata poi calcolata '
-     'la variazione anno su anno, per seguire la direzione del comparto nel quadriennio.'),
+     'Per le distribuzioni settoriali è stata preferita la mediana alla media perché meno '
+     'influenzata dai valori estremi presenti nel campione. Per completare la lettura temporale, '
+     'sono state inoltre calcolate le variazioni percentuali anno su anno delle mediane settoriali.'),
     (re.escape('Una volta definiti i dati da utilizzare, si è proceduto a confrontare i valori delle '
                'variabili dell\u2019azienda target con il valore mediano delle stesse per l\u2019intero '
                'settore, al fine di valutare sia un andamento storico, guardando come le due '
                'distribuzioni di dati variano dal 2021 al 2024, sia con particolare focus al 2024 '
                'dato l\u2019obiettivo finale dello studio di posizionamento.'),
-     'I valori dell\u2019azienda sono poi confrontati con quelli del settore, sia lungo tutto il '
-     'periodo 2021-2024 sia con attenzione particolare al 2024, che è l\u2019anno su cui viene '
-     'costruito il posizionamento.'),
+     'I valori aziendali sono quindi confrontati con le rispettive mediane settoriali, sia per '
+     'l\u2019intero periodo 2021-2024 sia con particolare riferimento al 2024, esercizio utilizzato '
+     'per il benchmarking e per l\u2019attribuzione del rating.'),
     # "tre benchmark – Benchmark Economico, Benchmark Patrimoniale e Benchmark
     # Finanziario": la parola compare quattro volte in una riga sola
     (re.escape("L\u2019analisi è stata sviluppata sulla base di tre benchmark – Benchmark Economico, "
@@ -669,14 +673,15 @@ CORREZIONI_TEMPLATE = [
                "come descritti nella sezione Obiettivi, con riguardo all\u2019anno 2024."),
      "L\u2019analisi poggia su tre benchmark \u2013 Economico, Patrimoniale e Finanziario \u2013 "
      "costruiti con il metodo dei terzili sulle distribuzioni 2024 degli indicatori descritti negli "
-     "Obiettivi. Il 2024 determina quindi il posizionamento, mentre il quadriennio 2021-2024 ne "
-     "mostra la direzione."),
+     "Obiettivi. Il 2024 determina quindi il posizionamento, mentre l\u2019analisi del quadriennio "
+     "2021-2024 mostra la direzione e l\u2019evoluzione nel tempo degli indicatori considerati."),
     (re.escape("I terzili costituiscono il criterio di confronto adottato per valutare il "
                "posizionamento della società rispetto a ciascun indicatore. In funzione del valore "
                "assunto da ogni variabile e del relativo terzile di appartenenza, "
                "{{ ragione_sociale }} e le altre imprese del panel sono classificate secondo le "
                "seguenti categorie:"),
-     "Per ogni indicatore il valore della società viene collocato nel terzile che gli compete. "
+     "Per ogni indicatore il valore della società viene collocato nel terzile che gli compete "
+     "dopo essere stato confrontato con la distribuzione del settore. "
      "Le classi A, B e C corrispondono alla fascia superiore, intermedia e inferiore della "
      "distribuzione; per il Gearing l\u2019ordine si inverte, perché un valore più contenuto "
      "segnala meno debito. Ne derivano le categorie seguenti:"),
@@ -701,15 +706,14 @@ CORREZIONI_TEMPLATE = [
                '{{ num_soc_fascia_tot }} imprese a livello di Benchmark Totale '
                '({{ perc_soc_fascia_tot }}% del campione analizzato) che rappresentano '
                '{{ descr_fascia_appartenenza }} del settore nel 2024.'),
-     'Il Rating Combinato "{{ rating_tot }}" {{ analisi_combinata }} La stessa combinazione ricorre '
-     'in {{ num_soc_fascia_tot }} imprese del panel, pari al {{ perc_soc_fascia_tot }}% del campione.'),
+     'Il Rating Combinato "{{ rating_tot }}" {{ rev_rating_combinato }}'),
     (re.escape('Il Rating complessivo \u201c{{ rating_comb }}\u201d dell\u2019azienda e il conseguente '
                'posizionamento della stessa all\u2019interno del settore deriva da un\u2019analisi tecnica '
                'condotta sulle nove variabili considerate per la costruzione dei benchmark al 2024.'),
-     'Il Rating Combinato \u201c{{ rating_tot }}\u201d e il posizionamento che ne deriva nascono '
+     'Il Rating Combinato \u201c{{ rating_tot }}\u201d e il relativo posizionamento derivano '
      'dalle nove variabili usate per costruire i tre benchmark, riferite al 2024. La lettura '
-     'storica 2021-2024 completa il quadro, mostrando come si siano mossi nel tempo i valori '
-     'aziendali e le mediane di settore.'),
+     'storica 2021-2024 completa il quadro, consentendo di osservare come gli indicatori '
+     'aziendali e le mediane settoriali si siano evoluti nel tempo.'),
     # doppio spazio in una didascalia
     (re.escape("mediano Settore  {{ codice_nace }}"), "mediano Settore {{ codice_nace }}"),
     # Apertura del report: una frase che dice cosa si fa, al posto di tre che lo annunciano
@@ -727,16 +731,17 @@ CORREZIONI_TEMPLATE = [
      "{{ ragione_sociale }} (P.IVA {{ partita_iva }}), impresa del settore "
      "\u201c{{ descr_settore }}\u201d \u2013 Codice NACE Rev.2 {{ codice_nace }}. Il confronto con il "
      "settore per l\u2019esercizio 2024 si affianca all\u2019esame dell\u2019evoluzione degli indicatori "
-     "nel quadriennio 2021-2024, così da distinguere la fotografia più recente dalle dinamiche "
-     "maturate nel tempo. Le dimensioni osservate sono tre:"),
+     "nel quadriennio 2021-2024, così da distinguere la situazione più recente dalle principali "
+     "dinamiche intervenute nel tempo. Le dimensioni osservate sono tre:"),
     (re.escape("L\u2019integrazione di queste tre componenti consente di tracciare il profilo di rischio e "
                "di performance dell\u2019impresa rispetto ai parametri di riferimento (benchmark) del "
                "settore, nonché di definirne il posizionamento (ranking) attraverso un\u2019analisi "
                "comparativa. Ciò fornisce all\u2019impresa una base informativa solida a supporto dei "
                "processi decisionali e della pianificazione strategica."),
-     "Lette insieme, le tre dimensioni mettono in relazione redditività, struttura delle fonti e "
-     "capacità di far fronte agli impegni di breve periodo, e restituiscono i punti di forza e le "
-     "aree che meritano attenzione. Il raffronto con il settore offre così una base concreta per le "
+     "L\u2019integrazione delle tre dimensioni consente di leggere in modo unitario i principali "
+     "punti di forza e le aree che meritano attenzione, mettendo in relazione redditività, struttura "
+     "delle fonti e capacità di copertura degli impegni di breve periodo. Il confronto settoriale "
+     "costituisce quindi un supporto informativo alla valutazione della situazione aziendale e alle "
      "decisioni di gestione."),
     # "maggiore o uguale di" regge la preposizione sbagliata ed è pesante da leggere:
     # per una soglia basta "almeno"
@@ -798,27 +803,55 @@ CORREZIONI_TEMPLATE = [
                'di classe {{ rating_fin }}.'),
      'Nel Benchmark Finanziario {{ nr_rating_fin }} società, pari al {{ perc_rating_fin }}% del '
      'campione, appartengono alla classe {{ rating_fin }}.'),
+    # --- Revisione di settembre: ritocchi di parola ----------------------------
+    (re.escape("composto da {{ tot_imprese }} società operanti sul territorio nazionale"),
+     "composto da {{ tot_imprese }} imprese operanti sul territorio nazionale"),
+    (re.escape("l\u2019analisi confronta i risultati conseguiti da"),
+     "l\u2019analisi compara i risultati conseguiti da"),
+    (re.escape("L'analisi dell'Equilibrio Finanziario e dell'efficienza gestionale nei quattro anni"),
+     "L'analisi dell'Equilibrio Finanziario nei quattro anni"),
+    (re.escape("si è tradotto in fatturato {{ ind_rot_cap }} volte nel corso dell'esercizio, esprimendo "
+               "quante volte le risorse investite sono state convertite in ricavi."),
+     "si è tradotto in valore della produzione {{ ind_rot_cap }} volte nel corso dell'esercizio."),
+    (re.escape("del totale Istat al 2024 pari a {{ max_soc_istat }} società), per le quali sono state "
+               "calcolate le nove variabili sopra citate contenute nei tre equilibri"),
+     "del totale Istat al 2024, corrispondente a {{ max_soc_istat }} società), per le quali sono state "
+     "calcolate le nove variabili sopra citate, esplicative dei tre equilibri,"),
+    # riquadri dimensionali dell'Executive Summary: la "categoria" e' la forma giuridica
+    (r"(del totale di categoria)\.", r"\1 ({{ forma_giuridica }})."),
+    (re.escape("Con questo risultato l\u2019azienda è classificata come una \u201c{{ classe_dimensionale }}\u201d. "
+               "Rappresenta una quota pari a {{ perc_dip_area }}% sul totale dipendenti dell\u2019area "
+               "{{ macroregione }} in cui l'impresa si colloca."),
+     "Sulla base dell\u2019organico l\u2019azienda è classificata come una \u201c{{ classe_dimensionale }}\u201d. "
+     "{{ ragione_sociale }} occupa una quota pari a {{ perc_dip_area }}% del totale dipendenti delle "
+     "comparables localizzate nell\u2019area geografica di riferimento ({{ macroregione }})."),
+    # note sulle distribuzioni
+    (re.escape("caratterizzate da {{ tipo_asimmetria }}, nonché {{ rel_media_mediana }}, e risultano "
+               "distribuzioni {{ tipo_curtosi }}."),
+     "caratterizzate da {{ tipo_asimmetria }}, stante {{ rel_media_mediana }}, e da distribuzioni "
+     "{{ tipo_curtosi }}."),
+    # EBITDA: la differenza in punti si lega alla composizione dei costi
+    (re.escape("{{ analisi_trend_ebitda }} (Tabella 8 e Figura 3)."),
+     "{{ analisi_trend_ebitda }} (Tabella 8 e Figura 3). {{ rev_ebitda_diff }}"),
     # "applicate le variabili di statistica descrittiva ad evidenziata la mediana":
     # la frase e' rotta, e compare due volte
     (re.escape('Una volta applicate le variabili di statistica descrittiva ad evidenziata la '
                'mediana come indicatore di sintesi più consono, è stato possibile confrontare i '
                'dati di settore con quelli dell\u2019impresa.'),
-     'Applicati gli strumenti di statistica descrittiva, la mediana si conferma l\u2019indicatore '
-     'di sintesi più adatto: su quella base i dati di settore sono confrontati con quelli '
-     'dell\u2019impresa.'),
+     "Nell'ambito dell'equilibrio economico, è stata predisposta un'analisi della composizione "
+     "percentuale del Valore della Produzione, con l'obiettivo di valutare l'incidenza delle "
+     "principali componenti di conto economico sulla formazione dei margini aziendali e di "
+     "confrontarne il peso relativo con quello rilevato nel settore di riferimento."),
     (re.escape('Applicate nuovamente le variabili di statistica descrittiva ad evidenziata la '
                'mediana come indicatore da considerare, si è proceduto al medesimo confronto '
                'condotto per l\u2019equilibrio economico.'),
-     'Anche qui la mediana resta l\u2019indicatore di riferimento e il confronto segue lo stesso '
-     'schema usato per l\u2019equilibrio economico.'),
+     SENTINELLA_ELIMINA),
     # "valutare come l'impatto ... incidano": soggetto singolare, verbo plurale
     (re.escape('In questo equilibrio, in particolar modo, è stata predisposta anche '
                'un\u2019analisi di composizione percentuale del Totale Valore della Produzione, al '
                'fine di valutare come l\u2019impatto delle singole componenti di bilancio sulla '
                'macro-voce incidano sull\u2019andamento dei margini, del settore e dell\u2019impresa:'),
-     'Per questo equilibrio si aggiunge la composizione percentuale del Totale Valore della '
-     'Produzione, che mostra quanto pesa ogni voce di bilancio sulla macro-voce e come quel peso '
-     'si rifletta sui margini, nel settore e nell\u2019impresa:'),
+     SENTINELLA_ELIMINA),
     # "In confronto alle dinamiche storiche di settore, L'assetto patrimoniale...":
     # il segnaposto porta una frase compiuta, quindi l'incipit apriva una maiuscola
     # in mezzo al periodo
@@ -843,6 +876,195 @@ CORREZIONI_TEMPLATE = [
      '({{ num_patr_piu_pres }}) e la {{ rat_fin_piu_pres }} nel Finanziario '
      '({{ num_fin_piu_pres }}).'),
 ]
+
+
+# =====================================================================
+# ✍️ REVISIONE DI SETTEMBRE: CAPOVERSI SOSTITUITI O TOLTI
+# =====================================================================
+# La revisione riscrive per intero molti capoversi del template. Qui ogni voce
+# indica come comincia il capoverso (dopo le CORREZIONI_TEMPLATE) e cosa diventa:
+#   None          -> il capoverso sparisce
+#   "testo"       -> il capoverso prende questo testo
+#   ["t1", "t2"]  -> il capoverso prende t1 e subito dopo ne nascono altri con t2...
+# I testi nuovi sono quasi sempre segnaposto riempiti da testi_revisione.py, che
+# scrive i capoversi a partire dai dati: sull'export di prova coincidono con quelli
+# della revisione, su un'altra azienda seguono il suo andamento.
+REVISIONE_PARAGRAFI = [
+    # Executive Summary: i cinque capoversi finali diventano i quattro "Sul piano ..."
+    ("Nel complesso il quadro restituisce {{ sintesi_profilo_integrato }}", "{{ rev_sintesi_eco }}"),
+    ('Relativamente al Benchmark Patrimoniale (Classe "{{ rating_patr }}")', "{{ rev_sintesi_patr }}"),
+    ("Passando all'analisi della redditività (Benchmark Economico", "{{ rev_sintesi_fin }}"),
+    ("Dal punto di vista della gestione della liquidità (Benchmark Finanziario", "{{ rev_sintesi_finale }}"),
+    ("In conclusione, {{ ragione_sociale }} {{ raccomandazione_finale }}", None),
+    # Panoramica generale
+    ("Si procede ora al confronto dell'andamento della {{ ragione_sociale }}",
+     "Si riporta il confronto tra l’andamento di {{ ragione_sociale }} e quello del settore NACE "
+     "{{ codice_nace }} nei tre Equilibri:"),
+    # Equilibrio Economico
+    ("Focalizzando l'analisi sull'ultimo esercizio disponibile, emerge {{ asimmetria_ebitda }}",
+     ["{{ rev_ebitda_comp }}", "{{ rev_ebitda_trend }}"]),
+    ("Analogamente, il Margine EBIT dell'azienda si attesta a {{ mg_ebit }}%", "{{ rev_ebit }}"),
+    ("L'analisi dell'ultimo esercizio indica che il Margine EBIT di {{ ragione_sociale }}", None),
+    ("Infine, a chiusura del conto economico per il 2024", "{{ rev_profitto }}"),
+    ("{{ ragione_sociale }} {{ prospettiva_redditivita_futura }}", "{{ rev_profitto_struttura }}"),
+    ("L'analisi dei margini e la percentualizzazione del Valore della Produzione", "{{ rev_eco_concl_1 }}"),
+    ("Questo risultato {{ interpretazione_risultato_eco }}", "{{ rev_eco_concl_2 }}"),
+    ("{{ implicazione_finale_eco }}", None),
+    # Equilibrio Patrimoniale
+    ("L'analisi dell'Equilibrio Patrimoniale di {{ ragione_sociale }} nel quadriennio evidenzia", None),
+    ("Relativamente all'Indice di Struttura di 1° livello, nell'ultimo esercizio",
+     ["{{ rev_patr_intro_1 }}", "{{ rev_patr_intro_2 }}", "{{ rev_str1 }}"]),
+    ("Focalizzando l'analisi sull'ultimo esercizio, l'Indice di Struttura di 1° livello", None),
+    ("L'analisi patrimoniale è ulteriormente approfondita dall'Indice di Struttura di 2° livello", None),
+    ("Il posizionamento dell'azienda {{ conclusione_struttura2 }}", "{{ rev_str2 }}"),
+    ("{{ ragione_sociale }} {{ evoluzione_vantaggio_competitivo }}", None),
+    ("Passando all'analisi del Gearing, {{ intro_analisi_gearing }}", None),
+    ("Il confronto con il benchmark evidenzia che {{ confronto_gearing_settore }}",
+     ["{{ rev_gearing_intro }}", "{{ rev_gearing_1 }}", "{{ rev_gearing_2 }}"]),
+    ("L'indicatore in esame {{ sintesi_valore_gearing }}", None),
+    ("Al termine del quadriennio analizzato, l'azienda {{ conclusione_autonomia_finanziaria }}", None),
+    ("L'analisi combinata delle variabili strutturali converge", "{{ rev_patr_concl_1 }}"),
+    ("Questo risultato {{ sintesi_finale_patr }}", "{{ rev_patr_concl_2 }}"),
+    ("Nel panorama competitivo attuale, {{ ragione_sociale }}",
+     ["{{ rev_patr_concl_3 }}", "{{ rev_patr_concl_4 }}"]),
+    # Equilibrio Finanziario
+    ("Concentrandosi sull'ultimo esercizio, il Current Ratio aziendale raggiunge quota",
+     ["{{ rev_fin_intro_1 }}", "{{ rev_fin_intro_2 }}", "{{ rev_cr_1 }}"]),
+    ("Osservando l'andamento storico del quadriennio 2021-2024, l'azienda {{ reazione_contesto_liquidita }}",
+     "{{ rev_cr_2 }}"),
+    ("Nell'ultimo esercizio, a fronte di una mediana di settore che tende a stabilizzarsi", None),
+    ("A livello di gestione corrente, l'azienda {{ capacita_generazione_liquidita }}", "{{ rev_cr_3 }}"),
+    ("Passando all'analisi del Quick Ratio (o Indice di Liquidità Immediata)",
+     "Passando all'analisi del Quick Ratio (o Indice di Liquidità Immediata), nell'ultimo esercizio "
+     "l'azienda registra un valore pari a {{ ind_qr }}{{ rev_qr_coda }}"),
+    ("Di conseguenza, {{ implicazione_liquidita_immediata }}", None),
+    ("L'andamento dell'ultimo esercizio mette in evidenza {{ andamento_liquidita_primaria }}", None),
+    ("Pur tenendo conto delle fisiologiche differenze nell'intensità di capitale",
+     "Pur tenendo conto delle fisiologiche differenze nell'intensità di capitale richieste dalle "
+     "dinamiche del mercato, {{ rev_rotazione }}"),
+    ("L'analisi dell'equilibrio finanziario di {{ ragione_sociale }} nell'ultimo esercizio evidenzia",
+     "{{ rev_fin_concl_1 }}"),
+    ("In definitiva, l'azienda {{ gestione_tesoreria_fin }}", "{{ rev_fin_concl_2 }}"),
+    # Nota Metodologica
+    ("La parte relativa al posizionamento si sostanzia nella valutazione",
+     "Questa sezione si propone di individuare la distribuzione delle imprese all’interno del "
+     "settore e di verificare la posizione che {{ ragione_sociale }} ricopre all’interno del panel. "
+     "Tale posizionamento è stato calcolato sulla base di tre benchmark, uno per ogni categoria di "
+     "equilibrio, determinati tramite il calcolo dei terzili applicato alla distribuzione delle "
+     "variabili considerate per l’anno 2024:"),
+    ("Questi terzili sono stati utilizzati come base di confronto del valore delle società",
+     "I terzili sono stati utilizzati per confrontare il posizionamento delle società rispetto a "
+     "ciascuna variabile, associando a ogni azienda un punteggio in base alla fascia di appartenenza:"),
+    ("E successivamente organizzare come segue le componenti del panel",
+     "Successivamente, sulla base di questa classificazione, le componenti del panel sono state "
+     "ripartite all'interno di ciascuna categoria. Questo passaggio ha permesso di analizzare la "
+     "distribuzione quantitativa delle società e di verificare l'omogeneità dei raggruppamenti così "
+     "ottenuti."),
+]
+
+
+def _testo_normalizzato(testo):
+    """Apostrofi e virgolette tipografici resi dritti, spazi compattati."""
+    t = (testo.replace('’', "'").replace('‘', "'")
+         .replace('“', '"').replace('”', '"'))
+    return re.sub(r'\s+', ' ', t).strip()
+
+
+def _contiene_disegni(elemento):
+    """Forme, immagini o caselle ancorate: non vanno perse cancellando il testo."""
+    for el in elemento.iter():
+        tag = el.tag if isinstance(el.tag, str) else ''
+        if tag in (qn('w:drawing'), qn('w:pict')) or tag.endswith('}AlternateContent'):
+            return True
+    return False
+
+
+def _porta_interruzione_sezione(p):
+    pPr = p._p.find(qn('w:pPr'))
+    return pPr is not None and pPr.find(qn('w:sectPr')) is not None
+
+
+def _scrivi_testo(p, testo):
+    """Tutto il testo nel primo run 'di testo'; i run con disegni restano intatti."""
+    run_testo = [r for r in p.runs if not _contiene_disegni(r._r)]
+    if not run_testo:
+        p.add_run(testo)
+        return
+    run_testo[0].text = testo
+    for r in run_testo[1:]:
+        r.text = ''
+
+
+def _togli_paragrafo(p):
+    """Elimina il capoverso, ma se regge un disegno o un'interruzione di sezione lo svuota soltanto."""
+    if _contiene_disegni(p._p) or _porta_interruzione_sezione(p):
+        _scrivi_testo(p, '')
+    else:
+        p._p.getparent().remove(p._p)
+
+
+def _clona_dopo(p, testo):
+    """Nuovo capoverso con la stessa formattazione di `p`, subito dopo di lui."""
+    copia = copy.deepcopy(p._p)
+    for el in list(copia.iter()):
+        tag = el.tag if isinstance(el.tag, str) else ''
+        if (tag in (qn('w:drawing'), qn('w:pict'), qn('w:bookmarkStart'), qn('w:bookmarkEnd'))
+                or tag.endswith('}AlternateContent')):
+            genitore = el.getparent()
+            if genitore is not None:
+                genitore.remove(el)
+    pPr = copia.find(qn('w:pPr'))
+    if pPr is not None:
+        sect = pPr.find(qn('w:sectPr'))
+        if sect is not None:
+            pPr.remove(sect)
+    for attr in list(copia.attrib):
+        if attr.endswith('}paraId') or attr.endswith('}textId'):
+            del copia.attrib[attr]
+    p._p.addnext(copia)
+    nuovo = Paragraph(copia, p._parent)
+    _scrivi_testo(nuovo, testo)
+    return nuovo
+
+
+def applica_revisione_paragrafi(doc_temp):
+    """Applica REVISIONE_PARAGRAFI ai capoversi del corpo del template."""
+    applicate = 0
+    for inizio, nuovo in REVISIONE_PARAGRAFI:
+        chiave = _testo_normalizzato(inizio)
+        bersagli = [p for p in doc_temp.paragraphs
+                    if _testo_normalizzato(p.text).startswith(chiave)]
+        for p in bersagli:
+            if nuovo is None:
+                _togli_paragrafo(p)
+            elif isinstance(nuovo, str):
+                _scrivi_testo(p, nuovo)
+            else:
+                _scrivi_testo(p, nuovo[0])
+                ultimo = p
+                for testo in nuovo[1:]:
+                    ultimo = _clona_dopo(ultimo, testo)
+            applicate += 1
+    return applicate
+
+
+def elimina_paragrafi_sentinella(documento):
+    """Toglie i capoversi il cui testo e' la sola SENTINELLA_ELIMINA."""
+    # Si parte dall'XML e non da documento.paragraphs: docxtpl, nel render,
+    # sostituisce l'intero <w:body> e python-docx continua a restituire i
+    # capoversi di quello vecchio, staccato dal documento.
+    tolti = 0
+    for p_el in list(documento.element.body.iter(qn('w:p'))):
+        p = Paragraph(p_el, documento)
+        if p.text.strip() != SENTINELLA_ELIMINA:
+            continue
+        genitore = p_el.getparent()
+        if genitore.tag == qn('w:tc') and len(genitore.findall(qn('w:p'))) == 1:
+            _scrivi_testo(p, '')            # una cella non puo' restare senza capoversi
+        else:
+            _togli_paragrafo(p)
+        tolti += 1
+    return tolti
 
 
 def correggi_testi_template(doc_temp):
@@ -973,6 +1195,8 @@ def uniforma_didascalie(doc_temp):
 def lavatrice_nucleare(template_path):
     doc_temp = docx.Document(template_path)
     correggi_testi_template(doc_temp)
+    applica_revisione_paragrafi(doc_temp)
+    elimina_paragrafi_sentinella(doc_temp)
     uniforma_titoli(doc_temp)
     uniforma_didascalie(doc_temp)
     
@@ -1304,7 +1528,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         
         # Se esiste una seconda forma giuridica, continuiamo la frase
         if fg_2_name:
-            testo_fg = testo_fg.rstrip(".") + f", mentre le {fg_2_name} rappresentano una quota residuale del comparto ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità)"
+            testo_fg = testo_fg.rstrip(".") + f", mentre le {fg_2_name} rappresentano una quota residuale ({format_euro(fg_2_perc)}%, {f'{fg_2_num:,}'.replace(',', '.')} unità)"
             if fg_altre_num > 0:
                 testo_fg += f" e, in minor parte, da altre configurazioni societarie miste ({format_euro(fg_altre_perc)}%, {f'{fg_altre_num:,}'.replace(',', '.')} unità)."
             else:
@@ -1512,7 +1736,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         aggettivi di contorno: il dato e la sua scala bastano.
         """
         peso = {True: "una quota significativa", False: "una quota contenuta"}[perc >= 1.0]
-        return (f"Con un Valore della Produzione 2024 pari a € {ricavi_formattati} mln, {nome} "
+        return (f"Con un Valore della Produzione 2024 di € {ricavi_formattati} mln, {nome} "
                 f"rappresenta circa {con_articolo(format_euro(perc))}% dei ricavi complessivi delle "
                 f"imprese del settore localizzate nell'area {macroregione}, {peso} del comparto locale.")
 
@@ -1986,7 +2210,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: return "dimostra inefficienze del ciclo d'incasso, con la chiara dipendenza dalle scorte che affossa il Quick Ratio."
 
     def get_confronto_rotazione_mediana(az_rot, set_rot):
-        if az_rot >= set_rot: return f"L'efficienza d'utilizzo si colloca su livelli favorevoli, risultando superiore al parametro mediano ({format_euro(set_rot)}) e confermando un'ottimale resa."
+        if az_rot >= set_rot: return f"L'efficienza d'utilizzo si colloca su livelli favorevoli, risultando superiore al parametro mediano ({format_euro(set_rot)})."
         else: return f"L'Indice di rotazione si colloca al di sotto della mediana settoriale ({format_euro(set_rot)}), evidenziando un impiego poco performante del capitale."
 
     def get_interpretazione_modello_rotazione(az_rot, set_rot):
@@ -3331,9 +3555,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
         # Analisi Asimmetria Patrimoniale
         if skew_patr > SOGLIA_BOWLEY:
-            context['tipo_asimmetria_patr'] = "asimmetriche, in questo caso positive,"
+            context['tipo_asimmetria_patr'] = "asimmetriche"
         elif skew_patr < -SOGLIA_BOWLEY:
-            context['tipo_asimmetria_patr'] = "asimmetriche, in questo caso negative,"
+            context['tipo_asimmetria_patr'] = "con asimmetria negativa"
         else:
             context['tipo_asimmetria_patr'] = "sostanzialmente simmetriche"
 
@@ -5079,6 +5303,68 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                         pass
 
     # =================================================================
+    # ✍️ TESTI DELLA REVISIONE DI SETTEMBRE
+    # =================================================================
+    # Qui sono disponibili tutti i dati che servono ai capoversi riscritti: le serie
+    # 2021-2024 di impresa e settore, le classi e la composizione del Valore della
+    # Produzione della Tabella 7.
+    from testi_revisione import testi_report
+
+    def _incidenza_2024(dati, voce):
+        valori = dati.get(voce) or []
+        return valori[3] if len(valori) > 3 else None
+
+    dati_revisione = {
+        'nome': context.get('ragione_sociale', str(azienda_target)),
+        'az': serie_az, 'sett': serie_set,
+        'rating_eco': context['rating_eco'], 'rating_patr': context['rating_patr'],
+        'rating_fin': context['rating_fin'], 'rating_tot': context['rating_tot'],
+        'comp_az': {
+            'venduto': _incidenza_2024(dati_azienda, 'Costo del venduto'),
+            'oneri_gestione': _incidenza_2024(dati_azienda, 'Oneri di gestione'),
+            'finanziari': _incidenza_2024(dati_azienda, 'Proventi/Oneri fin.'),
+        },
+        'comp_sett': {
+            'venduto': _incidenza_2024(dati_settore, 'Costo del venduto'),
+            'oneri_gestione': _incidenza_2024(dati_settore, 'Oneri di gestione'),
+            'finanziari': _incidenza_2024(dati_settore, 'Proventi/Oneri fin.'),
+        },
+    }
+    try:
+        testi_rev = testi_report(dati_revisione)
+    except Exception as errore_revisione:
+        print(f"⚠️ Testi della revisione non generati: {errore_revisione}")
+        testi_rev = {}
+
+    if testi_rev:
+        # i bullet del capitolo di posizionamento
+        for chiave_ctx, chiave_rev in (
+                ('analisi_ebitda', 'ebitda'), ('analisi_ebit', 'ebit'),
+                ('analisi_margine_profitto', 'profitto'), ('analisi_struttura1', 'strut1'),
+                ('analisi_struttura2', 'strut2'), ('analisi_gearing', 'gearing'),
+                ('analisi_current_ratio', 'cr'), ('analisi_quick_ratio', 'qr'),
+                ('analisi_rotazione', 'rotazione')):
+            context[chiave_ctx] = testi_rev['rev_bullet'][chiave_rev]
+        # Executive Summary
+        context['descr_rating_tot'] = testi_rev['rev_rating_tot']
+        from testi_revisione import descr_rating_eco as _descr_eco
+        context['descr_rating_eco'] = _descr_eco(
+            dati_revisione,
+            "L'elemento da approfondire riguarda la capacit\u00e0 della gestione caratteristica di "
+            "trasformare il Valore della Produzione in reddito operativo.")
+        if testi_rev.get('rev_intro_margini_coda'):
+            context['intro_margini'] = (context['intro_margini'].rstrip() + ' '
+                                        + testi_rev['rev_intro_margini_coda'])
+        # tutti i capoversi nuovi; quelli vuoti spariscono dopo il render
+        in_coda = {'rev_ebitda_diff', 'rev_qr_coda', 'rev_rotazione', 'rev_rating_combinato',
+                   'rev_intro_margini_coda', 'rev_bullet', 'rev_rating_tot'}
+        for chiave_rev, testo_rev in testi_rev.items():
+            if chiave_rev in in_coda:
+                context[chiave_rev] = testo_rev
+            else:
+                context[chiave_rev] = testo_rev if testo_rev else SENTINELLA_ELIMINA
+
+    # =================================================================
     # 🔒 3. CENSURA VARIABILI (Testo Puro = Zero Crash)
     # =================================================================
     if modalita_teaser:
@@ -5135,6 +5421,8 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # 🔧 Ripara le tabelle inserite da docxtpl dentro un nodo di testo
     # =================================================================
     estrai_blocchi_dai_run(doc.docx)
+    # capoversi della revisione rimasti vuoti per questa azienda
+    elimina_paragrafi_sentinella(doc.docx)
 
     # =================================================================
     # 🎨 4. COLORATORE NATIVO CHIRURGICO: Rende ROSSA SOLO la scritta premium
@@ -6307,7 +6595,8 @@ def migliora_layout(output_buffer):
             cover_page_end = idx
         if pp.text.strip().startswith('Formalmente costituita') and exec_box_start is None:
             exec_box_start = idx
-        if pp.text.strip().startswith('Con questo risultato') and exec_box_start is not None and exec_box_end is None:
+        if pp.text.strip().startswith(('Con questo risultato', 'Sulla base dell\u2019organico', "Sulla base dell'organico")) \
+                and exec_box_start is not None and exec_box_end is None:
             exec_box_end = idx
         if pp.text.strip() == 'Appendice' and pp.style.name == 'Heading 1':
             appendice_start = idx
