@@ -18,6 +18,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt, Mm, RGBColor
 from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 import tempfile
 import matplotlib.image as mpimg
 from PIL import Image
@@ -1065,6 +1066,116 @@ def elimina_paragrafi_sentinella(documento):
             _togli_paragrafo(p)
         tolti += 1
     return tolti
+
+
+# Davanti alla scritta di censura l'articolo scelto per il numero vero ("all'1,60",
+# "lo 0,96") suona male e lascia intuire la cifra: si passa alla forma piana.
+_ARTICOLO_PIANO = {'all': 'al', 'dall': 'dal', 'dell': 'del', 'sull': 'sul', 'nell': 'nel', 'l': 'il',
+                   'allo': 'al', 'dallo': 'dal', 'dello': 'del', 'sullo': 'sul', 'nello': 'nel', 'lo': 'il'}
+_RE_ARTICOLO_CENSURA = re.compile(
+    r"\b(all|dall|dell|sull|nell|l)['\u2019]\s*(?=\U0001f512)|\b(allo|dallo|dello|sullo|nello|lo)\s+(?=\U0001f512)",
+    re.IGNORECASE)
+
+
+_RE_ARTICOLO_IN_CODA = re.compile(
+    r"\b(all|dall|dell|sull|nell|l)['\u2019]\s*$|\b(allo|dallo|dello|sullo|nello|lo)\s+$", re.IGNORECASE)
+
+
+def _testo_run(r):
+    return ''.join(t.text or '' for t in r.findall(qn('w:t')))
+
+
+def _solo_testo(r):
+    ammessi = (qn('w:rPr'), qn('w:t'), qn('w:lastRenderedPageBreak'))
+    return r.find(qn('w:t')) is not None and all(c.tag in ammessi for c in r)
+
+
+def _riscrivi_run(r, testo):
+    nodi = r.findall(qn('w:t'))
+    nodi[0].text = testo
+    nodi[0].set(qn('xml:space'), 'preserve')
+    for t in nodi[1:]:
+        r.remove(t)
+
+
+def _articolo_piano(m):
+    articolo = m.group(1) or m.group(2)
+    piano = _ARTICOLO_PIANO[articolo.lower()]
+    return (piano.capitalize() if articolo[0].isupper() else piano) + ' '
+
+
+def colora_scritte_premium(documento):
+    """Nella versione con watermark rende rossa e in grassetto ogni scritta di censura."""
+    # Si lavora sui run dell'XML, cosi' si raggiungono anche celle e caselle di
+    # testo, e il resto del capoverso (grassetti, disegni) resta com'e'.
+    scritta = "\U0001f512 PREMIUM"
+    for r in list(documento.element.body.iter(qn('w:r'))):
+        testo = ''.join(t.text or '' for t in r.findall(qn('w:t')))
+        if scritta not in testo:
+            continue
+        # segno di impaginazione lasciato da Word: lo ricalcola lui all'apertura
+        for segno in r.findall(qn('w:lastRenderedPageBreak')):
+            r.remove(segno)
+        if not all(c.tag in (qn('w:rPr'), qn('w:t')) for c in r):
+            # run con tabulazioni, a capo o disegni: si colora tutto il run
+            font = Run(r, None).font
+            font.color.rgb = RGBColor(255, 0, 0)
+            font.bold = True
+            continue
+        testo = _RE_ARTICOLO_CENSURA.sub(_articolo_piano, testo)
+        testo = re.sub(r'(?<=\S)  +(?=\S)', ' ', testo)              # doppi spazi dei segnaposto
+        testo = testo.replace(scritta + ' %', scritta + '%')
+        for parte in re.split(f'({re.escape(scritta)})', testo):
+            if not parte:
+                continue
+            nuovo = copy.deepcopy(r)
+            for t in nuovo.findall(qn('w:t')):
+                nuovo.remove(t)
+            t = OxmlElement('w:t')
+            t.text = parte
+            t.set(qn('xml:space'), 'preserve')
+            nuovo.append(t)
+            if parte == scritta:
+                font = Run(nuovo, None).font
+                font.color.rgb = RGBColor(255, 0, 0)
+                font.bold = True
+            r.addprevious(nuovo)
+        r.getparent().remove(r)
+
+    # Nel template articolo, spazi e segnaposto stanno spesso in run separati:
+    # qui si sistemano i vicini di ogni scritta, capoverso per capoverso.
+    per_capoverso = {}
+    for r in documento.element.body.iter(qn('w:r')):
+        capoverso = next(r.iterancestors(qn('w:p')), None)
+        if capoverso is not None:
+            per_capoverso.setdefault(capoverso, []).append(r)
+    spazio_solo = lambda r: _solo_testo(r) and not _testo_run(r).strip()
+    for runs in per_capoverso.values():
+        for i, r in enumerate(runs):
+            if _testo_run(r) != scritta:
+                continue
+            j, vuoti = i - 1, []
+            while j >= 0 and spazio_solo(runs[j]):
+                vuoti.append(runs[j])
+                j -= 1
+            if j >= 0 and _solo_testo(runs[j]):
+                prima = _RE_ARTICOLO_IN_CODA.sub(_articolo_piano, _testo_run(runs[j]))
+                _riscrivi_run(runs[j], prima)
+                if vuoti:
+                    for v in vuoti:
+                        _riscrivi_run(v, '')
+                    if not (prima[-1:].isspace() or prima.endswith('(')):
+                        _riscrivi_run(vuoti[0], ' ')
+            k, vuoti = i + 1, []
+            while k < len(runs) and spazio_solo(runs[k]):
+                vuoti.append(runs[k])
+                k += 1
+            if vuoti and k < len(runs) and _solo_testo(runs[k]):
+                dopo = _testo_run(runs[k])
+                for v in vuoti:
+                    _riscrivi_run(v, '')
+                if not (dopo[:1] in '%,.;:)' or dopo[:1].isspace()):
+                    _riscrivi_run(vuoti[0], ' ')
 
 
 def correggi_testi_template(doc_temp):
@@ -5401,12 +5512,25 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         # context (le chiavi già svuotate sopra vengono escluse perché non serve
         # ripassarle), così da coprire anche eventuali nuove funzioni narrative
         # aggiunte in futuro senza dover aggiornare manualmente un elenco.
+        # I testi della revisione citano anche la composizione 2024 del Valore della
+        # Produzione, che nella Tabella 7 e' gia' coperta.
+        for gruppo in ('comp_az', 'comp_sett'):
+            for valore in dati_revisione[gruppo].values():
+                if valore is not None and not pd.isna(valore):
+                    valori_da_sostituire += [format_euro(valore), format_euro(abs(valore))]
+        valori_da_sostituire = [v for v in dict.fromkeys(valori_da_sostituire) if len(v) >= 2]
+        # Il valore si copre solo quando e' un numero intero: "1,60" non deve
+        # mangiarsi l'inizio di "11,60".
+        schemi_censura = [re.compile(r'(?<![\d.,])' + re.escape(v) + r'(?!\d)') for v in valori_da_sostituire]
+        # Distanze e variazioni in punti percentuali: con il valore 2023 o la mediana
+        # accanto, restituirebbero il dato 2024 coperto.
+        schema_punti = re.compile(r'(?<![\d.,])\d{1,3}(?:\.\d{3})*,\d+(?= punti percentuali)')
         chiavi_discorsive = [k for k in context if k not in variabili_sensibili and isinstance(context[k], str)]
         for k in chiavi_discorsive:
             testo_normale = context[k]
-            for val in valori_da_sostituire:
-                if len(val) >= 2:
-                    testo_normale = testo_normale.replace(val, testo_censura_sicuro)
+            for schema in schemi_censura:
+                testo_normale = schema.sub(testo_censura_sicuro.strip(), testo_normale)
+            testo_normale = schema_punti.sub(testo_censura_sicuro.strip(), testo_normale)
             context[k] = testo_normale
 
     # Ora genera il documento in totale sicurezza! (Renderizza il testo crudo)
@@ -5428,48 +5552,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # 🎨 4. COLORATORE NATIVO CHIRURGICO: Rende ROSSA SOLO la scritta premium
     # =================================================================
     if modalita_teaser:
-        from docx.shared import RGBColor
-
-        def colora_paragrafo_chirurgico(p):
-            # Interveniamo solo se nel testo globale del paragrafo esiste la scure
-            if "🔒 PREMIUM" in p.text:
-                testo_completo = p.text
-                
-                # Ci salviamo lo stile del font del primo run per non perdere la formattazione del template
-                font_name = p.runs[0].font.name if p.runs else None
-                font_size = p.runs[0].font.size if p.runs else None
-                
-                # Svuotiamo i runs del paragrafo per ricostruirli in modo pulito
-                p.text = "" 
-                
-                # Tagliamo il testo usando la scritta premium come separatore
-                parti = re.split(r'(🔒 PREMIUM)', testo_completo)
-                for parte in parti:
-                    if not parte:
-                        continue
-                    
-                    # Creiamo un run dedicato per questo frammento di testo
-                    run = p.add_run(parte)
-                    
-                    # Ripristiniamo il font originale per non alterare il layout
-                    if font_name: run.font.name = font_name
-                    if font_size: run.font.size = font_size
-                    
-                    # Se questo specifico frammento è la scritta di censura, lo spariamo rosso e bold
-                    if "🔒 PREMIUM" in parte:
-                        run.font.color.rgb = RGBColor(255, 0, 0)
-                        run.font.bold = True
-
-        # 1. Spazzoliamo tutti i paragrafi standard del documento (testi liberi, box, ecc.)
-        for p in doc.docx.paragraphs:
-            colora_paragrafo_chirurgico(p)
-
-        # 2. Spazzoliamo tutti i paragrafi nascosti dentro le celle delle tabelle
-        for table in doc.docx.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        colora_paragrafo_chirurgico(p)
+        colora_scritte_premium(doc.docx)
 
     # =================================================================
     # 📏 FIX SPAZIATURA: Imposta interlinea 1.0 per tutto il testo narrativo
