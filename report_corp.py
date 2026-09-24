@@ -437,6 +437,50 @@ def _percentile_ordinale(valore):
     return con_articolo(testo, 'a')
 
 
+# Soglie dimensionali del Codice Civile in vigore dal 1° gennaio 2024 (artt. 2435-bis
+# e 2435-ter c.c., come modificati dal D.Lgs. 125/2024): totale attivo, ricavi netti e
+# numero medio di dipendenti. Si appartiene a una categoria quando non si superano
+# almeno due dei tre limiti; superandone due su tre si passa a quella successiva.
+SOGLIE_DIMENSIONALI = (
+    ('Microimpresa', 450_000, 900_000, 10),
+    ('Piccola Impresa', 5_000_000, 10_000_000, 50),
+    ('Media Impresa', 25_000_000, 50_000_000, 250),
+)
+
+
+def classe_dimensionale(attivo_eur, ricavi_eur, dipendenti):
+    """La categoria dimensionale secondo la regola dei due limiti su tre.
+
+    I parametri mancanti non si contano: con due valori noti servono entrambi
+    entro soglia, con uno solo si decide su quello.
+    """
+    def noto(valore):
+        return valore is not None and not pd.isna(valore)
+
+    for nome, soglia_attivo, soglia_ricavi, soglia_dipendenti in SOGLIE_DIMENSIONALI:
+        confronti = [(attivo_eur, soglia_attivo), (ricavi_eur, soglia_ricavi),
+                     (dipendenti, soglia_dipendenti)]
+        noti = [(valore, soglia) for valore, soglia in confronti if noto(valore)]
+        if not noti:
+            return 'Grande Impresa'
+        entro = sum(1 for valore, soglia in noti if valore <= soglia)
+        if entro >= min(2, len(noti)):
+            return nome
+    return 'Grande Impresa'
+
+
+def criteri_dimensionali_usati(attivo_eur, ricavi_eur, dipendenti):
+    """I parametri davvero disponibili, da nominare nel testo."""
+    voci = []
+    for valore, nome in ((attivo_eur, 'totale attivo'), (ricavi_eur, 'ricavi'),
+                         (dipendenti, 'numero di dipendenti')):
+        if valore is not None and not pd.isna(valore):
+            voci.append(nome)
+    if len(voci) <= 1:
+        return voci[0] if voci else 'parametri disponibili'
+    return ", ".join(voci[:-1]) + f" e {voci[-1]}"
+
+
 def costruisci_catena_filtri(info_filtri):
     """
     🔧 BUG 1f — la Nota Metodologica dichiarava 2 soli filtri di selezione.
@@ -852,9 +896,10 @@ CORREZIONI_TEMPLATE = [
     (re.escape("Con questo risultato l\u2019azienda è classificata come una \u201c{{ classe_dimensionale }}\u201d. "
                "Rappresenta una quota pari a {{ perc_dip_area }}% sul totale dipendenti dell\u2019area "
                "{{ macroregione }} in cui l'impresa si colloca."),
-     "Sulla base dell\u2019organico l\u2019azienda è classificata come una \u201c{{ classe_dimensionale }}\u201d. "
-     "{{ ragione_sociale }} occupa una quota pari a {{ perc_dip_area }}% del totale dipendenti delle "
-     "comparables localizzate nell\u2019area geografica di riferimento ({{ macroregione }})."),
+     "Sulla base dei parametri di legge del 2024 ({{ criteri_dimensionali }}) l\u2019azienda è "
+     "classificata come una \u201c{{ classe_dimensionale }}\u201d. {{ ragione_sociale }} occupa una "
+     "quota pari a {{ perc_dip_area }}% del totale dipendenti delle comparables localizzate "
+     "nell\u2019area geografica di riferimento ({{ macroregione }})."),
     # note sulle distribuzioni
     (re.escape("caratterizzate da {{ tipo_asimmetria }}, nonché {{ rel_media_mediana }}, e risultano "
                "distribuzioni {{ tipo_curtosi }}."),
@@ -1761,7 +1806,14 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         'perc_fg': format_euro(perc_fg_target), 'num_fg': f"{num_fg_target:,}".replace(',', '.'),
         'fg_maggioranza': fg_maggioranza, 'num_fg_maggioranza': f"{num_fg_maggioranza:,}".replace(',', '.'),
         'perc_fg_maggioranza': format_euro(perc_fg_maggioranza),
-        'classe_dimensionale': 'Grande Impresa' if ricavi_mln > 50 else ('Media Impresa' if ricavi_mln > 10 else 'Piccola Impresa'),
+        # I "ricavi netti" della norma sono la voce A1 del conto economico; l'estrazione
+        # ORBIS porta il valore della produzione (voce A), che li comprende: sopra la
+        # soglia dei ricavi la classificazione puo' quindi risultare prudenziale.
+        'classe_dimensionale': classe_dimensionale(
+            attivo_mgl * 1000 if pd.notna(attivo_mgl) else None,
+            ricavi_mgl * 1000 if pd.notna(ricavi_mgl) else None,
+            dipendenti),
+        'criteri_dimensionali': criteri_dimensionali_usati(attivo_mgl, ricavi_mgl, dipendenti),
         'ricavi_mln': format_euro(ricavi_mln),
         'perc_ricavi_panel': format_euro(perc_ricavi_panel),
         'perc_ricavi_categoria': format_euro(perc_ricavi_categoria), # <-- Ora calcola il VERO dato!
