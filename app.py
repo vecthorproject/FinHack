@@ -2941,7 +2941,7 @@ if uploaded_file is not None:
                         f"0️⃣ Tratta il Gearing pari a zero come dato non disponibile "
                         f"({n_gearing_nullo} aziende scartate)",
                         value=True,
-                        help="ATTIVO (default storico): le imprese con Gearing 2024 = 0 escono dal campione "
+                        help="ATTIVO (default storico): le imprese con Gearing 2024 = 0 vengono scartate "
                              "e gli zeri degli anni 2021-2023 diventano 'n.d.'.\n\n"
                              "DISATTIVATO: lo zero viene letto come 'nessun debito finanziario', quindi un "
                              "valore reale. Le imprese restano nel campione e la mediana settoriale del "
@@ -2990,10 +2990,16 @@ if uploaded_file is not None:
         # spostano la mediana, ma travolgono media, deviazione standard, asimmetria e
         # curtosi, cioe' proprio le statistiche descrittive della Nota Metodologica.
         #
-        # Il criterio e' il trimming percentile, il piu' usato in finanza aziendale:
-        # per ogni variabile e ogni esercizio si scartano le imprese che stanno oltre le
-        # code. Non si usano le barriere di Tukey (1,5*IQR) ne' il MAD, che presuppongono
-        # distribuzioni quasi simmetriche: qui toglierebbero il 44-48% del campione.
+        # Le code si individuano con i percentili. Non si usano le barriere di Tukey
+        # (1,5*IQR) ne' il MAD, che presuppongono distribuzioni quasi simmetriche: qui
+        # toglierebbero il 44-48% del campione.
+        #
+        # Sul che farne ci sono due strade. Il taglio (trimming) scarta l'impresa che ha
+        # almeno un valore oltre le code, e il panel si riduce. La winsorizzazione riporta
+        # il solo valore estremo al livello della soglia: la numerosita' resta quella, la
+        # mediana non si muove e media, deviazione standard, asimmetria e curtosi tornano
+        # leggibili. Per le statistiche della Nota Metodologica la seconda e' preferibile,
+        # perche' non fa sparire imprese dai conteggi e dalle distribuzioni.
         BASI_OUTLIER = [
             'Margine EBITDA (*) %', 'Margine EBIT (*) %', 'Margine di Profitto (*) %',
             'Indice di Struttura 1° livello (*)', 'Indice di Struttura 2° livello (*)',
@@ -3024,20 +3030,48 @@ if uploaded_file is not None:
                 fuori |= colpite
             return fuori, dettaglio
 
+        def winsorizza(df_in, percentile, anni, righe):
+            """Riporta i valori oltre le code al valore della soglia: nessuna impresa esce."""
+            df_out = df_in.copy()
+            toccate = pd.Series(False, index=df_in.index)
+            valori_corretti = 0
+            for base in BASI_OUTLIER:
+                for anno in anni:
+                    col = f"{base} {anno}"
+                    if col not in df_in.columns:
+                        continue
+                    serie = pd.to_numeric(df_in[col], errors='coerce')
+                    validi = serie.dropna()
+                    if len(validi) < 50:
+                        continue
+                    basso = validi.quantile(percentile / 100)
+                    alto = validi.quantile(1 - percentile / 100)
+                    oltre = serie.notna() & ((serie < basso) | (serie > alto)) & righe
+                    if not oltre.any():
+                        continue
+                    df_out.loc[oltre, col] = serie[oltre].clip(basso, alto)
+                    valori_corretti += int(oltre.sum())
+                    toccate |= oltre
+            return df_out, toccate, valori_corretti
+
         attiva_filtro_outlier = False
         percentile_outlier = 1.0
         perimetro_outlier = '2021-2024'
+        metodo_outlier = 'Winsorizzazione'
         scartate_outlier = 0
+        winsor_imprese = 0
+        winsor_valori = 0
         with st.expander("📉 Filtro valori anomali (outlier) — opzionale"):
             st.caption(
-                "Scarta le imprese con valori estremi sulle nove variabili, con il criterio "
-                "dei percentili. Serve a togliere dal campione i casi che nascono da "
-                "denominatori vicini a zero e che rendono illeggibili media, deviazione "
-                "standard, asimmetria e curtosi nella Nota Metodologica. Le mediane e i "
-                "terzili, che sono gia' robusti, cambiano poco."
+                "Individua i valori estremi delle nove variabili con il criterio dei "
+                "percentili e li tratta in uno dei due modi: riportandoli alla soglia "
+                "(winsorizzazione) oppure scartando l'impresa (taglio). Servono a "
+                "neutralizzare i casi che nascono da denominatori vicini a zero e che rendono "
+                "illeggibili media, deviazione standard, asimmetria e curtosi nella Nota "
+                "Metodologica. Le mediane e i terzili, che sono gia' robusti, cambiano poco."
             )
             attiva_filtro_outlier = st.toggle(
-                "✂️ Attiva il taglio dei valori anomali",
+                "✂️ Attiva il trattamento dei valori anomali",
                 value=False,
                 help="Disattivato per default: il campione resta quello di sempre.",
                 key="attiva_filtro_outlier",
@@ -3047,7 +3081,7 @@ if uploaded_file is not None:
                     "Ampiezza delle code da scartare (percentile)",
                     min_value=0.1, max_value=5.0, value=1.0, step=0.1,
                     help="Con 1,0 restano fuori i valori sotto l'1° percentile e sopra il 99°. "
-                         "Piu' il valore e' alto, piu' il taglio e' severo.",
+                         "Piu' il valore e' alto, piu' imprese vengono interessate.",
                     key="percentile_outlier",
                 )
                 perimetro_outlier = st.radio(
@@ -3056,8 +3090,19 @@ if uploaded_file is not None:
                     horizontal=True,
                     help="'2021-2024' ripulisce anche le statistiche storiche della Nota "
                          "Metodologica; 'solo 2024' tocca solo l'anno che determina il "
-                         "posizionamento e scarta molte meno imprese.",
+                         "posizionamento e interessa molte meno imprese.",
                     key="perimetro_outlier",
+                )
+                metodo_outlier = st.radio(
+                    "Che cosa farne",
+                    options=['Winsorizzazione', 'Taglio'],
+                    horizontal=True,
+                    help="Winsorizzazione: l'impresa resta nel campione e solo il valore estremo viene "
+                         "riportato al livello della soglia. La numerosita' non cambia, e media, "
+                         "deviazione standard, asimmetria e curtosi diventano leggibili senza perdere "
+                         "imprese. Taglio: l'impresa che ha almeno un valore oltre le code esce dal "
+                         "campione, quindi il panel si riduce.",
+                    key="metodo_outlier",
                 )
                 anni_outlier = ['2024'] if perimetro_outlier == 'solo 2024' else ['2021', '2022', '2023', '2024']
                 maschera_fuori, dettaglio_outlier = calcola_outlier(
@@ -3079,7 +3124,7 @@ if uploaded_file is not None:
                     idx: etichetta_azienda(df_orbis.loc[idx], df_orbis) for idx in indici_fuori
                 }
                 indici_esenti_outlier = st.multiselect(
-                    "Tieni comunque nel campione una o più di queste imprese",
+                    "Lascia comunque intatte una o più di queste imprese",
                     options=indici_fuori,
                     format_func=lambda idx: etichette_outlier.get(idx, str(idx)),
                     default=[],
@@ -3088,20 +3133,37 @@ if uploaded_file is not None:
                 if indici_esenti_outlier:
                     maschera_fuori.loc[indici_esenti_outlier] = False
 
-                scartate_outlier = int(maschera_fuori.sum())
-                st.info(
-                    f"Con queste impostazioni escono **{scartate_outlier}** imprese su "
-                    f"{len(df_orbis)} (**{scartate_outlier / max(len(df_orbis), 1) * 100:.1f}%** "
-                    f"del campione)."
-                )
+                quante_fuori = int(maschera_fuori.sum())
+                quota_fuori = quante_fuori / max(len(df_orbis), 1) * 100
+                if metodo_outlier == 'Winsorizzazione':
+                    st.info(
+                        f"Con queste impostazioni **nessuna impresa viene scartata**: i valori "
+                        f"estremi di **{quante_fuori}** imprese su {len(df_orbis)} "
+                        f"(**{quota_fuori:.1f}%** del campione) vengono riportati alla soglia."
+                    )
+                else:
+                    scartate_outlier = quante_fuori
+                    st.info(
+                        f"Con queste impostazioni vengono scartate **{scartate_outlier}** imprese su "
+                        f"{len(df_orbis)} (**{quota_fuori:.1f}%** del campione)."
+                    )
                 if indice_target_protetto is not None:
-                    st.caption("L'azienda analizzata è esclusa dal taglio: resta nel campione in ogni caso.")
+                    st.caption(
+                        "L'azienda analizzata resta sempre fuori dal trattamento: i suoi valori "
+                        "non vengono modificati e non viene mai scartata."
+                    )
                 if dettaglio_outlier:
                     st.caption("Imprese colpite per variabile: " + " · ".join(
                         f"{nome} {quante}" for nome, quante in dettaglio_outlier
                     ))
 
-                df_orbis = df_orbis[~maschera_fuori]
+                if metodo_outlier == 'Winsorizzazione':
+                    df_orbis, maschera_toccate, winsor_valori = winsorizza(
+                        df_orbis, percentile_outlier, anni_outlier, maschera_fuori
+                    )
+                    winsor_imprese = int(maschera_toccate.sum())
+                else:
+                    df_orbis = df_orbis[~maschera_fuori]
 
         righe_finali = len(df_orbis)
         
@@ -3276,7 +3338,8 @@ if uploaded_file is not None:
             label="🗑️ Aziende Scartate", 
             value=righe_scartate, 
             delta=(f"-{scartate_rotazione} Rotazione | -{scartate_gearing} Gearing"
-                   + (f" | -{scartate_outlier} Outlier" if scartate_outlier else "")), 
+                   + (f" | -{scartate_outlier} Outlier" if scartate_outlier else "")
+                   + (f" | {winsor_imprese} winsorizzate" if winsor_imprese else "")), 
             delta_color="inverse"
         )
             
@@ -3529,8 +3592,12 @@ if uploaded_file is not None:
                                 'scartate_dati': scartate_rotazione,
                                 'scartate_gearing': scartate_gearing,
                                 'scartate_outlier': scartate_outlier,
-                                'percentile_outlier': percentile_outlier if scartate_outlier else None,
-                                'perimetro_outlier': perimetro_outlier if scartate_outlier else None,
+                                'winsor_imprese': winsor_imprese,
+                                'winsor_valori': winsor_valori,
+                                'percentile_outlier': (percentile_outlier
+                                                       if (scartate_outlier or winsor_imprese) else None),
+                                'perimetro_outlier': (perimetro_outlier
+                                                      if (scartate_outlier or winsor_imprese) else None),
                                 'finali': righe_finali,
                             }
 

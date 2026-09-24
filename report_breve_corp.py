@@ -8,7 +8,7 @@ import re
 import warnings 
 from pptx import Presentation 
 from identificazione_azienda import riga_target
-from testi_revisione import Serie as SerieRevisione, commento_andamento_ppt
+from testi_revisione import Serie as SerieRevisione, commento_andamento_ppt, riassunto_ppt
 from pptx.util import Inches, Pt, Cm
 import matplotlib.patheffects as pe
 import copy
@@ -2025,6 +2025,31 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             )
             nuove_slide.append(slide_trend)
 
+    # --- chiusura: che cosa dice il report nel suo insieme --------------------
+    # Le slide precedenti raccontano un indicatore per volta: l'ultima rimette
+    # insieme metodo, esito e limiti di lettura.
+    serie_chiusura_az, serie_chiusura_set = {}, {}
+    for chiave_ppt, chiave_testi in CHIAVI_REVISIONE.items():
+        valori_az, valori_set, _ = get_dati_grafico(COLONNE_SERIE[chiave_ppt])
+        serie_chiusura_az[chiave_testi] = dict(zip(anni, valori_az))
+        serie_chiusura_set[chiave_testi] = dict(zip(anni, valori_set))
+    dati_chiusura = {
+        'nome': str(azienda_target), 'az': serie_chiusura_az, 'sett': serie_chiusura_set,
+        'rating_eco': rat_eco, 'rating_patr': rat_pat, 'rating_fin': rat_fin,
+    }
+    slide_chiusura = prepara_slide_indicatore(
+        prs, modello_slide, "Il quadro d'insieme",
+        "Che cosa è stato confrontato, che cosa ne esce e come va letto",
+    )
+    riquadri = riassunto_ppt(dati_chiusura)
+    CHIUSURA_SX, CHIUSURA_LARGA, CHIUSURA_PASSO = Cm(1.75), Cm(14.9), Cm(15.6)
+    CHIUSURA_ALTA = Cm(14.5)        # riquadri di solo testo: piu' bassi di quelli col grafico
+    for posto, (titolo_riquadro, testo_riquadro) in enumerate(riquadri):
+        aggiungi_card_commento(
+            slide_chiusura, CHIUSURA_SX + CHIUSURA_PASSO * posto, GRAFICO_ALTO,
+            CHIUSURA_LARGA, CHIUSURA_ALTA, titolo_riquadro, '', testo_riquadro,
+        )
+
     # Via le sei slide vecchie (tre "Andamento" a tre grafici e tre di soli commenti)
     for slide_vecchia in [prs.slides[i] for i in (15, 14, 13, 12, 11, 10)]:
         elimina_slide(prs, slide_vecchia)
@@ -2032,6 +2057,9 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Le nuove entrano dopo le tre slide di area, prima della Sintesi Strategica
     for posizione, slide_nuova in enumerate(nuove_slide, start=10):
         sposta_slide(prs, slide_nuova, posizione)
+    # La chiusura sta in fondo, subito prima della slide dei contatti
+    # -2 perche' la slide, tolta dalla lista per essere reinserita, non si conta
+    sposta_slide(prs, slide_chiusura, len(prs.slides._sldIdLst) - 2)
 
 
     pulisci_sentinelle_ppt(prs)

@@ -422,6 +422,21 @@ def pulisci_nome_orbis(testo):
     return _RE_MIGLIAIA.sub('mgl', _RE_ASTERISCO_ORBIS.sub('', str(testo)))
 
 
+def _ambito_percentili(perimetro):
+    """Su che cosa si calcolano le code: il solo 2024 o tutti gli esercizi."""
+    perimetro = (perimetro or '2021-2024').strip().lower()
+    return ("per ogni variabile, sul solo esercizio 2024" if perimetro == 'solo 2024'
+            else "per ogni variabile e ogni esercizio del periodo 2021-2024")
+
+
+def _percentile_ordinale(valore):
+    """"all\'1°", "al 99°": l'articolo si concorda con il numero che segue."""
+    testo = format_euro(valore, 1)
+    if testo.endswith(',0'):
+        testo = testo[:-2]
+    return con_articolo(testo, 'a')
+
+
 def costruisci_catena_filtri(info_filtri):
     """
     🔧 BUG 1f — la Nota Metodologica dichiarava 2 soli filtri di selezione.
@@ -491,18 +506,12 @@ def costruisci_catena_filtri(info_filtri):
         soglia = info_filtri.get('percentile_outlier')
         perimetro = info_filtri.get('perimetro_outlier') or '2021-2024'
         soglia = 1.0 if soglia is None else float(soglia)
-        # "inferiori al 1° percentile" vuole l'articolo elidibile: "all'1°".
-        def _percentile(valore):
-            testo = format_euro(valore, 1)
-            if testo.endswith(',0'):
-                testo = testo[:-2]
-            return con_articolo(testo, 'a')
         scarti.append(
             f"{f'{n_outlier:,}'.replace(',', '.')} imprese con almeno un valore anomalo "
             f"fra le nove variabili, individuate con il criterio dei percentili estremi: "
-            f"per ogni variabile e ogni esercizio del periodo {perimetro} restano fuori i "
-            f"valori inferiori {_percentile(soglia)}\u00b0 percentile o superiori "
-            f"{_percentile(100 - soglia)}\u00b0"
+            f"{_ambito_percentili(perimetro)} restano fuori i "
+            f"valori inferiori {_percentile_ordinale(soglia)}\u00b0 percentile o superiori "
+            f"{_percentile_ordinale(100 - soglia)}\u00b0"
         )
     if scarti:
         elenco_scarti = (" e ".join(scarti) if len(scarti) < 3
@@ -511,6 +520,26 @@ def costruisci_catena_filtri(info_filtri):
             "Su questa base la procedura di elaborazione ha escluso ulteriormente "
             + elenco_scarti + "."
         )
+
+    # Winsorizzazione: le imprese restano tutte nel campione, si riportano alla
+    # soglia i soli valori oltre le code.
+    n_winsor = info_filtri.get('winsor_imprese') or 0
+    if n_winsor:
+        soglia = info_filtri.get('percentile_outlier')
+        soglia = 1.0 if soglia is None else float(soglia)
+        perimetro = info_filtri.get('perimetro_outlier') or '2021-2024'
+        valori = info_filtri.get('winsor_valori') or 0
+        frase = (
+            f"Ai valori estremi delle nove variabili è stata infine applicata una "
+            f"winsorizzazione: {_ambito_percentili(perimetro)}, i "
+            f"valori inferiori {_percentile_ordinale(soglia)}° percentile o superiori "
+            f"{_percentile_ordinale(100 - soglia)}° sono stati riportati al valore della "
+            f"soglia"
+        )
+        if valori:
+            frase += (f", per un totale di {f'{valori:,}'.replace(',', '.')} valori riferiti a "
+                      f"{f'{n_winsor:,}'.replace(',', '.')} imprese")
+        frasi.append(frase + ". Nessuna impresa è stata esclusa per questo motivo.")
 
     return " ".join(frasi)
 
@@ -1004,8 +1033,8 @@ def _togli_paragrafo(p):
         p._p.getparent().remove(p._p)
 
 
-def _clona_dopo(p, testo):
-    """Nuovo capoverso con la stessa formattazione di `p`, subito dopo di lui."""
+def _copia_capoverso(p):
+    """Copia dell'XML di un capoverso, senza disegni, segnalibri e fine sezione."""
     copia = copy.deepcopy(p._p)
     for el in list(copia.iter()):
         tag = el.tag if isinstance(el.tag, str) else ''
@@ -1022,10 +1051,65 @@ def _clona_dopo(p, testo):
     for attr in list(copia.attrib):
         if attr.endswith('}paraId') or attr.endswith('}textId'):
             del copia.attrib[attr]
+    return copia
+
+
+def _clona_dopo(p, testo):
+    """Nuovo capoverso con la stessa formattazione di `p`, subito dopo di lui."""
+    copia = _copia_capoverso(p)
     p._p.addnext(copia)
     nuovo = Paragraph(copia, p._parent)
     _scrivi_testo(nuovo, testo)
     return nuovo
+
+
+def _clona_prima(modello, bersaglio, testo):
+    """Capoverso con la formattazione di `modello`, inserito prima di `bersaglio`."""
+    copia = _copia_capoverso(modello)
+    bersaglio._p.addprevious(copia)
+    nuovo = Paragraph(copia, bersaglio._parent)
+    _scrivi_testo(nuovo, testo)
+    return nuovo
+
+
+TITOLO_CHIUSURA = 'Sintesi conclusiva'
+CHIUSURA_CAPOVERSI = ('{{ rev_chiusura_1 }}', '{{ rev_chiusura_2 }}',
+                      '{{ rev_chiusura_3 }}', '{{ rev_chiusura_4 }}')
+
+
+def aggiungi_sintesi_conclusiva(doc_temp):
+    """Chiude l'analisi degli Equilibri con il senso del report, prima della Nota metodologica."""
+    paragrafi = doc_temp.paragraphs
+    def stile(p):
+        try:
+            return p.style.name if p.style is not None else ''
+        except Exception:
+            return ''
+    if any(_testo_normalizzato(p.text) == _testo_normalizzato(TITOLO_CHIUSURA) for p in paragrafi):
+        return False                                    # gia' inserita
+    def e_la_nota(p):
+        return _testo_normalizzato(p.text).lower().startswith('nota metodologica')
+    titolo_nota = next((p for p in paragrafi if stile(p).startswith('Heading') and e_la_nota(p)), None)
+    if titolo_nota is None:
+        return False
+    prima_della_nota = paragrafi[:paragrafi.index(titolo_nota)]
+    modello_titolo = next((p for p in reversed(prima_della_nota) if stile(p) == 'Heading 3'), None)
+    modello_testo = next((p for p in reversed(prima_della_nota)
+                          if p.text.strip() and stile(p).startswith('Body')), None)
+    if modello_titolo is None or modello_testo is None:
+        return False
+    _clona_prima(modello_titolo, titolo_nota, TITOLO_CHIUSURA)
+    for segnaposto in CHIUSURA_CAPOVERSI:
+        _clona_prima(modello_testo, titolo_nota, segnaposto)
+
+    # Il sommario del template e' un elenco scritto a mano: senza la sua voce
+    # il nuovo titolo non comparirebbe nell'indice.
+    voce_nota = next((p for p in paragrafi if stile(p).lower().startswith('toc') and e_la_nota(p)), None)
+    modello_voce = next((p for p in paragrafi
+                         if stile(p).lower().replace(' ', '') == 'toc3'), None)
+    if voce_nota is not None and modello_voce is not None:
+        _clona_prima(modello_voce, voce_nota, TITOLO_CHIUSURA)
+    return True
 
 
 def applica_revisione_paragrafi(doc_temp):
@@ -1227,6 +1311,7 @@ TITOLI_LIVELLO_3 = (
     'Equilibrio Economico',
     'Equilibrio Patrimoniale',
     'Equilibrio Finanziario',
+    'Sintesi conclusiva',
 )
 COLORE_TITOLI = '002060'
 
@@ -1307,6 +1392,7 @@ def lavatrice_nucleare(template_path):
     doc_temp = docx.Document(template_path)
     correggi_testi_template(doc_temp)
     applica_revisione_paragrafi(doc_temp)
+    aggiungi_sintesi_conclusiva(doc_temp)
     elimina_paragrafi_sentinella(doc_temp)
     uniforma_titoli(doc_temp)
     uniforma_didascalie(doc_temp)

@@ -1572,6 +1572,187 @@ def fin_conclusioni(dati):
     return [p1, p2]
 
 
+# --- Sintesi conclusiva: che cosa dice il report nel suo insieme ---------
+
+# Per il Gearing "meglio" vuol dire piu' basso: il verso va rovesciato.
+INVERSI = {'gearing'}
+AREE_INDICATORI = (
+    ('economica', ('ebitda', 'ebit', 'profitto'), 'rating_eco'),
+    ('patrimoniale', ('strut1', 'strut2', 'gearing'), 'rating_patr'),
+    ('finanziaria', ('cr', 'qr', 'rotazione'), 'rating_fin'),
+)
+
+
+_NUMERI_LETTERE = ('nessuno', 'uno', 'due', 'tre', 'quattro', 'cinque',
+                   'sei', 'sette', 'otto', 'nove')
+
+
+def _lettere(quanti, femminile=False):
+    """I numeri piccoli si scrivono in lettere, come nel resto del report."""
+    if not 0 <= quanti < len(_NUMERI_LETTERE):
+        return str(quanti)
+    parola = _NUMERI_LETTERE[quanti]
+    return 'una' if (femminile and parola == 'uno') else parola
+
+
+def _posizione_nove(dati):
+    """Quanti indicatori stanno dal lato favorevole della mediana, quanti no, quanti in linea."""
+    favorevoli = sfavorevoli = allineati = 0
+    for chiave in NOMI_ART:
+        az, sett = _serie(dati, chiave)
+        valore, mediana = az.valore(2024), sett.valore(2024)
+        if valore is None or mediana is None:
+            continue
+        if valore == mediana:
+            allineati += 1
+        elif (valore > mediana) if chiave in INVERSI else (valore < mediana):
+            sfavorevoli += 1
+        else:
+            favorevoli += 1
+    return favorevoli, sfavorevoli, allineati
+
+
+def _direzione_nove(dati):
+    """Quanti indicatori sono migliorati e quanti peggiorati rispetto al primo anno."""
+    meglio = peggio = 0
+    for chiave in NOMI_ART:
+        az, _ = _serie(dati, chiave)
+        if not az.valida or az.vN == az.v0:
+            continue
+        if (az.vN < az.v0) if chiave in INVERSI else (az.vN > az.v0):
+            meglio += 1
+        else:
+            peggio += 1
+    return meglio, peggio
+
+
+def _aree_per_classe(dati):
+    """Le aree raggruppate per classe."""
+    per_classe = {}
+    for nome, _chiavi, chiave_rating in AREE_INDICATORI:
+        per_classe.setdefault(dati.get(chiave_rating, 'B'), []).append(nome)
+    return per_classe
+
+
+def _anni_periodo(dati):
+    for chiave in NOMI_ART:
+        az, _ = _serie(dati, chiave)
+        if az.valida:
+            return az.a0, az.aN
+    return int(ANNI[0]), int(ANNI[-1])
+
+
+def _quanti_indicatori(quanti, singolare, plurale):
+    """"un indicatore si colloca" / "tre indicatori si collocano"."""
+    if quanti == 1:
+        return f"un indicatore {singolare}"
+    return f"{_lettere(quanti)} indicatori {plurale}"
+
+
+def _aree_con_articolo(aree):
+    """"dall'area economica"; "dalle aree economica e patrimoniale"."""
+    if len(aree) == 1:
+        return f"dall'area {aree[0]}"
+    return f"dalle aree {_elenco(aree)}"
+
+
+def chiusura_metodo(dati):
+    a0, aN = _anni_periodo(dati)
+    return (f"Il report ha confrontato nove indicatori di bilancio di {dati['nome']} con le mediane "
+            f"del settore, esercizio per esercizio dal {a0} al {aN}. Il {aN} determina le tre classi, "
+            f"che dividono il comparto in terzili; gli anni precedenti servono a distinguere la "
+            f"posizione raggiunta dalla direzione seguita per arrivarci.")
+
+
+def chiusura_posizione(dati):
+    aN = _anni_periodo(dati)[1]
+    per_classe = _aree_per_classe(dati)
+    if len(per_classe) == 1:
+        classe = next(iter(per_classe))
+        frasi = [f"Nel {aN} le tre aree si collocano tutte in classe {classe}."]
+    else:
+        frasi = [f"Le classi del {aN} sono {dati['rating_eco']} per l'area economica, "
+                 f"{dati['rating_patr']} per quella patrimoniale e {dati['rating_fin']} per quella "
+                 f"finanziaria."]
+    favorevoli, sfavorevoli, allineati = _posizione_nove(dati)
+    totale = favorevoli + sfavorevoli + allineati
+    # la mediana si nomina una volta sola: nelle voci successive basta il lato
+    voci = [(quanti, lungo, corto) for quanti, lungo, corto in (
+        (favorevoli, 'dal lato favorevole della mediana settoriale', 'dal lato favorevole'),
+        (sfavorevoli, 'dal lato sfavorevole della mediana settoriale', 'dal lato sfavorevole'),
+        (allineati, 'in linea con la mediana settoriale', 'in linea con la mediana')) if quanti]
+    if totale == 1:
+        frasi.append(f"L'unico indicatore confrontabile si colloca {voci[0][1]}.")
+    elif len(voci) == 1:
+        frasi.append(f"Tutti e {_lettere(totale)} gli indicatori confrontabili si collocano "
+                     f"{voci[0][1]}.")
+    elif voci:
+        quanti, lungo, _corto = voci[0]
+        pezzi = [f"{_lettere(quanti)} si {'colloca' if quanti == 1 else 'collocano'} {lungo}"]
+        pezzi += [f"{_lettere(q)} {corto}" for q, _lungo, corto in voci[1:]]
+        frasi.append(f"Dei {_lettere(totale)} indicatori confrontabili, {_elenco(pezzi)}.")
+    if len(per_classe) > 1:
+        migliori, peggiori = per_classe.get('A'), per_classe.get('C')
+        if migliori and peggiori:
+            frasi.append(f"Il contributo migliore viene {_aree_con_articolo(migliori)}, quello più "
+                         f"debole {_aree_con_articolo(peggiori)}.")
+        elif peggiori:
+            frasi.append(f"Il peso maggiore sul giudizio complessivo viene "
+                         f"{_aree_con_articolo(peggiori)}.")
+        elif migliori:
+            frasi.append(f"Il contributo migliore viene {_aree_con_articolo(migliori)}.")
+    return " ".join(frasi)
+
+
+def chiusura_direzione(dati):
+    a0, aN = _anni_periodo(dati)
+    meglio, peggio = _direzione_nove(dati)
+    if not (meglio or peggio):
+        return ''
+    if meglio and peggio:
+        frase = (f"Nel confronto con il {a0}, "
+                 f"{_quanti_indicatori(meglio, 'si muove', 'si muovono')} nella direzione favorevole e "
+                 f"{_lettere(peggio)} in quella opposta")
+    else:
+        quanti = meglio or peggio
+        verso = 'favorevole' if meglio else 'sfavorevole'
+        soggetto = ("tutti gli indicatori si muovono" if quanti > 1
+                    else "l'unico indicatore confrontabile si muove")
+        frase = f"Nel confronto con il {a0} {soggetto} nella direzione {verso}"
+    margini = [_serie(dati, k)[0] for k in ('ebitda', 'ebit', 'profitto')]
+    calo_finale = [a for a in margini if a.valida and a.vN < a.vP]
+    if len(calo_finale) == 3:
+        frase += (f". Il {aN} segna però una battuta d'arresto su tutti e tre i margini, ed è questo "
+                  f"il movimento da verificare nel prossimo esercizio")
+    elif calo_finale:
+        frase += f". Il {aN} segna però una riduzione dei margini rispetto al {calo_finale[0].aP}"
+    return frase + "."
+
+
+def chiusura_uso(dati):
+    """Come va letto il report: che cosa misura e che cosa non misura."""
+    return ("Le classi misurano un posizionamento relativo: dicono dove si colloca l'impresa rispetto "
+            "alle altre dello stesso codice di attività, non se un valore sia di per sé adeguato. Il "
+            "confronto si ferma inoltre ai dati di bilancio e non tiene conto degli elementi gestionali "
+            "— portafoglio ordini, tempi di incasso e pagamento, operazioni straordinarie, scelte di "
+            "valutazione — che spesso spiegano gli scostamenti dal settore. Il report individua quindi "
+            "i punti da approfondire e fornisce il termine di paragone; la valutazione conclusiva "
+            "richiede le informazioni interne all'impresa.")
+
+
+def riassunto_ppt(dati):
+    """I tre riquadri della slide di chiusura: metodo, esito, uso."""
+    direzione = chiusura_direzione(dati)
+    esito = chiusura_posizione(dati)
+    if direzione:
+        esito += " " + direzione
+    return [
+        ("Che cosa è stato confrontato", chiusura_metodo(dati)),
+        ("Che cosa ne esce", esito),
+        ("Come si legge", chiusura_uso(dati)),
+    ]
+
+
 def testi_report(dati):
     """Tutti i testi nuovi del report, pronti per il context del template."""
     t = {
@@ -1601,6 +1782,10 @@ def testi_report(dati):
         'rev_fin_intro_2': fin_intro_2(dati),
         'rev_qr_coda': quick_ratio_coda(dati),
         'rev_rotazione': rotazione_paragrafo(dati),
+        'rev_chiusura_1': chiusura_metodo(dati),
+        'rev_chiusura_2': chiusura_posizione(dati),
+        'rev_chiusura_3': chiusura_direzione(dati),
+        'rev_chiusura_4': chiusura_uso(dati),
     }
     for i, testo in enumerate(patr_conclusioni(dati) + ['', '', '', ''], start=1):
         if i > 4:
