@@ -10,6 +10,7 @@ from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
 from report_corp import genera_report_word, pulisci_nome_orbis
+from statistica_robusta import soglie as soglie_robuste, COEFFICIENTE_BAFFI
 from report_breve_corp import genera_presentazione_ppt
 from identificazione_azienda import (
     maschera_target, riga_target, risolvi_ricerca, chiave_da_riga,
@@ -3007,7 +3008,16 @@ if uploaded_file is not None:
             'Indice di Rotazione del Capitale Investito (*)',
         ]
 
-        def calcola_outlier(df_in, percentile, anni):
+        def soglie_colonna(df_in, col, soglie_di):
+            """Le due soglie di una colonna-anno, None quando non si possono calcolare."""
+            serie = pd.to_numeric(df_in[col], errors='coerce')
+            validi = serie.dropna()
+            if len(validi) < 50:          # campione troppo piccolo per stimare le code
+                return serie, None, None
+            basso, alto = soglie_di(validi.to_numpy())
+            return serie, basso, alto
+
+        def calcola_outlier(df_in, anni, soglie_di):
             """Indici delle righe con almeno un valore oltre le code, e il dettaglio."""
             fuori = pd.Series(False, index=df_in.index)
             dettaglio = []
@@ -3017,12 +3027,9 @@ if uploaded_file is not None:
                     col = f"{base} {anno}"
                     if col not in df_in.columns:
                         continue
-                    serie = pd.to_numeric(df_in[col], errors='coerce')
-                    validi = serie.dropna()
-                    if len(validi) < 50:      # campione troppo piccolo per i percentili
+                    serie, basso, alto = soglie_colonna(df_in, col, soglie_di)
+                    if basso is None:
                         continue
-                    basso = validi.quantile(percentile / 100)
-                    alto = validi.quantile(1 - percentile / 100)
                     oltre = serie.notna() & ((serie < basso) | (serie > alto))
                     colpite |= oltre
                 if colpite.any():
@@ -3030,7 +3037,7 @@ if uploaded_file is not None:
                 fuori |= colpite
             return fuori, dettaglio
 
-        def winsorizza(df_in, percentile, anni, righe):
+        def winsorizza(df_in, anni, righe, soglie_di):
             """Riporta i valori oltre le code al valore della soglia: nessuna impresa esce."""
             df_out = df_in.copy()
             toccate = pd.Series(False, index=df_in.index)
@@ -3040,12 +3047,9 @@ if uploaded_file is not None:
                     col = f"{base} {anno}"
                     if col not in df_in.columns:
                         continue
-                    serie = pd.to_numeric(df_in[col], errors='coerce')
-                    validi = serie.dropna()
-                    if len(validi) < 50:
+                    serie, basso, alto = soglie_colonna(df_in, col, soglie_di)
+                    if basso is None:
                         continue
-                    basso = validi.quantile(percentile / 100)
-                    alto = validi.quantile(1 - percentile / 100)
                     oltre = serie.notna() & ((serie < basso) | (serie > alto)) & righe
                     if not oltre.any():
                         continue
@@ -3058,14 +3062,16 @@ if uploaded_file is not None:
         percentile_outlier = 1.0
         perimetro_outlier = '2021-2024'
         metodo_outlier = 'Winsorizzazione'
+        criterio_outlier = 'Percentili'
+        coefficiente_baffi = COEFFICIENTE_BAFFI
         scartate_outlier = 0
         winsor_imprese = 0
         winsor_valori = 0
         with st.expander("📉 Filtro valori anomali (outlier) — opzionale"):
             st.caption(
-                "Individua i valori estremi delle nove variabili con il criterio dei "
-                "percentili e li tratta in uno dei due modi: riportandoli alla soglia "
-                "(winsorizzazione) oppure scartando l'impresa (taglio). Servono a "
+                "Individua i valori estremi delle nove variabili e li tratta in uno dei due "
+                "modi: riportandoli alla soglia (winsorizzazione) oppure scartando l'impresa "
+                "(taglio). Servono a "
                 "neutralizzare i casi che nascono da denominatori vicini a zero e che rendono "
                 "illeggibili media, deviazione standard, asimmetria e curtosi nella Nota "
                 "Metodologica. Le mediane e i terzili, che sono gia' robusti, cambiano poco."
@@ -3077,13 +3083,40 @@ if uploaded_file is not None:
                 key="attiva_filtro_outlier",
             )
             if attiva_filtro_outlier:
-                percentile_outlier = st.slider(
-                    "Ampiezza delle code da scartare (percentile)",
-                    min_value=0.1, max_value=5.0, value=1.0, step=0.1,
-                    help="Con 1,0 restano fuori i valori sotto l'1° percentile e sopra il 99°. "
-                         "Piu' il valore e' alto, piu' imprese vengono interessate.",
-                    key="percentile_outlier",
+                criterio_outlier = st.radio(
+                    "Come individuare le code",
+                    options=['Percentili', 'Boxplot adattato'],
+                    horizontal=True,
+                    help="Percentili: soglie fisse, per esempio 1° e 99°; la quota di valori "
+                         "interessati e' decisa in partenza, uguale per tutte le variabili.\n\n"
+                         "Boxplot adattato (Hubert e Vandervieren, 2008): le soglie partono dai "
+                         "quartili, come nel boxplot classico, e vengono corrette con il medcouple, "
+                         "un indice di asimmetria robusto. Le code si allargano dove la "
+                         "distribuzione e' naturalmente sbilanciata, cosi' viene scartato quello "
+                         "che e' davvero anomalo e non una quota fissa: su una variabile senza "
+                         "valori aberranti i percentili tagliano comunque il 2%, il boxplot "
+                         "adattato meno dell'1%. Il boxplot di Tukey e la regola della deviazione "
+                         "assoluta mediana, che presuppongono simmetria, su questi indici "
+                         "arrivano a dichiarare anomalo oltre meta' del campione.",
+                    key="criterio_outlier",
                 )
+                if criterio_outlier == 'Percentili':
+                    percentile_outlier = st.slider(
+                        "Ampiezza delle code da trattare (percentile)",
+                        min_value=0.1, max_value=5.0, value=1.0, step=0.1,
+                        help="Con 1,0 restano fuori i valori sotto l'1° percentile e sopra il 99°. "
+                             "Piu' il valore e' alto, piu' imprese vengono interessate.",
+                        key="percentile_outlier",
+                    )
+                else:
+                    coefficiente_baffi = st.slider(
+                        "Ampiezza dei baffi",
+                        min_value=1.0, max_value=3.0, value=float(COEFFICIENTE_BAFFI), step=0.1,
+                        help="E' il coefficiente che moltiplica lo scarto interquartile: 1,5 e' il "
+                             "valore classico del boxplot. Alzandolo si trattano solo i valori piu' "
+                             "lontani.",
+                        key="coefficiente_baffi",
+                    )
                 perimetro_outlier = st.radio(
                     "Su quali esercizi applicarlo",
                     options=['2021-2024', 'solo 2024'],
@@ -3105,8 +3138,13 @@ if uploaded_file is not None:
                     key="metodo_outlier",
                 )
                 anni_outlier = ['2024'] if perimetro_outlier == 'solo 2024' else ['2021', '2022', '2023', '2024']
+                soglie_outlier = lambda valori: soglie_robuste(
+                    valori,
+                    'boxplot' if criterio_outlier == 'Boxplot adattato' else 'percentili',
+                    percentile=percentile_outlier, coefficiente=coefficiente_baffi,
+                )
                 maschera_fuori, dettaglio_outlier = calcola_outlier(
-                    df_orbis, percentile_outlier, anni_outlier
+                    df_orbis, anni_outlier, soglie_outlier
                 )
 
                 # L'azienda analizzata non esce mai dal campione: se e' lei l'anomalia,
@@ -3159,7 +3197,7 @@ if uploaded_file is not None:
 
                 if metodo_outlier == 'Winsorizzazione':
                     df_orbis, maschera_toccate, winsor_valori = winsorizza(
-                        df_orbis, percentile_outlier, anni_outlier, maschera_fuori
+                        df_orbis, anni_outlier, maschera_fuori, soglie_outlier
                     )
                     winsor_imprese = int(maschera_toccate.sum())
                 else:
@@ -3594,6 +3632,9 @@ if uploaded_file is not None:
                                 'scartate_outlier': scartate_outlier,
                                 'winsor_imprese': winsor_imprese,
                                 'winsor_valori': winsor_valori,
+                                'criterio_outlier': ('boxplot' if criterio_outlier == 'Boxplot adattato'
+                                                     else 'percentili'),
+                                'coefficiente_baffi': coefficiente_baffi,
                                 'percentile_outlier': (percentile_outlier
                                                        if (scartate_outlier or winsor_imprese) else None),
                                 'perimetro_outlier': (perimetro_outlier

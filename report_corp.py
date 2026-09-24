@@ -425,8 +425,14 @@ def pulisci_nome_orbis(testo):
 def _ambito_percentili(perimetro):
     """Su che cosa si calcolano le code: il solo 2024 o tutti gli esercizi."""
     perimetro = (perimetro or '2021-2024').strip().lower()
-    return ("per ogni variabile, sul solo esercizio 2024" if perimetro == 'solo 2024'
+    return ("per ogni variabile sul solo esercizio 2024" if perimetro == 'solo 2024'
             else "per ogni variabile e ogni esercizio del periodo 2021-2024")
+
+
+def _numero_pulito(valore):
+    """"1,5" e "2", senza i decimali inutili."""
+    testo = format_euro(valore, 2)
+    return testo.rstrip('0').rstrip(',') if ',' in testo else testo
 
 
 def _percentile_ordinale(valore):
@@ -479,6 +485,21 @@ def criteri_dimensionali_usati(attivo_eur, ricavi_eur, dipendenti):
     if len(voci) <= 1:
         return voci[0] if voci else 'parametri disponibili'
     return ", ".join(voci[:-1]) + f" e {voci[-1]}"
+
+
+def _criterio_code(info_filtri):
+    """Il criterio con cui sono state fissate le soglie, come sintagma nominale."""
+    if info_filtri.get('criterio_outlier') == 'boxplot':
+        coefficiente = info_filtri.get('coefficiente_baffi') or 1.5
+        return (f"il boxplot adattato all'asimmetria di Hubert e Vandervieren (2008), che "
+                f"parte dal primo e dal terzo quartile, li amplia di "
+                f"{_numero_pulito(coefficiente)} volte lo scarto interquartile e corregge le "
+                f"soglie con il medcouple, indice di asimmetria robusto")
+    soglia = info_filtri.get('percentile_outlier')
+    soglia = 1.0 if soglia is None else float(soglia)
+    return (f"il criterio dei percentili estremi, che lascia fuori i valori inferiori "
+            f"{_percentile_ordinale(soglia)}° percentile e superiori "
+            f"{_percentile_ordinale(100 - soglia)}°")
 
 
 def costruisci_catena_filtri(info_filtri):
@@ -551,11 +572,9 @@ def costruisci_catena_filtri(info_filtri):
         perimetro = info_filtri.get('perimetro_outlier') or '2021-2024'
         soglia = 1.0 if soglia is None else float(soglia)
         scarti.append(
-            f"{f'{n_outlier:,}'.replace(',', '.')} imprese con almeno un valore anomalo "
-            f"fra le nove variabili, individuate con il criterio dei percentili estremi: "
-            f"{_ambito_percentili(perimetro)} restano fuori i "
-            f"valori inferiori {_percentile_ordinale(soglia)}\u00b0 percentile o superiori "
-            f"{_percentile_ordinale(100 - soglia)}\u00b0"
+            f"{f'{n_outlier:,}'.replace(',', '.')} imprese con almeno un valore fuori dalle "
+            f"code delle nove variabili, calcolate {_ambito_percentili(perimetro)} con "
+            f"{_criterio_code(info_filtri)}"
         )
     if scarti:
         elenco_scarti = (" e ".join(scarti) if len(scarti) < 3
@@ -575,10 +594,9 @@ def costruisci_catena_filtri(info_filtri):
         valori = info_filtri.get('winsor_valori') or 0
         frase = (
             f"Ai valori estremi delle nove variabili è stata infine applicata una "
-            f"winsorizzazione: {_ambito_percentili(perimetro)}, i "
-            f"valori inferiori {_percentile_ordinale(soglia)}° percentile o superiori "
-            f"{_percentile_ordinale(100 - soglia)}° sono stati riportati al valore della "
-            f"soglia"
+            f"winsorizzazione: i valori fuori dalle code, calcolate "
+            f"{_ambito_percentili(perimetro)} con {_criterio_code(info_filtri)}, sono stati "
+            f"riportati al valore della soglia"
         )
         if valori:
             frase += (f", per un totale di {f'{valori:,}'.replace(',', '.')} valori riferiti a "
