@@ -6589,6 +6589,53 @@ def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
     return result
 
 
+# ---------------------------------------------------------------------------
+# Impaginazione: qui stanno le poche misure che il codice impone alle tabelle,
+# che costruisce lui e che nel template non esistono. Tutto il resto - stili,
+# font, dimensioni, colori, spaziature, margini, formato pagina - arriva dal
+# template: chi lo modifica in Word vede il cambiamento nel report, senza
+# mettere le mani nel codice.
+# ---------------------------------------------------------------------------
+COLORE_BORDI_TABELLA = '2B3A67'
+MARGINE_CELLA = {'stretta': 40, 'larga': 80}     # twip, sopra e sotto 20
+COLONNE_TABELLA_STRETTA = 6                      # da qui in su la cella si stringe
+# Corpo del testo nelle tabelle, per numero di colonne: piu' colonne, piu' piccolo,
+# cosi' le celle non vanno a capo.
+CORPO_TABELLA = {4: 9, 5: 8.5, 6: 8, 7: 7.5, 8: 7.5}
+CORPO_TABELLA_MOLTE_COLONNE = 7
+CORPO_TABELLA_POCHE_COLONNE = 10
+# Quota di larghezza della prima colonna, che ospita le etichette.
+QUOTA_PRIMA_COLONNA = ((6, 0.26), (8, 0.22), (99, 0.20))
+# Sotto questa lunghezza un capoverso non viene giustificato: su una riga sola
+# la giustificazione stira le parole.
+LUNGHEZZA_MINIMA_GIUSTIFICAZIONE = 200
+
+
+def _larghezza_utile(doc, ripiego=10440):
+    """La larghezza del testo la decide il template, non il codice."""
+    try:
+        sezione = doc.sections[0]
+        larghezza = sezione.page_width.twips - sezione.left_margin.twips - sezione.right_margin.twips
+        return larghezza if larghezza > 0 else ripiego
+    except Exception:
+        return ripiego
+
+
+def _corpo_del_template(doc):
+    """La dimensione piu' usata nel corpo del testo del template."""
+    conta = {}
+    for p in doc.paragraphs:
+        try:
+            if p.style is None or p.style.name != 'Body Text' or not p.text.strip():
+                continue
+        except Exception:
+            continue
+        for run in p.runs:
+            if run.text.strip() and run.font.size is not None:
+                conta[run.font.size] = conta.get(run.font.size, 0) + 1
+    return max(conta, key=conta.get) if conta else None
+
+
 def migliora_layout(output_buffer):
     """
     Migliora il layout del documento:
@@ -6601,11 +6648,7 @@ def migliora_layout(output_buffer):
     output_buffer.seek(0)
     doc = docx.Document(output_buffer)
 
-    BODY_INDENT = 412
-    PAGE_W = 12240
-    LEFT_MARGIN = 720
-    RIGHT_MARGIN = 1080
-    TEXT_WIDTH = PAGE_W - LEFT_MARGIN - RIGHT_MARGIN   # 10440
+    TEXT_WIDTH = _larghezza_utile(doc)
     # Le tabelle occupano tutta la larghezza utile, senza il rientro del corpo del
     # testo: serve ogni millimetro per far stare ogni riga su una riga sola.
     TABLE_INDENT = 0
@@ -6687,14 +6730,11 @@ def migliora_layout(output_buffer):
         inserisci_in_ordine(tblPr, tblInd)
 
         tblBorders = parse_xml(
-            r'<w:tblBorders %s>'
-            r'<w:top w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
-            r'<w:left w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
-            r'<w:bottom w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
-            r'<w:right w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
-            r'<w:insideH w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
-            r'<w:insideV w:val="single" w:sz="4" w:space="0" w:color="2B3A67"/>'
-            r'</w:tblBorders>' % nsdecls('w')
+            (r'<w:tblBorders %s>' % nsdecls('w'))
+            + "".join(f'<w:{lato} w:val="single" w:sz="4" w:space="0" '
+                      f'w:color="{COLORE_BORDI_TABELLA}"/>'
+                      for lato in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'))
+            + r'</w:tblBorders>'
         )
         inserisci_in_ordine(tblPr, tblBorders)
 
@@ -6736,7 +6776,7 @@ def migliora_layout(output_buffer):
         # parti uguali manda a capo le etichette. Qui la prima colonna riceve una quota
         # maggiore e le restanti si dividono il resto.
         if num_cols >= 4:
-            quota = 0.26 if num_cols <= 6 else (0.22 if num_cols <= 8 else 0.20)
+            quota = next(q for soglia, q in QUOTA_PRIMA_COLONNA if num_cols <= soglia)
             prima_col = int(TABLE_WIDTH * quota)
             altre_col = (TABLE_WIDTH - prima_col) // (num_cols - 1)
         else:
@@ -6744,7 +6784,8 @@ def migliora_layout(output_buffer):
 
         # Margini di cella ridotti sulle tabelle fitte: ogni millimetro recuperato
         # è larghezza utile che evita l'a capo.
-        margine = 40 if num_cols >= 6 else 80
+        margine = (MARGINE_CELLA['stretta'] if num_cols >= COLONNE_TABELLA_STRETTA
+                   else MARGINE_CELLA['larga'])
         vecchio_mar = tblPr.find(qn('w:tblCellMar'))
         if vecchio_mar is not None:
             tblPr.remove(vecchio_mar)
@@ -6780,7 +6821,8 @@ def migliora_layout(output_buffer):
         # Corpo più piccolo quanto più la tabella è fitta di colonne, così le celle
         # non vanno a capo. I titoli di riga restano leggibili perché la prima colonna
         # è già stata allargata sopra.
-        corpo = {4: 9, 5: 8.5, 6: 8, 7: 7.5, 8: 7.5}.get(num_cols, 7 if num_cols > 8 else 10)
+        corpo = CORPO_TABELLA.get(num_cols, CORPO_TABELLA_MOLTE_COLONNE if num_cols > 8
+                                  else CORPO_TABELLA_POCHE_COLONNE)
         for row in rows:
             for cell in row.findall(qn('w:tc')):
                 for para in cell.findall('.//' + qn('w:p')):
@@ -6796,16 +6838,23 @@ def migliora_layout(output_buffer):
                             el = OxmlElement(tag)
                             el.set(qn('w:val'), str(int(corpo * 2)))
                             rPr.append(el)
+    # Il testo che scrive il codice finisce in run senza dimensione, che
+    # prenderebbero quella dello stile (12 pt) e risulterebbero piu' grandi del
+    # resto. Si completa solo quello che manca, con la misura del template: chi
+    # cambia il corpo in Word se lo ritrova nel report.
+    corpo_template = _corpo_del_template(doc)
     for p in doc.paragraphs:
         if p.style.name == 'Body Text' and p.text.strip():
-             for run in p.runs:
-                if run.text.strip() and run.font.size != Pt(10):
-                    run.font.size = Pt(10)
-             # Solo i paragrafi abbastanza lunghi da andare su 3+ righe vengono
-             # giustificati: su paragrafi corti (1-2 righe) la giustificazione
-             # tende a "stirare" vistosamente le parole dell'unica riga non finale.
-             if len(p.text.strip()) >= 200 and p.paragraph_format.alignment is None:
-                 p.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
+            if corpo_template is not None:
+                for run in p.runs:
+                    if run.text.strip() and run.font.size is None:
+                        run.font.size = corpo_template
+            # Solo i paragrafi abbastanza lunghi da andare su 3+ righe vengono
+            # giustificati: su paragrafi corti (1-2 righe) la giustificazione
+            # tende a "stirare" vistosamente le parole dell'unica riga non finale.
+            if (len(p.text.strip()) >= LUNGHEZZA_MINIMA_GIUSTIFICAZIONE
+                    and p.paragraph_format.alignment is None):
+                p.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
 
     # ================================================================
     # Normalizza gli spazi tra i contenuti: esattamente 2 paragrafi vuoti
