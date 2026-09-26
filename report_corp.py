@@ -1161,7 +1161,15 @@ def aggiungi_sintesi_conclusiva(doc_temp):
                           if p.text.strip() and stile(p).startswith('Body')), None)
     if modello_titolo is None or modello_testo is None:
         return False
-    _clona_prima(modello_titolo, titolo_nota, TITOLO_CHIUSURA)
+    titolo = _clona_prima(modello_titolo, titolo_nota, TITOLO_CHIUSURA)
+    # Come gli altri capitoli di terzo livello, la chiusura apre una pagina sua:
+    # altrimenti la sua coda resta appesa in fondo alla pagina precedente.
+    pPr_titolo = titolo._p.find(qn('w:pPr'))
+    if pPr_titolo is None:
+        pPr_titolo = OxmlElement('w:pPr')
+        titolo._p.insert(0, pPr_titolo)
+    if pPr_titolo.find(qn('w:pageBreakBefore')) is None:
+        inserisci_in_ordine(pPr_titolo, OxmlElement('w:pageBreakBefore'))
     for segnaposto in CHIUSURA_CAPOVERSI:
         _clona_prima(modello_testo, titolo_nota, segnaposto)
 
