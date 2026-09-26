@@ -5742,6 +5742,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # (Equilibrio Economico/Patrimoniale/Finanziario) che si accavallano
     # =================================================================
     output_word = correggi_riquadri_indicatori(output_word)
+    output_word = sistema_salti_pagina(output_word)
 
     # =================================================================
     # 📐 POST-PROCESSOR: Allinea i 3 box KPI dell'Executive Summary
@@ -6609,6 +6610,131 @@ QUOTA_PRIMA_COLONNA = ((6, 0.26), (8, 0.22), (99, 0.20))
 # Sotto questa lunghezza un capoverso non viene giustificato: su una riga sola
 # la giustificazione stira le parole.
 LUNGHEZZA_MINIMA_GIUSTIFICAZIONE = 200
+# Fino a questo numero di righe una tabella resta tutta sulla stessa pagina; oltre,
+# si lascia spezzare ripetendo l'intestazione, altrimenti scivola alla pagina dopo
+# lasciando mezza pagina bianca.
+RIGHE_TABELLA_INDIVISIBILE = 12
+# Le forme flottanti del template (i riquadri "Anno 2024", "INDICE ROTAZIONE...")
+# non occupano spazio nel flusso: se l'ancora capita a fine pagina vengono tagliate
+# dal margine. Qui si tiene insieme l'ancora con lo spazio che le serve.
+EMU_PER_TWIP = 635
+ALTEZZA_RIGA_VUOTA = 240          # twip, stima prudente di una riga vuota
+MASSIMI_VUOTI_AGGANCIATI = 24
+
+
+def _forme_flottanti_sotto(p_el):
+    """Quanto sporgono, sotto il capoverso che le ancora, le forme flottanti (twip)."""
+    sporgenza = 0
+    for anc in p_el.iter(qn('wp:anchor')):
+        ext = anc.find(qn('wp:extent'))
+        pos = anc.find(qn('wp:positionV'))
+        if ext is None or pos is None or pos.get('relativeFrom') != 'paragraph':
+            continue
+        scostamento = pos.find(qn('wp:posOffset'))
+        giu = int(scostamento.text) if scostamento is not None and scostamento.text else 0
+        sporgenza = max(sporgenza, (giu + int(ext.get('cy'))) // EMU_PER_TWIP)
+    return sporgenza
+
+
+def _capoverso_vuoto(p):
+    return not p.text.strip() and not p._p.findall('.//' + qn('w:drawing'))
+
+
+def _pPr(p):
+    pPr = p._p.find(qn('w:pPr'))
+    if pPr is None:
+        pPr = OxmlElement('w:pPr')
+        p._p.insert(0, pPr)
+    return pPr
+
+
+def _aggancia_al_seguente(p):
+    pPr = _pPr(p)
+    if pPr.find(qn('w:keepNext')) is None:
+        inserisci_in_ordine(pPr, OxmlElement('w:keepNext'))
+
+
+def sistema_salti_pagina(output_buffer):
+    """Ultimo passaggio: niente pagine vuote, niente forme tagliate dal margine.
+
+    Va dopo correggi_riquadri_indicatori, che ai gruppi di card riserva gia'
+    lo spazio: qui si sistema tutto il resto.
+    """
+    output_buffer.seek(0)
+    doc = docx.Document(output_buffer)
+    togli_salti_pagina_inutili(doc)
+    tieni_insieme_forme_flottanti(doc)
+    risultato = io.BytesIO()
+    doc.save(risultato)
+    risultato.seek(0)
+    return risultato
+
+
+def togli_salti_pagina_inutili(doc):
+    """Una fine sezione porta gia' a pagina nuova: un'interruzione subito dopo lascia una pagina vuota."""
+    tolti = 0
+    paragrafi = doc.paragraphs
+    for i in range(1, len(paragrafi)):
+        pPr = paragrafi[i]._p.find(qn('w:pPr'))
+        if pPr is None:
+            continue
+        salto = pPr.find(qn('w:pageBreakBefore'))
+        if salto is None:
+            continue
+        pPr_prec = paragrafi[i - 1]._p.find(qn('w:pPr'))
+        sect = pPr_prec.find(qn('w:sectPr')) if pPr_prec is not None else None
+        if sect is None:
+            continue
+        tipo = sect.find(qn('w:type'))
+        if tipo is None or str(tipo.get(qn('w:val'), 'nextPage')).startswith('next'):
+            pPr.remove(salto)
+            tolti += 1
+    return tolti
+
+
+def tieni_insieme_forme_flottanti(doc):
+    """Evita che un salto pagina separi una forma flottante dal suo spazio."""
+    sistemati = 0
+    paragrafi = doc.paragraphs
+    for i, p in enumerate(paragrafi):
+        sporgenza = _forme_flottanti_sotto(p._p)
+        if sporgenza <= 0:
+            continue
+        # I gruppi di card indicatore hanno gia' la loro riserva, messa da
+        # correggi_riquadri_indicatori: riservarla due volte aprirebbe un vuoto.
+        mia_ora = _pPr(p).find(qn('w:spacing'))
+        if (mia_ora is not None and mia_ora.get(qn('w:lineRule')) == 'exact'
+                and int(mia_ora.get(qn('w:line'), 0)) >= sporgenza * 0.9):
+            continue
+        seguente = paragrafi[i + 1] if i + 1 < len(paragrafi) else None
+        spaziatura = _pPr(seguente).find(qn('w:spacing')) if seguente is not None else None
+        prima = int(spaziatura.get(qn('w:before'), 0)) if spaziatura is not None else 0
+        if prima >= sporgenza * 0.7:
+            # Lo spazio c'e' gia', ma sta nel capoverso dopo: a inizio pagina Word lo
+            # scarta e la forma resta tagliata sulla pagina precedente. Si sposta
+            # dentro l'ancora, dove non puo' essere perso.
+            spaziatura.set(qn('w:before'), '0')
+            mia = _pPr(p).find(qn('w:spacing'))
+            if mia is None:
+                mia = OxmlElement('w:spacing')
+                inserisci_in_ordine(_pPr(p), mia)
+            mia.set(qn('w:line'), str(max(sporgenza, prima)))
+            mia.set(qn('w:lineRule'), 'exact')
+            sistemati += 1
+            continue
+        # Altrimenti lo spazio sono le righe vuote che seguono: restano agganciate.
+        coperto = 0
+        k = i
+        agganciati = 0
+        while (coperto < sporgenza and k + 1 < len(paragrafi)
+               and agganciati < MASSIMI_VUOTI_AGGANCIATI and _capoverso_vuoto(paragrafi[k + 1])):
+            _aggancia_al_seguente(paragrafi[k])
+            coperto += ALTEZZA_RIGA_VUOTA
+            agganciati += 1
+            k += 1
+        if agganciati:
+            sistemati += 1
+    return sistemati
 
 
 def _larghezza_utile(doc, ripiego=10440):
@@ -6746,6 +6872,7 @@ def migliora_layout(output_buffer):
         # venga divisa a metà tra due pagine: ogni riga (tranne l'ultima) resta
         # agganciata alla successiva, cosi' se non c'è spazio l'intera tabella
         # passa alla pagina seguente invece di spezzarsi a metà.
+        tabella_intera = len(rows) <= RIGHE_TABELLA_INDIVISIBILE
         for idx_row, row in enumerate(rows):
             trPr = row.find(qn('w:trPr'))
             if trPr is None:
@@ -6753,7 +6880,10 @@ def migliora_layout(output_buffer):
                 row.insert(0, trPr)
             if trPr.find(qn('w:cantSplit')) is None:
                 trPr.append(OxmlElement('w:cantSplit'))
-            if idx_row < len(rows) - 1:
+            if idx_row == 0 and not tabella_intera and trPr.find(qn('w:tblHeader')) is None:
+                # tabella lunga: si spezza, ma l'intestazione ricompare sulla pagina dopo
+                trPr.insert(0, OxmlElement('w:tblHeader'))
+            if tabella_intera and idx_row < len(rows) - 1:
                 for para in row.findall('.//' + qn('w:p')):
                     pPr = para.find(qn('w:pPr'))
                     if pPr is None:
@@ -7035,6 +7165,7 @@ def migliora_layout(output_buffer):
                             jc = OxmlElement('w:jc')
                             inserisci_in_ordine(pPr, jc)
                         jc.set(qn('w:val'), 'right')
+
     result = io.BytesIO()
     doc.save(result)
     result.seek(0)
