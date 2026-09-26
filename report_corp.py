@@ -6662,12 +6662,98 @@ def sistema_salti_pagina(output_buffer):
     """
     output_buffer.seek(0)
     doc = docx.Document(output_buffer)
+    unisci_fini_sezione_doppie(doc)
     togli_salti_pagina_inutili(doc)
+    togli_righe_vuote_prima_dei_salti(doc)
     tieni_insieme_forme_flottanti(doc)
     risultato = io.BytesIO()
     doc.save(risultato)
     risultato.seek(0)
     return risultato
+
+
+def _sezione_di(p):
+    pPr = p._p.find(qn('w:pPr'))
+    return pPr.find(qn('w:sectPr')) if pPr is not None else None
+
+
+def _va_a_pagina_nuova(sect):
+    tipo = sect.find(qn('w:type'))
+    return tipo is None or str(tipo.get(qn('w:val'), 'nextPage')).startswith('next')
+
+
+def _firma_sezione(sect, parte):
+    """Le proprieta' della sezione, con intestazioni e pie' risolti al loro contenuto.
+
+    Due sezioni possono puntare a intestazioni diverse che pero' contengono la
+    stessa cosa: contano i contenuti, non gli identificativi.
+    """
+    import hashlib
+    copia = copy.deepcopy(sect)
+    impronte = []
+    riferimenti = (list(copia.iter(qn('w:headerReference')))
+                   + list(copia.iter(qn('w:footerReference'))))
+    for rif in riferimenti:
+        rid = rif.get(qn('r:id'))
+        try:
+            contenuto = parte.rels[rid].target_part.blob
+        except Exception:
+            contenuto = b''
+        # Word duplica le intestazioni a ogni sezione: gli identificativi di
+        # revisione cambiano, il contenuto no. Si confronta il contenuto.
+        contenuto = re.sub(rb'\s(?:w:rsid\w*|w14:\w+)="[^"]*"', b'', contenuto)
+        impronte.append((rif.tag, rif.get(qn('w:type')), hashlib.md5(contenuto).hexdigest()))
+        rif.getparent().remove(rif)
+    for tipo in list(copia.iter(qn('w:type'))):
+        tipo.getparent().remove(tipo)
+    testo = re.sub(r'\s(?:w:rsid\w*|w14:\w+)="[^"]*"', '', copia.xml)
+    return testo, sorted(impronte)
+
+
+def unisci_fini_sezione_doppie(doc):
+    """Due fini di sezione di fila fanno due salti: in mezzo resta una pagina bianca."""
+    unite = 0
+    paragrafi = doc.paragraphs          # istantanea: la lista si accorcia mentre si tolgono
+    for i in range(len(paragrafi) - 1):
+        p, seguente = paragrafi[i], paragrafi[i + 1]
+        prima, dopo = _sezione_di(p), _sezione_di(seguente)
+        if prima is None or dopo is None:
+            continue
+        if not (_va_a_pagina_nuova(prima) and _va_a_pagina_nuova(dopo)):
+            continue
+        if p.text.strip() or p._p.findall('.//' + qn('w:drawing')):
+            continue
+        if _firma_sezione(prima, doc.part) != _firma_sezione(dopo, doc.part):
+            continue
+        p._p.getparent().remove(p._p)
+        unite += 1
+    return unite
+
+
+def togli_righe_vuote_prima_dei_salti(doc):
+    """Le righe vuote davanti a un salto di pagina restano da sole sulla pagina prima.
+
+    Se il blocco precedente finisce a ridosso del fondo pagina, quelle righe
+    scivolano sulla pagina dopo, che si chiude subito sul salto: pagina bianca.
+    """
+    tolte = 0
+    for p in list(doc.paragraphs):
+        pPr = p._p.find(qn('w:pPr'))
+        if pPr is None or pPr.find(qn('w:pageBreakBefore')) is None:
+            continue
+        precedente = p._p.getprevious()
+        while precedente is not None and precedente.tag == qn('w:p'):
+            testo = ''.join(t.text or '' for t in precedente.iter(qn('w:t'))).strip()
+            pPr_prec = precedente.find(qn('w:pPr'))
+            protetto = (testo
+                        or precedente.findall('.//' + qn('w:drawing'))
+                        or (pPr_prec is not None and pPr_prec.find(qn('w:sectPr')) is not None))
+            if protetto:
+                break
+            da_togliere, precedente = precedente, precedente.getprevious()
+            da_togliere.getparent().remove(da_togliere)
+            tolte += 1
+    return tolte
 
 
 def togli_salti_pagina_inutili(doc):
