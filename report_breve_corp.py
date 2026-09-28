@@ -2039,7 +2039,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     }
     slide_chiusura = prepara_slide_indicatore(
         prs, modello_slide, "Il quadro d'insieme",
-        "Che cosa è stato confrontato, che cosa ne esce e come va letto",
+        "Dove si colloca l'impresa, come ci è arrivata e che cosa conviene guardare",
     )
     riquadri = riassunto_ppt(dati_chiusura)
     CHIUSURA_SX, CHIUSURA_LARGA, CHIUSURA_PASSO = Cm(1.75), Cm(14.9), Cm(15.6)

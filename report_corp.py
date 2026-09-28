@@ -1162,16 +1162,20 @@ def aggiungi_sintesi_conclusiva(doc_temp):
     if modello_titolo is None or modello_testo is None:
         return False
     titolo = _clona_prima(modello_titolo, titolo_nota, TITOLO_CHIUSURA)
-    # Come gli altri capitoli di terzo livello, la chiusura apre una pagina sua:
-    # altrimenti la sua coda resta appesa in fondo alla pagina precedente.
-    pPr_titolo = titolo._p.find(qn('w:pPr'))
-    if pPr_titolo is None:
-        pPr_titolo = OxmlElement('w:pPr')
-        titolo._p.insert(0, pPr_titolo)
-    if pPr_titolo.find(qn('w:pageBreakBefore')) is None:
-        inserisci_in_ordine(pPr_titolo, OxmlElement('w:pageBreakBefore'))
-    for segnaposto in CHIUSURA_CAPOVERSI:
-        _clona_prima(modello_testo, titolo_nota, segnaposto)
+    capoversi = [_clona_prima(modello_testo, titolo_nota, segnaposto)
+                 for segnaposto in CHIUSURA_CAPOVERSI]
+    # La chiusura resta tutta insieme: se non ci sta nello spazio rimasto scende
+    # intera alla pagina dopo, senza lasciare code appese ne' pagine mezze vuote.
+    blocco = [titolo] + capoversi
+    for posto, capoverso in enumerate(blocco):
+        pPr = capoverso._p.find(qn('w:pPr'))
+        if pPr is None:
+            pPr = OxmlElement('w:pPr')
+            capoverso._p.insert(0, pPr)
+        if pPr.find(qn('w:keepLines')) is None:
+            inserisci_in_ordine(pPr, OxmlElement('w:keepLines'))
+        if posto < len(blocco) - 1 and pPr.find(qn('w:keepNext')) is None:
+            inserisci_in_ordine(pPr, OxmlElement('w:keepNext'))
 
     # Il sommario del template e' un elenco scritto a mano: senza la sua voce
     # il nuovo titolo non comparirebbe nell'indice.

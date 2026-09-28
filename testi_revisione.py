@@ -1656,100 +1656,242 @@ def _aree_con_articolo(aree):
     return f"dalle aree {_elenco(aree)}"
 
 
-def chiusura_metodo(dati):
-    a0, aN = _anni_periodo(dati)
-    return (f"Il report ha confrontato nove indicatori di bilancio di {dati['nome']} con le mediane "
-            f"del settore, esercizio per esercizio dal {a0} al {aN}. Il {aN} determina le tre classi, "
-            f"che dividono il comparto in terzili; gli anni precedenti servono a distinguere la "
-            f"posizione raggiunta dalla direzione seguita per arrivarci.")
+UNITA_INDICATORI = {'ebitda': '%', 'ebit': '%', 'profitto': '%', 'gearing': '%'}
+# Oltre questo scarto relativo dalla mediana vale la pena nominare l'indicatore.
+SCARTO_DEGNO_DI_NOTA = 0.05
+# La rotazione oltre questo multiplo della mediana e' un caso da spiegare, non un merito.
+ROTAZIONE_ANOMALA = 3.0
+# Struttura, liquidita', rotazione e gearing hanno senso solo positivi: partire da un
+# valore negativo (patrimonio netto sotto zero) rende la variazione illeggibile.
+SOLO_POSITIVI = {'strut1', 'strut2', 'gearing', 'cr', 'qr', 'rotazione'}
+
+
+def _unita(chiave):
+    return UNITA_INDICATORI.get(chiave, '')
+
+
+def _nome_minuscolo(chiave):
+    """"il Margine EBITDA", "l'Indice di Rotazione del Capitale Investito"."""
+    nome = NOMI_ART[chiave]
+    return nome[0].lower() + nome[1:]
+
+
+def _valori_2024(dati, chiave):
+    az, sett = _serie(dati, chiave)
+    return az.valore(2024), sett.valore(2024)
+
+
+def _scarto_relativo(valore, mediana, chiave):
+    """Di quanto l'indicatore batte la mediana, in proporzione: negativo se la subisce."""
+    if valore is None or mediana is None or abs(mediana) < 1e-9:
+        return None
+    scarto = (mediana - valore) if chiave in INVERSI else (valore - mediana)
+    return scarto / abs(mediana)
+
+
+def _confronto(chiave, valore, mediana):
+    """"il Margine EBITDA (14,36% contro il 6,84% del settore)"."""
+    u = _unita(chiave)
+    return f"{_nome_minuscolo(chiave)} ({n(valore, u)} contro {na(mediana, u)} del settore)"
+
+
+def _rotazione_fuori_scala(dati):
+    ro, ros = _serie(dati, 'rotazione')
+    return bool(ro.valida and ros.valida and ros.vN > 0 and ro.vN > ros.vN * ROTAZIONE_ANOMALA)
+
+
+def _estremi_posizione(dati):
+    """L'indicatore piu' avanti e quello piu' indietro rispetto alla mediana."""
+    misure = []
+    for chiave in NOMI_ART:
+        valore, mediana = _valori_2024(dati, chiave)
+        scarto = _scarto_relativo(valore, mediana, chiave)
+        if scarto is None:
+            continue
+        if chiave == 'rotazione' and _rotazione_fuori_scala(dati):
+            continue                       # non e' un merito: se ne parla fra i punti
+        misure.append((scarto, chiave, valore, mediana))
+    if not misure:
+        return None, None
+    misure.sort(key=lambda m: m[0])
+    peggiore = misure[0] if misure[0][0] < -SCARTO_DEGNO_DI_NOTA else None
+    migliore = misure[-1] if misure[-1][0] > SCARTO_DEGNO_DI_NOTA else None
+    return migliore, peggiore
+
+
+def _estremi_percorso(dati):
+    """Il movimento piu' ampio del quadriennio, in meglio e in peggio."""
+    movimenti = []
+    for chiave in NOMI_ART:
+        az, _ = _serie(dati, chiave)
+        if not az.valida or abs(az.v0) < 1e-9 or az.vN == az.v0:
+            continue
+        if chiave in SOLO_POSITIVI and (az.v0 <= 0 or az.vN <= 0):
+            continue
+        guadagno = (az.v0 - az.vN) if chiave in INVERSI else (az.vN - az.v0)
+        movimenti.append((guadagno / abs(az.v0), chiave, az))
+    if not movimenti:
+        return None, None
+    movimenti.sort(key=lambda m: m[0])
+    peggiore = movimenti[0] if movimenti[0][0] < -SCARTO_DEGNO_DI_NOTA else None
+    migliore = movimenti[-1] if movimenti[-1][0] > SCARTO_DEGNO_DI_NOTA else None
+    return migliore, peggiore
+
+
+def _passaggio(chiave, az, relativa=False):
+    """"il Gearing passa dal 133,40% del 2021 al 42,10% del 2024"."""
+    u = _unita(chiave)
+    corpo = f"passa {na(az.v0, u, 'da')} del {az.a0} {na(az.vN, u, 'a')} del {az.aN}"
+    if relativa:
+        return f"{_nome_minuscolo(chiave)}, che {corpo}"
+    return f"{_nome_minuscolo(chiave)} {corpo}"
 
 
 def chiusura_posizione(dati):
+    """Dove si colloca l'impresa nell'ultimo esercizio, con i due estremi."""
     aN = _anni_periodo(dati)[1]
-    per_classe = _aree_per_classe(dati)
-    if len(per_classe) == 1:
-        classe = next(iter(per_classe))
-        frasi = [f"Nel {aN} le tre aree si collocano tutte in classe {classe}."]
-    else:
-        frasi = [f"Le classi del {aN} sono {dati['rating_eco']} per l'area economica, "
-                 f"{dati['rating_patr']} per quella patrimoniale e {dati['rating_fin']} per quella "
-                 f"finanziaria."]
-    favorevoli, sfavorevoli, allineati = _posizione_nove(dati)
-    totale = favorevoli + sfavorevoli + allineati
-    # la mediana si nomina una volta sola: nelle voci successive basta il lato
-    voci = [(quanti, lungo, corto) for quanti, lungo, corto in (
-        (favorevoli, 'dal lato favorevole della mediana settoriale', 'dal lato favorevole'),
-        (sfavorevoli, 'dal lato sfavorevole della mediana settoriale', 'dal lato sfavorevole'),
-        (allineati, 'in linea con la mediana settoriale', 'in linea con la mediana')) if quanti]
-    if totale == 1:
-        frasi.append(f"L'unico indicatore confrontabile si colloca {voci[0][1]}.")
-    elif len(voci) == 1:
-        frasi.append(f"Tutti e {_lettere(totale)} gli indicatori confrontabili si collocano "
-                     f"{voci[0][1]}.")
-    elif voci:
-        quanti, lungo, _corto = voci[0]
-        pezzi = [f"{_lettere(quanti)} si {'colloca' if quanti == 1 else 'collocano'} {lungo}"]
-        pezzi += [f"{_lettere(q)} {corto}" for q, _lungo, corto in voci[1:]]
-        frasi.append(f"Dei {_lettere(totale)} indicatori confrontabili, {_elenco(pezzi)}.")
-    if len(per_classe) > 1:
-        migliori, peggiori = per_classe.get('A'), per_classe.get('C')
-        if migliori and peggiori:
-            frasi.append(f"Il contributo migliore viene {_aree_con_articolo(migliori)}, quello più "
-                         f"debole {_aree_con_articolo(peggiori)}.")
-        elif peggiori:
-            frasi.append(f"Il peso maggiore sul giudizio complessivo viene "
-                         f"{_aree_con_articolo(peggiori)}.")
-        elif migliori:
-            frasi.append(f"Il contributo migliore viene {_aree_con_articolo(migliori)}.")
+    frasi = [f"Nel {aN} {dati['nome']} chiude con l'Equilibrio Economico in classe "
+             f"{dati['rating_eco']}, il Patrimoniale in classe {dati['rating_patr']} e il "
+             f"Finanziario in classe {dati['rating_fin']}."]
+    favorevoli, sfavorevoli, _allineati = _posizione_nove(dati)
+    totale = favorevoli + sfavorevoli
+    if totale:
+        if sfavorevoli == 0:
+            frasi.append("Tutti gli indicatori confrontati stanno dalla parte favorevole della "
+                         "mediana di settore.")
+        elif favorevoli == 0:
+            frasi.append("Nessun indicatore raggiunge la mediana di settore.")
+        else:
+            batte = 'batte' if favorevoli == 1 else 'battono'
+            resta = 'resta' if sfavorevoli == 1 else 'restano'
+            frasi.append(f"Su nove indicatori, {_lettere(favorevoli)} {batte} la mediana di "
+                         f"settore e {_lettere(sfavorevoli)} {resta} indietro.")
+    migliore, peggiore = _estremi_posizione(dati)
+    if migliore:
+        _s, chiave, valore, mediana = migliore
+        frasi.append(f"Il vantaggio più netto riguarda {_confronto(chiave, valore, mediana)}.")
+    if peggiore:
+        _s, chiave, valore, mediana = peggiore
+        attacco = "Il divario più ampio" if migliore else "Il divario maggiore"
+        frasi.append(f"{attacco} riguarda {_confronto(chiave, valore, mediana)}.")
+    if _rotazione_fuori_scala(dati):
+        ro, ros = _serie(dati, 'rotazione')
+        frasi.append(f"A parte va letto l'Indice di Rotazione del Capitale Investito, {n(ro.vN)} "
+                     f"contro {n(ros.vN)} del settore: un valore così distante dal comparto "
+                     f"dipende dalla composizione del capitale investito prima che "
+                     f"dall'efficienza.")
     return " ".join(frasi)
 
 
-def chiusura_direzione(dati):
+def chiusura_percorso(dati):
+    """Come ci e' arrivata: i movimenti che contano del quadriennio."""
     a0, aN = _anni_periodo(dati)
-    meglio, peggio = _direzione_nove(dati)
-    if not (meglio or peggio):
-        return ''
-    if meglio and peggio:
-        frase = (f"Nel confronto con il {a0}, "
-                 f"{_quanti_indicatori(meglio, 'si muove', 'si muovono')} nella direzione favorevole e "
-                 f"{_lettere(peggio)} in quella opposta")
-    else:
-        quanti = meglio or peggio
-        verso = 'favorevole' if meglio else 'sfavorevole'
-        soggetto = ("tutti gli indicatori si muovono" if quanti > 1
-                    else "l'unico indicatore confrontabile si muove")
-        frase = f"Nel confronto con il {a0} {soggetto} nella direzione {verso}"
-    margini = [_serie(dati, k)[0] for k in ('ebitda', 'ebit', 'profitto')]
-    calo_finale = [a for a in margini if a.valida and a.vN < a.vP]
-    if len(calo_finale) == 3:
-        frase += (f". Il {aN} segna però una battuta d'arresto su tutti e tre i margini, ed è questo "
-                  f"il movimento da verificare nel prossimo esercizio")
-    elif calo_finale:
-        frase += f". Il {aN} segna però una riduzione dei margini rispetto al {calo_finale[0].aP}"
-    return frase + "."
+    migliore, peggiore = _estremi_percorso(dati)
+    frasi = []
+    if migliore:
+        _v, chiave, az = migliore
+        frasi.append(f"Nel quadriennio il miglioramento più ampio riguarda "
+                     f"{_passaggio(chiave, az, relativa=True)}.")
+    if peggiore:
+        _v, chiave, az = peggiore
+        attacco = "In direzione opposta," if migliore else "Nel quadriennio"
+        frasi.append(f"{attacco} {_passaggio(chiave, az)}.")
+    if not frasi:
+        frasi.append(f"Fra il {a0} e il {aN} gli indicatori restano sui livelli di partenza.")
+    margini = [(k, _serie(dati, k)[0]) for k in ('ebitda', 'ebit', 'profitto')]
+    in_calo = [k for k, a in margini if a.valida and a.vN < a.vP]
+    if len(in_calo) == 3:
+        frasi.append(f"Nell'ultimo esercizio i tre margini si riducono tutti rispetto al "
+                     f"{margini[0][1].aP}.")
+    elif in_calo:
+        nomi = {'ebitda': "l'EBITDA", 'ebit': "l'EBIT", 'profitto': 'il Margine di Profitto'}
+        verbo = 'si riduce' if len(in_calo) == 1 else 'si riducono'
+        frasi.append(f"Nell'ultimo esercizio {verbo} {_elenco([nomi[k] for k in in_calo])}.")
+    return " ".join(frasi)
+
+
+def _punti_da_seguire(dati):
+    """Le cose concrete da guardare, dalla piu' urgente, ciascuna con il suo numero."""
+    punti = []
+    cr, _crs = _serie(dati, 'cr')
+    qr, _qrs = _serie(dati, 'qr')
+    if cr.valida and cr.vN < 1:
+        punti.append(f"la copertura delle passività correnti (Current Ratio {n(cr.vN)}, "
+                     f"sotto l'unità)")
+    elif qr.valida and qr.vN < 1:
+        punti.append(f"la liquidità al netto del magazzino (Quick Ratio {n(qr.vN)}, "
+                     f"sotto l'unità)")
+    s2, _ = _serie(dati, 'strut2')
+    s1, _ = _serie(dati, 'strut1')
+    if s2.valida and s2.vN < 1:
+        punti.append(f"la copertura delle immobilizzazioni, che le fonti durevoli non garantiscono "
+                     f"per intero (Indice di Struttura di 2° livello {n(s2.vN)})")
+    elif s1.valida and s1.vN < 1:
+        punti.append(f"la struttura delle fonti, con il patrimonio netto che da solo non copre le "
+                     f"immobilizzazioni (Indice di Struttura di 1° livello {n(s1.vN)})")
+    eb, ebs = _serie(dati, 'ebitda')
+    margini_sotto = [k for k in ('ebitda', 'ebit', 'profitto') if _sotto_mediana(*_serie(dati, k))]
+    if margini_sotto:
+        quanti = ("su tutti e tre i margini" if len(margini_sotto) == 3
+                  else "su " + _elenco([{'ebitda': 'EBITDA', 'ebit': 'EBIT',
+                                         'profitto': 'Margine di Profitto'}[k] for k in margini_sotto]))
+        dettaglio = (f" (EBITDA {n(eb.vN, '%')} contro {n(ebs.vN, '%')} del settore)"
+                     if 'ebitda' in margini_sotto and eb.valida and ebs.valida else "")
+        punti.append(f"il recupero della marginalità, sotto la mediana {quanti}{dettaglio}")
+    g, gs = _serie(dati, 'gearing')
+    if g.valida and gs.valida and g.vN > gs.vN:
+        quanto = "molto più alto" if g.vN > gs.vN * 1.5 else "più alto"
+        punti.append(f"il peso del debito, con un Gearing {quanto} della mediana "
+                     f"({n(g.vN, '%')} contro {n(gs.vN, '%')})")
+    ro, ros = _serie(dati, 'rotazione')
+    if _rotazione_fuori_scala(dati):
+        punti.append("la composizione del capitale investito, da cui dipende l'Indice di Rotazione "
+                     "fuori scala")
+    return punti
+
+
+def chiusura_priorita(dati):
+    """Che cosa guardare adesso, e che cosa invece regge."""
+    punti = _punti_da_seguire(dati)[:3]
+    frasi = []
+    if len(punti) == 1:
+        frasi.append(f"Il punto da seguire è {punti[0]}.")
+    elif punti:
+        # le voci contengono gia' delle virgole: si separano con il punto e virgola
+        frasi.append(f"I punti da seguire sono {_lettere(len(punti))}: "
+                     + "; ".join(punti) + ".")
+    per_classe = _aree_per_classe(dati)
+    solide = per_classe.get('A') or []
+    if solide and punti:
+        frasi.append(f"{'Regge' if len(solide) == 1 else 'Reggono'} invece "
+                     f"{_elenco(['l’area ' + a for a in solide])}, in classe A.")
+    elif not punti:
+        _favorevoli, sfavorevoli, _allineati = _posizione_nove(dati)
+        if sfavorevoli:
+            frasi.append("Non emergono criticità di rilievo: dove l'impresa resta indietro lo "
+                         "scarto dalla mediana è contenuto, e nessun indicatore scende sotto le "
+                         "soglie di equilibrio.")
+        else:
+            frasi.append("Non emergono criticità: ogni indicatore batte la mediana di settore, e "
+                         "l'attenzione può concentrarsi sul mantenimento delle posizioni.")
+    return " ".join(frasi)
 
 
 def chiusura_uso(dati):
-    """Come va letto il report: che cosa misura e che cosa non misura."""
-    return ("Le classi misurano un posizionamento relativo: dicono dove si colloca l'impresa rispetto "
-            "alle altre dello stesso codice di attività, non se un valore sia di per sé adeguato. Il "
-            "confronto si ferma inoltre ai dati di bilancio e non tiene conto degli elementi gestionali "
-            "— portafoglio ordini, tempi di incasso e pagamento, operazioni straordinarie, scelte di "
-            "valutazione — che spesso spiegano gli scostamenti dal settore. Il report individua quindi "
-            "i punti da approfondire e fornisce il termine di paragone; la valutazione conclusiva "
-            "richiede le informazioni interne all'impresa.")
+    """Una riga su che cosa misura il confronto e che cosa non misura."""
+    return ("Le classi dicono dove si colloca l'impresa rispetto alle altre dello stesso codice di "
+            "attività, non se un valore sia adeguato in assoluto: il confronto si ferma ai dati di "
+            "bilancio e non vede portafoglio ordini, tempi di incasso, operazioni straordinarie e "
+            "scelte di valutazione, che spesso spiegano gli scostamenti dal settore.")
 
 
 def riassunto_ppt(dati):
-    """I tre riquadri della slide di chiusura: metodo, esito, uso."""
-    direzione = chiusura_direzione(dati)
-    esito = chiusura_posizione(dati)
-    if direzione:
-        esito += " " + direzione
+    """I tre riquadri della slide di chiusura: posizione, percorso, che cosa guardare."""
+    priorita = chiusura_priorita(dati)
     return [
-        ("Che cosa è stato confrontato", chiusura_metodo(dati)),
-        ("Che cosa ne esce", esito),
-        ("Come si legge", chiusura_uso(dati)),
+        ("Dove si colloca", chiusura_posizione(dati)),
+        ("Come ci è arrivata", chiusura_percorso(dati)),
+        ("Che cosa guardare", f"{priorita} {chiusura_uso(dati)}"),
     ]
 
 
@@ -1782,9 +1924,9 @@ def testi_report(dati):
         'rev_fin_intro_2': fin_intro_2(dati),
         'rev_qr_coda': quick_ratio_coda(dati),
         'rev_rotazione': rotazione_paragrafo(dati),
-        'rev_chiusura_1': chiusura_metodo(dati),
-        'rev_chiusura_2': chiusura_posizione(dati),
-        'rev_chiusura_3': chiusura_direzione(dati),
+        'rev_chiusura_1': chiusura_posizione(dati),
+        'rev_chiusura_2': chiusura_percorso(dati),
+        'rev_chiusura_3': chiusura_priorita(dati),
         'rev_chiusura_4': chiusura_uso(dati),
     }
     for i, testo in enumerate(patr_conclusioni(dati) + ['', '', '', ''], start=1):
