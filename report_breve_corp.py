@@ -16,6 +16,7 @@ import matplotlib.patheffects as pe
 import copy
 from pptx.dml.color import RGBColor
 from pptx.util import Emu
+from pptx.oxml.ns import qn
 
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
@@ -590,6 +591,45 @@ def aggiorna_anni_ppt(prs):
                     if nuovo != testo:
                         run.text = nuovo
                         sistemati += 1
+    return sistemati
+
+
+def _riscrivi_paragrafo(par, pezzi):
+    """Riscrive un paragrafo tenendo la formattazione dei suoi run.
+
+    Un pezzo per run, cosi' le interruzioni di riga del template restano dove
+    stanno; i run di troppo si svuotano. Se il testo nuovo sta su una riga sola,
+    le interruzioni in eccesso si levano, per non lasciare una riga vuota.
+    """
+    for i, run in enumerate(par.runs):
+        run.text = pezzi[i] if i < len(pezzi) else ''
+    if len(pezzi) < 2:
+        for interruzione in par._p.findall(qn('a:br')):
+            par._p.remove(interruzione)
+
+
+def aggiorna_anno_istat_ppt(prs, etichetta):
+    """Porta l'annata dei numeri Istat su quella dichiarata dai file.
+
+    La slide di sintesi mette tre numeri Istat sotto un'etichetta sola, scritta
+    nel template: se le tavole hanno annate diverse, qui l'etichetta le distingue
+    e la fonte resta citata senza anno.
+    """
+    sistemati = 0
+    for slide in prs.slides:
+        for forma in slide.shapes:
+            if not forma.has_text_frame:
+                continue
+            for par in forma.text_frame.paragraphs:
+                testo = ''.join(run.text for run in par.runs)
+                if etichetta and re.search(r'Dati riferiti\s*all.anno\s+\d{4}', testo):
+                    pezzi = etichetta
+                elif re.search(r'Fonte dei dati:\s*ISTAT,\s*anno\s+\d{4}', testo):
+                    pezzi = ['Fonte dei dati: ISTAT']
+                else:
+                    continue
+                _riscrivi_paragrafo(par, pezzi)
+                sistemati += 1
     return sistemati
 
 
@@ -1230,8 +1270,25 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         """Legge i file XLSX ISTAT cercando il NACE in modo totale, senza limiti di intestazione."""
         risultati = {
             'tot_imprese': 0, 'tot_val_prod_mln': 0.0, 'tot_dipendenti': 0,
-            'no_num': 0, 'ne_num': 0, 'ce_num': 0, 'su_num': 0
+            'no_num': 0, 'ne_num': 0, 'ce_num': 0, 'su_num': 0,
+            'anno_soc': '', 'anno_dip': '', 'anno_val': '',
         }
+
+        def anno_del_file(df):
+            """L'annata la dichiara il file: "Tempo: 2024" nelle tavole ASIA, una
+            riga "Tempo" con gli anni nelle colonne in quella economica."""
+            for _, riga in df.head(12).iterrows():
+                celle = [str(v).strip() for v in riga.tolist() if str(v).strip() not in ('', 'nan')]
+                if not celle:
+                    continue
+                trovato = re.search(r'Tempo:?\s*(\d{4})', celle[0])
+                if trovato:
+                    return trovato.group(1)
+                if celle[0].rstrip(':').strip().lower() == 'tempo':
+                    for cella in celle[1:]:
+                        if re.fullmatch(r'\d{4}', cella):
+                            return cella
+            return ''
         
         codici_estratti = re.findall(r'\b\d{2}\.?\d{1,2}\b', str(nace_stringa))
         nace_puliti = [c.replace('.', '') for c in codici_estratti if len(c.replace('.', '')) >= 3]
@@ -1268,6 +1325,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             try:
                 # Leggiamo tutto senza skiprows per evitare di saltare i dati
                 df_soc = pd.read_excel(file_soc, header=None, dtype=str)
+                risultati['anno_soc'] = anno_del_file(df_soc)
                 riga = trova_riga_sicura(df_soc)
                 if riga is not None:
                     # Assumiamo che i dati siano in colonna B(1), C(2), D(3), E(4), F(5), G(6)
@@ -1286,6 +1344,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         if os.path.exists(file_dip):
             try:
                 df_dip = pd.read_excel(file_dip, header=None, dtype=str)
+                risultati['anno_dip'] = anno_del_file(df_dip)
                 riga = trova_riga_sicura(df_dip)
                 if riga is not None:
                     risultati['tot_dipendenti'] += int(pulisci_numero_istat(riga.iloc[1]))
@@ -1296,6 +1355,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         if os.path.exists(file_val):
             try:
                 df_val = pd.read_excel(file_val, header=None, dtype=str)
+                risultati['anno_val'] = anno_del_file(df_val)
                 riga = trova_riga_sicura(df_val)
                 if riga is not None:
                     valore_migliaia = pulisci_numero_istat(riga.iloc[3])
@@ -1308,6 +1368,20 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Lanciamo l'estrazione
     dati_istat = estrai_dati_istat(settore_nace, NOME_CARTELLA_ISTAT)
     ha_dati_istat = dati_istat['tot_imprese'] > 0
+
+    # Le tre tavole Istat non hanno sempre la stessa annata: i risultati economici
+    # escono con qualche anno di ritardo rispetto al registro delle imprese attive.
+    # L'etichetta della slide dice quella di ciascuna, invece di dichiararne una per
+    # tutte, e la legge dai file: cambi i file e si aggiorna da se'.
+    anno_asia = dati_istat['anno_soc'] or dati_istat['anno_dip']
+    anno_val = dati_istat['anno_val']
+    if anno_asia and anno_val and anno_asia != anno_val:
+        etichetta_anni_istat = [f'Imprese e addetti {anno_asia}',
+                                f'Valore della produzione {anno_val}']
+    elif anno_asia or anno_val:
+        etichetta_anni_istat = [f"Dati riferiti all\u2019anno {anno_asia or anno_val}"]
+    else:
+        etichetta_anni_istat = []
 
     def calc_perc_istat(num, tot):
         if not ha_dati_istat or tot == 0: return "n.d."
@@ -1972,6 +2046,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     prs = Presentation(template_path)
     revisione_layout_ppt(prs)
     aggiorna_anni_ppt(prs)
+    aggiorna_anno_istat_ppt(prs, etichetta_anni_istat)
 
     for slide in prs.slides:
         for shape in slide.shapes:
