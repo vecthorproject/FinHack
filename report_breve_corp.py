@@ -9,6 +9,8 @@ import warnings
 from pptx import Presentation 
 from identificazione_azienda import riga_target
 from testi_revisione import Serie as SerieRevisione, commento_andamento_ppt, riassunto_ppt
+from periodo import (ANNI, PRIMO, ULTIMO, PENULTIMO, PERIODO, NOME_PERIODO,
+                     ANNO_TEMPLATE, PERIODO_TEMPLATE)
 from pptx.util import Inches, Pt, Cm
 import matplotlib.patheffects as pe
 import copy
@@ -173,7 +175,7 @@ def elabora_shape_per_testo(shape, context):
 # Con tre grafici affiancati le scale si pestano i piedi: sulla stessa slide
 # convivevano un Gearing a 159,50% e un Indice di Struttura a 1,88, e il secondo
 # diventava una riga piatta. Ogni indicatore ha quindi due slide sue, una per la
-# fotografia 2024 e una per il percorso 2021-2024, entrambe commentate.
+# fotografia dell'ultimo esercizio e una per il percorso, entrambe commentate.
 
 _NS_REL = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 
@@ -562,6 +564,35 @@ CORREZIONI_TESTO_PPT = {
 }
 
 
+_RE_FONTE_DATATA_PPT = re.compile(r'Istat|ISTAT|D\.?Lgs|art\.', re.IGNORECASE)
+
+
+def aggiorna_anni_ppt(prs):
+    """Porta gli anni scritti nel template sul periodo di questa edizione.
+
+    Le fonti datate - la slide che cita l'Istat - tengono il loro anno.
+    """
+    if (PERIODO_TEMPLATE, ANNO_TEMPLATE) == (PERIODO, ULTIMO):
+        return 0
+    sistemati = 0
+    for slide in prs.slides:
+        for forma in slide.shapes:
+            if not forma.has_text_frame or _RE_FONTE_DATATA_PPT.search(forma.text_frame.text):
+                continue
+            for par in forma.text_frame.paragraphs:
+                for run in par.runs:
+                    testo = run.text
+                    if not testo or '20' not in testo:
+                        continue
+                    nuovo = testo.replace(PERIODO_TEMPLATE, PERIODO)
+                    nuovo = nuovo.replace(PERIODO_TEMPLATE.replace('-', ' - '), PERIODO.replace('-', ' - '))
+                    nuovo = re.sub(r'\b' + re.escape(ANNO_TEMPLATE) + r'\b', ULTIMO, nuovo)
+                    if nuovo != testo:
+                        run.text = nuovo
+                        sistemati += 1
+    return sistemati
+
+
 def revisione_layout_ppt(prs):
     """Ritocchi di impaginazione della revisione, prima di riempire i segnaposto."""
     for slide in prs.slides:
@@ -757,7 +788,7 @@ def calcola_forza_debolezza(rating_eco, rating_patr, rating_fin):
 # 📝 COMMENTI STANDARDIZZATI PER I GRAFICI (Trend e Barre)
 # =================================================================
 
-# Soglie di lettura del percorso 2021-2024.
+# Soglie di lettura del percorso.
 SOGLIA_VARIAZIONE = 10.0   # % sul valore di partenza: sotto, gli estremi si equivalgono
 SOGLIA_ESCURSIONE = 15.0   # % : sopra, nel mezzo il valore si e' mosso in modo visibile
 
@@ -915,7 +946,7 @@ def preposizione_regione_ppt(nome_regione, preposizione='in'):
 
 
 def commento_2024_ppt(nome_con_articolo, valore, mediana, unita, inverso, lettura, giro=0):
-    """La slide del 2024: dove sta il valore rispetto al settore, e cosa vuol dire."""
+    """La slide dell'ultimo esercizio: dove sta il valore rispetto al settore."""
     return commento_percorso_ppt(nome_con_articolo, valore, mediana, unita, inverso,
                                  lettura, '', giro=giro)
 
@@ -933,19 +964,19 @@ def commento_trend_ppt(nome_con_articolo, frase_percorso, dati_percorso, unita='
                      f"valore {verso} {con_articolo(format_euro(abs(variazione)), 'di')}%: "
                      f"\u00e8 il punto che merita una spiegazione nel commento.")
     elif dati_percorso.get('escursione_pct', 0) < 5:
-        pezzi.append("Nel quadriennio il valore non si muove in modo apprezzabile.")
+        pezzi.append(f"Nel {NOME_PERIODO} il valore non si muove in modo apprezzabile.")
     return " ".join(pezzi)
 
 
 def commento_percorso_ppt(nome_con_articolo, valore, mediana, unita, inverso,
                           lettura, frase_percorso, giro=0):
-    """Il commento di un grafico: dove sta il 2024, come ci e' arrivato, cosa vuol dire."""
+    """Il commento di un grafico: dove sta oggi, come ci e' arrivato, cosa vuol dire."""
     if valore is None or pd.isna(valore):
-        return f"{nome_con_articolo} non risulta disponibile per il 2024."
+        return f"{nome_con_articolo} non risulta disponibile per il {ULTIMO}."
 
     val = f"{format_euro(valore)}{unita}"
     if mediana is None or pd.isna(mediana):
-        testa = f"{nome_con_articolo} si attesta {con_articolo(val, 'a')} nel 2024."
+        testa = f"{nome_con_articolo} si attesta {con_articolo(val, 'a')} nel {ULTIMO}."
     else:
         med = f"{format_euro(mediana)}{unita}"
         favorevole = (valore <= mediana) if inverso else (valore >= mediana)
@@ -953,9 +984,9 @@ def commento_percorso_ppt(nome_con_articolo, valore, mediana, unita, inverso,
         aperture = [
             f"{nome_con_articolo} si attesta {con_articolo(val, 'a')}, "
             f"{'meglio' if favorevole else 'peggio'} della mediana di settore ({med}).",
-            f"Nel 2024 {minuscolo} vale {val} contro {con_articolo(med, None)} del settore: "
+            f"Nel {ULTIMO} {minuscolo} vale {val} contro {con_articolo(med, None)} del settore: "
             f"il confronto \u00e8 {'a favore' if favorevole else 'a sfavore'} dell'impresa.",
-            f"{nome_con_articolo} chiude il 2024 {con_articolo(val, 'a')}; la mediana di "
+            f"{nome_con_articolo} chiude il {ULTIMO} {con_articolo(val, 'a')}; la mediana di "
             f"settore vale {med}, quindi il confronto "
             f"{'premia' if favorevole else 'penalizza'} l'impresa.",
         ]
@@ -1059,7 +1090,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         'Gearing (*) %', 'Current Ratio (*)', 'Quick Ratio (*)', 'Indice di Rotazione del Capitale Investito (*)'
     ]
     
-    anni_col = ['2021', '2022', '2023', '2024', '']
+    anni_col = [*ANNI, '']
     for base in base_numeriche:
         for anno in anni_col:
             c = f"{base} {anno}".strip()
@@ -1091,15 +1122,15 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         return 'A' if punti >= 8 else ('B' if punti >= 5 else 'C')
 
     # --- 1. IL MOTORE DI CALCOLO COMPLETO A 9 METRICHE (Copiatodal Word) ---
-    c_prof = 'Margine di Profitto (*) % 2024'
-    c_ebitda = 'Margine EBITDA (*) % 2024'
-    c_ebit = 'Margine EBIT (*) % 2024'
-    c_rot = 'Indice di Rotazione del Capitale Investito (*) 2024'
-    c_quick = 'Quick Ratio (*) 2024'
-    c_curr = 'Current Ratio (*) 2024'
-    c_str1 = 'Indice di Struttura 1° livello (*) 2024'
-    c_str2 = 'Indice di Struttura 2° livello (*) 2024'
-    c_gear = 'Gearing (*) % 2024'
+    c_prof = 'Margine di Profitto (*) % 2025'
+    c_ebitda = 'Margine EBITDA (*) % 2025'
+    c_ebit = 'Margine EBIT (*) % 2025'
+    c_rot = 'Indice di Rotazione del Capitale Investito (*) 2025'
+    c_quick = 'Quick Ratio (*) 2025'
+    c_curr = 'Current Ratio (*) 2025'
+    c_str1 = 'Indice di Struttura 1° livello (*) 2025'
+    c_str2 = 'Indice di Struttura 2° livello (*) 2025'
+    c_gear = 'Gearing (*) % 2025'
 
     # La Rotazione (c_rot) è tra le dirette: più alto è, più punti prende!
     metriche_dirette = [c_prof, c_ebitda, c_ebit, c_rot, c_quick, c_curr, c_str1, c_str2]
@@ -1151,8 +1182,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Produzione e la 148ª per Totale Attivo su 11.259 imprese). La leadership di mercato
     # e' una questione di dimensione, non di rating: si ordina su tutto il campione, con il
     # Totale Attivo come criterio di spareggio a parita' di Valore della Produzione.
-    _col_prod = 'Totale valore della produzione migl EUR 2024'
-    _col_att  = 'Totale Attivo migl EUR 2024'
+    _col_prod = 'Totale valore della produzione migl EUR 2025'
+    _col_att  = 'Totale Attivo migl EUR 2025'
     _sort_cols = [c for c in [_col_prod, _col_att] if c in df_raw.columns]
     if _sort_cols:
         idx_leader = df_raw.sort_values(by=_sort_cols, ascending=False, na_position='last').index[0]
@@ -1309,8 +1340,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
                                 'sicilia', 'sardegna']): return 'Sud e Isole'
         return None
     valori_macro_panel = {}
-    if col_regione and 'Totale valore della produzione migl EUR 2024' in df_raw.columns:
-        vdp_panel = pd.to_numeric(df_raw['Totale valore della produzione migl EUR 2024'], errors='coerce')
+    if col_regione and 'Totale valore della produzione migl EUR 2025' in df_raw.columns:
+        vdp_panel = pd.to_numeric(df_raw['Totale valore della produzione migl EUR 2025'], errors='coerce')
         macro_panel = df_raw[col_regione].map(_macroarea_da_regione)
         valori_macro_panel = vdp_panel.groupby(macro_panel).sum().to_dict()
     testo_rilevanza_revisione = testo_distribuzione_territoriale(
@@ -1341,8 +1372,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         'tot_imprese_regione': f"{tot_imprese_regione:,}".replace(',', '.'),
         'regione_target': regione_target_pulita,
         # Valori diretti per i riquadri del Market Leader (Senza decimali)
-        'tot_ricavi': format_euro(df_raw.loc[idx_leader].get('Totale valore della produzione migl EUR 2024', 0), 0) if pd.notna(idx_leader) else "n.d.",
-        'tot_attivo': format_euro(df_raw.loc[idx_leader].get('Totale Attivo migl EUR 2024', 0), 0) if pd.notna(idx_leader) else "n.d.",
+        'tot_ricavi': format_euro(df_raw.loc[idx_leader].get('Totale valore della produzione migl EUR 2025', 0), 0) if pd.notna(idx_leader) else "n.d.",
+        'tot_attivo': format_euro(df_raw.loc[idx_leader].get('Totale Attivo migl EUR 2025', 0), 0) if pd.notna(idx_leader) else "n.d.",
         'market_leader': market_leader,
         'rating_tot': rat_tot_c,
         'rating_eco': rat_eco_c,
@@ -1456,7 +1487,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         mem_img.seek(0)
         return mem_img
     
-    anni = ['2021', '2022', '2023', '2024']
+    anni = list(ANNI)
     def get_dati_grafico(nome_colonna):
         az = [riga.get(f'{nome_colonna} {a}', 0) for a in anni]
         set_m = [df_raw[f'{nome_colonna} {a}'].median() if f'{nome_colonna} {a}' in df_raw.columns else 0 for a in anni]
@@ -1484,7 +1515,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     az, st, rg = get_dati_grafico('Indice di Rotazione del Capitale Investito (*)')
     img_fin_3 = crea_grafico_mini(anni, az, st, rg, titolo='Rot. Cap. Inv.')
     # =================================================================
-    # --- 4. GRAFICI A BARRE E TABELLE RANKING (2024)
+    # --- 4. GRAFICI A BARRE E TABELLE RANKING (ultimo esercizio)
     # =================================================================
     def crea_grafico_barre_confronto(metriche, val_ita, val_reg, val_az, nome_regione, figsize=(7, 3.5), etichette_valori=False, suffisso=''):
         fig, ax = plt.subplots(figsize=figsize)
@@ -1582,78 +1613,78 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         return f"{format_euro(pos_ottenuta, 0)}/{format_euro(tot_valide, 0)}"
 
     # ECO
-    az_ebitda, az_ebit, az_prof = riga.get('Margine EBITDA (*) % 2024', 0), riga.get('Margine EBIT (*) % 2024', 0), riga.get('Margine di Profitto (*) % 2024', 0)
-    ita_ebitda = df_raw['Margine EBITDA (*) % 2024'].median() if 'Margine EBITDA (*) % 2024' in df_raw.columns else 0
-    ita_ebit = df_raw['Margine EBIT (*) % 2024'].median() if 'Margine EBIT (*) % 2024' in df_raw.columns else 0
-    ita_prof = df_raw['Margine di Profitto (*) % 2024'].median() if 'Margine di Profitto (*) % 2024' in df_raw.columns else 0
-    reg_ebitda = df_regione['Margine EBITDA (*) % 2024'].median() if not df_regione.empty and 'Margine EBITDA (*) % 2024' in df_regione.columns else 0
-    reg_ebit = df_regione['Margine EBIT (*) % 2024'].median() if not df_regione.empty and 'Margine EBIT (*) % 2024' in df_regione.columns else 0
-    reg_prof = df_regione['Margine di Profitto (*) % 2024'].median() if not df_regione.empty and 'Margine di Profitto (*) % 2024' in df_regione.columns else 0
+    az_ebitda, az_ebit, az_prof = riga.get('Margine EBITDA (*) % 2025', 0), riga.get('Margine EBIT (*) % 2025', 0), riga.get('Margine di Profitto (*) % 2025', 0)
+    ita_ebitda = df_raw['Margine EBITDA (*) % 2025'].median() if 'Margine EBITDA (*) % 2025' in df_raw.columns else 0
+    ita_ebit = df_raw['Margine EBIT (*) % 2025'].median() if 'Margine EBIT (*) % 2025' in df_raw.columns else 0
+    ita_prof = df_raw['Margine di Profitto (*) % 2025'].median() if 'Margine di Profitto (*) % 2025' in df_raw.columns else 0
+    reg_ebitda = df_regione['Margine EBITDA (*) % 2025'].median() if not df_regione.empty and 'Margine EBITDA (*) % 2025' in df_regione.columns else 0
+    reg_ebit = df_regione['Margine EBIT (*) % 2025'].median() if not df_regione.empty and 'Margine EBIT (*) % 2025' in df_regione.columns else 0
+    reg_prof = df_regione['Margine di Profitto (*) % 2025'].median() if not df_regione.empty and 'Margine di Profitto (*) % 2025' in df_regione.columns else 0
 
     img_barre_eco = crea_grafico_barre_confronto(['EBITDA Margin', 'EBIT Margin', 'Profit Margin'], [ita_ebitda, ita_ebit, ita_prof], [reg_ebitda, reg_ebit, reg_prof], [az_ebitda, az_ebit, az_prof], regione_target_pulita)
-    rnk_naz_ebitda, rnk_reg_ebitda = calc_rank_str(df_raw, 'Margine EBITDA (*) % 2024', az_ebitda, True), calc_rank_str(df_regione, 'Margine EBITDA (*) % 2024', az_ebitda, True)
-    rnk_naz_ebit, rnk_reg_ebit = calc_rank_str(df_raw, 'Margine EBIT (*) % 2024', az_ebit, True), calc_rank_str(df_regione, 'Margine EBIT (*) % 2024', az_ebit, True)
-    rnk_naz_prof, rnk_reg_prof = calc_rank_str(df_raw, 'Margine di Profitto (*) % 2024', az_prof, True), calc_rank_str(df_regione, 'Margine di Profitto (*) % 2024', az_prof, True)
+    rnk_naz_ebitda, rnk_reg_ebitda = calc_rank_str(df_raw, 'Margine EBITDA (*) % 2025', az_ebitda, True), calc_rank_str(df_regione, 'Margine EBITDA (*) % 2025', az_ebitda, True)
+    rnk_naz_ebit, rnk_reg_ebit = calc_rank_str(df_raw, 'Margine EBIT (*) % 2025', az_ebit, True), calc_rank_str(df_regione, 'Margine EBIT (*) % 2025', az_ebit, True)
+    rnk_naz_prof, rnk_reg_prof = calc_rank_str(df_raw, 'Margine di Profitto (*) % 2025', az_prof, True), calc_rank_str(df_regione, 'Margine di Profitto (*) % 2025', az_prof, True)
 
     img_tabella_eco = crea_tabella_confronto_img([
         ['EBITDA Margin %', format_euro(ita_ebitda), format_euro(reg_ebitda), format_euro(az_ebitda), rnk_naz_ebitda, rnk_reg_ebitda],
         ['EBIT Margin %', format_euro(ita_ebit), format_euro(reg_ebit), format_euro(az_ebit), rnk_naz_ebit, rnk_reg_ebit],
         ['Profit Margin %', format_euro(ita_prof), format_euro(reg_prof), format_euro(az_prof), rnk_naz_prof, rnk_reg_prof]
-    ], "Equilibrio Economico - Anno 2024")
+    ], f"Equilibrio Economico - Anno {ULTIMO}")
 
     # PATR
-    az_str1, az_str2, az_gear = riga.get('Indice di Struttura 1° livello (*) 2024', 0), riga.get('Indice di Struttura 2° livello (*) 2024', 0), riga.get('Gearing (*) % 2024', 0)
-    ita_str1 = df_raw['Indice di Struttura 1° livello (*) 2024'].median() if 'Indice di Struttura 1° livello (*) 2024' in df_raw.columns else 0
-    ita_str2 = df_raw['Indice di Struttura 2° livello (*) 2024'].median() if 'Indice di Struttura 2° livello (*) 2024' in df_raw.columns else 0
-    ita_gear = df_raw['Gearing (*) % 2024'].median() if 'Gearing (*) % 2024' in df_raw.columns else 0
-    reg_str1 = df_regione['Indice di Struttura 1° livello (*) 2024'].median() if not df_regione.empty and 'Indice di Struttura 1° livello (*) 2024' in df_regione.columns else 0
-    reg_str2 = df_regione['Indice di Struttura 2° livello (*) 2024'].median() if not df_regione.empty and 'Indice di Struttura 2° livello (*) 2024' in df_regione.columns else 0
-    reg_gear = df_regione['Gearing (*) % 2024'].median() if not df_regione.empty and 'Gearing (*) % 2024' in df_regione.columns else 0
+    az_str1, az_str2, az_gear = riga.get('Indice di Struttura 1° livello (*) 2025', 0), riga.get('Indice di Struttura 2° livello (*) 2025', 0), riga.get('Gearing (*) % 2025', 0)
+    ita_str1 = df_raw['Indice di Struttura 1° livello (*) 2025'].median() if 'Indice di Struttura 1° livello (*) 2025' in df_raw.columns else 0
+    ita_str2 = df_raw['Indice di Struttura 2° livello (*) 2025'].median() if 'Indice di Struttura 2° livello (*) 2025' in df_raw.columns else 0
+    ita_gear = df_raw['Gearing (*) % 2025'].median() if 'Gearing (*) % 2025' in df_raw.columns else 0
+    reg_str1 = df_regione['Indice di Struttura 1° livello (*) 2025'].median() if not df_regione.empty and 'Indice di Struttura 1° livello (*) 2025' in df_regione.columns else 0
+    reg_str2 = df_regione['Indice di Struttura 2° livello (*) 2025'].median() if not df_regione.empty and 'Indice di Struttura 2° livello (*) 2025' in df_regione.columns else 0
+    reg_gear = df_regione['Gearing (*) % 2025'].median() if not df_regione.empty and 'Gearing (*) % 2025' in df_regione.columns else 0
 
     # 👇 MODIFICA: Gearing rimosso dall'istogramma, mantenendo solo i due indici di struttura
     img_barre_patr = crea_grafico_barre_confronto(['Ind. Struttura 1°', 'Ind. Struttura 2°'], [ita_str1, ita_str2], [reg_str1, reg_str2], [az_str1, az_str2], regione_target_pulita)
     
-    rnk_naz_str1, rnk_reg_str1 = calc_rank_str(df_raw, 'Indice di Struttura 1° livello (*) 2024', az_str1, True), calc_rank_str(df_regione, 'Indice di Struttura 1° livello (*) 2024', az_str1, True)
-    rnk_naz_str2, rnk_reg_str2 = calc_rank_str(df_raw, 'Indice di Struttura 2° livello (*) 2024', az_str2, True), calc_rank_str(df_regione, 'Indice di Struttura 2° livello (*) 2024', az_str2, True)
-    rnk_naz_gear, rnk_reg_gear = calc_rank_str(df_raw, 'Gearing (*) % 2024', az_gear, False), calc_rank_str(df_regione, 'Gearing (*) % 2024', az_gear, False)
+    rnk_naz_str1, rnk_reg_str1 = calc_rank_str(df_raw, 'Indice di Struttura 1° livello (*) 2025', az_str1, True), calc_rank_str(df_regione, 'Indice di Struttura 1° livello (*) 2025', az_str1, True)
+    rnk_naz_str2, rnk_reg_str2 = calc_rank_str(df_raw, 'Indice di Struttura 2° livello (*) 2025', az_str2, True), calc_rank_str(df_regione, 'Indice di Struttura 2° livello (*) 2025', az_str2, True)
+    rnk_naz_gear, rnk_reg_gear = calc_rank_str(df_raw, 'Gearing (*) % 2025', az_gear, False), calc_rank_str(df_regione, 'Gearing (*) % 2025', az_gear, False)
 
     img_tabella_patr = crea_tabella_confronto_img([
         ['Ind. Struttura 1°', format_euro(ita_str1), format_euro(reg_str1), format_euro(az_str1), rnk_naz_str1, rnk_reg_str1],
         ['Ind. Struttura 2°', format_euro(ita_str2), format_euro(reg_str2), format_euro(az_str2), rnk_naz_str2, rnk_reg_str2],
         ['Gearing %', format_euro(ita_gear), format_euro(reg_gear), format_euro(az_gear), rnk_naz_gear, rnk_reg_gear]
-    ], "Equilibrio Patrimoniale - Anno 2024")
+    ], f"Equilibrio Patrimoniale - Anno {ULTIMO}")
 
     # FIN
-    az_cr, az_qr, az_rot = riga.get('Current Ratio (*) 2024', 0), riga.get('Quick Ratio (*) 2024', 0), riga.get('Indice di Rotazione del Capitale Investito (*) 2024', 0)
-    ita_cr = df_raw['Current Ratio (*) 2024'].median() if 'Current Ratio (*) 2024' in df_raw.columns else 0
-    ita_qr = df_raw['Quick Ratio (*) 2024'].median() if 'Quick Ratio (*) 2024' in df_raw.columns else 0
-    ita_rot = df_raw['Indice di Rotazione del Capitale Investito (*) 2024'].median() if 'Indice di Rotazione del Capitale Investito (*) 2024' in df_raw.columns else 0
-    reg_cr = df_regione['Current Ratio (*) 2024'].median() if not df_regione.empty and 'Current Ratio (*) 2024' in df_regione.columns else 0
-    reg_qr = df_regione['Quick Ratio (*) 2024'].median() if not df_regione.empty and 'Quick Ratio (*) 2024' in df_regione.columns else 0
-    reg_rot = df_regione['Indice di Rotazione del Capitale Investito (*) 2024'].median() if not df_regione.empty and 'Indice di Rotazione del Capitale Investito (*) 2024' in df_regione.columns else 0
+    az_cr, az_qr, az_rot = riga.get('Current Ratio (*) 2025', 0), riga.get('Quick Ratio (*) 2025', 0), riga.get('Indice di Rotazione del Capitale Investito (*) 2025', 0)
+    ita_cr = df_raw['Current Ratio (*) 2025'].median() if 'Current Ratio (*) 2025' in df_raw.columns else 0
+    ita_qr = df_raw['Quick Ratio (*) 2025'].median() if 'Quick Ratio (*) 2025' in df_raw.columns else 0
+    ita_rot = df_raw['Indice di Rotazione del Capitale Investito (*) 2025'].median() if 'Indice di Rotazione del Capitale Investito (*) 2025' in df_raw.columns else 0
+    reg_cr = df_regione['Current Ratio (*) 2025'].median() if not df_regione.empty and 'Current Ratio (*) 2025' in df_regione.columns else 0
+    reg_qr = df_regione['Quick Ratio (*) 2025'].median() if not df_regione.empty and 'Quick Ratio (*) 2025' in df_regione.columns else 0
+    reg_rot = df_regione['Indice di Rotazione del Capitale Investito (*) 2025'].median() if not df_regione.empty and 'Indice di Rotazione del Capitale Investito (*) 2025' in df_regione.columns else 0
 
     img_barre_fin = crea_grafico_barre_confronto(['Current Ratio', 'Quick Ratio', 'Rotazione Cap.'], [ita_cr, ita_qr, ita_rot], [reg_cr, reg_qr, reg_rot], [az_cr, az_qr, az_rot], regione_target_pulita)
-    rnk_naz_cr, rnk_reg_cr = calc_rank_str(df_raw, 'Current Ratio (*) 2024', az_cr, True), calc_rank_str(df_regione, 'Current Ratio (*) 2024', az_cr, True)
-    rnk_naz_qr, rnk_reg_qr = calc_rank_str(df_raw, 'Quick Ratio (*) 2024', az_qr, True), calc_rank_str(df_regione, 'Quick Ratio (*) 2024', az_qr, True)
-    rnk_naz_rot, rnk_reg_rot = calc_rank_str(df_raw, 'Indice di Rotazione del Capitale Investito (*) 2024', az_rot, True), calc_rank_str(df_regione, 'Indice di Rotazione del Capitale Investito (*) 2024', az_rot, True)
+    rnk_naz_cr, rnk_reg_cr = calc_rank_str(df_raw, 'Current Ratio (*) 2025', az_cr, True), calc_rank_str(df_regione, 'Current Ratio (*) 2025', az_cr, True)
+    rnk_naz_qr, rnk_reg_qr = calc_rank_str(df_raw, 'Quick Ratio (*) 2025', az_qr, True), calc_rank_str(df_regione, 'Quick Ratio (*) 2025', az_qr, True)
+    rnk_naz_rot, rnk_reg_rot = calc_rank_str(df_raw, 'Indice di Rotazione del Capitale Investito (*) 2025', az_rot, True), calc_rank_str(df_regione, 'Indice di Rotazione del Capitale Investito (*) 2025', az_rot, True)
 
     img_tabella_fin = crea_tabella_confronto_img([
         ['Current Ratio', format_euro(ita_cr), format_euro(reg_cr), format_euro(az_cr), rnk_naz_cr, rnk_reg_cr],
         ['Quick Ratio', format_euro(ita_qr), format_euro(reg_qr), format_euro(az_qr), rnk_naz_qr, rnk_reg_qr],
         ['Rotazione Cap.', format_euro(ita_rot), format_euro(reg_rot), format_euro(az_rot), rnk_naz_rot, rnk_reg_rot]
-    ], "Equilibrio Finanziario - Anno 2024")
+    ], f"Equilibrio Finanziario - Anno {ULTIMO}")
 
     # =================================================================
     # 📝 COMMENTI STANDARDIZZATI PER I GRAFICI
     # =================================================================
     def serie_anni(col_base):
-        """Costruisce [(2021, v), (2022, v), (2023, v), (2024, v)] leggendo le 4 colonne
+        """Costruisce [(anno, valore), ...] leggendo le colonne
         annuali: analizza_percorso sceglie da qui il primo/ultimo anno DAVVERO disponibili,
         invece di assumere sempre 2021 come base (assunzione che fallisce per le aziende
         senza storico 2021)."""
-        return [(anno, pd.to_numeric(riga.get(f'{col_base} {anno}', np.nan), errors='coerce')) for anno in (2021, 2022, 2023, 2024)]
+        return [(anno, pd.to_numeric(riga.get(f'{col_base} {anno}', np.nan), errors='coerce')) for anno in tuple(int(a) for a in ANNI)]
 
-    # Percorso 2021-2024 letto una volta sola: l'etichetta serve al badge colorato del
+    # Percorso letto una volta sola: l'etichetta serve al badge colorato del
     # box, la frase e' il racconto che finisce nel commento, l'escursione e il salto
     # piu' forte alimentano il foglio di alert per chi commenta.
     # (chiave, colonna base, titolo del box, nome con l'articolo, unita', inverso)
@@ -1693,8 +1724,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         serie_az_perc, serie_it_perc, _serie_rg = get_dati_grafico(base_perc)
         dati_perc['commento_trend'] = commento_andamento_ppt(
             CHIAVI_REVISIONE[chiave_perc],
-            SerieRevisione(dict(zip(('2021', '2022', '2023', '2024'), serie_az_perc))),
-            SerieRevisione(dict(zip(('2021', '2022', '2023', '2024'), serie_it_perc))),
+            SerieRevisione(dict(zip(ANNI, serie_az_perc))),
+            SerieRevisione(dict(zip(ANNI, serie_it_perc))),
         )
         dati_perc['commento'] = commento_percorso_ppt(
             nome_perc, valore_perc, mediana_perc, unita_perc, inverso_perc,
@@ -1775,24 +1806,24 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Estrazione Dati e Calcolo Rating del Leader
     if pd.notna(idx_leader):
         riga_leader = df_raw.loc[idx_leader]
-        ml_ricavi = format_euro(riga_leader.get('Totale valore della produzione migl EUR 2024', 0), 0)
-        ml_attivo = format_euro(riga_leader.get('Totale Attivo migl EUR 2024', 0), 0)
+        ml_ricavi = format_euro(riga_leader.get('Totale valore della produzione migl EUR 2025', 0), 0)
+        ml_attivo = format_euro(riga_leader.get('Totale Attivo migl EUR 2025', 0), 0)
         # MODIFICATO: era == 3 (vecchia scala 3=best); ora 1=primo terzile=best, 3=terzo terzile=worst
-        ml_eco = 'A' if riga_leader.get('pts_Margine EBITDA (*) % 2024', 3) == 1 else ('B' if riga_leader.get('pts_Margine EBITDA (*) % 2024', 3) == 2 else 'C')
-        ml_pat = 'A' if riga_leader.get('pts_Gearing (*) % 2024', 3) == 1 else ('B' if riga_leader.get('pts_Gearing (*) % 2024', 3) == 2 else 'C')
-        ml_fin = 'A' if riga_leader.get('pts_Current Ratio (*) 2024', 3) == 1 else ('B' if riga_leader.get('pts_Current Ratio (*) 2024', 3) == 2 else 'C')
+        ml_eco = 'A' if riga_leader.get('pts_Margine EBITDA (*) % 2025', 3) == 1 else ('B' if riga_leader.get('pts_Margine EBITDA (*) % 2025', 3) == 2 else 'C')
+        ml_pat = 'A' if riga_leader.get('pts_Gearing (*) % 2025', 3) == 1 else ('B' if riga_leader.get('pts_Gearing (*) % 2025', 3) == 2 else 'C')
+        ml_fin = 'A' if riga_leader.get('pts_Current Ratio (*) 2025', 3) == 1 else ('B' if riga_leader.get('pts_Current Ratio (*) 2025', 3) == 2 else 'C')
         ml_bench = f"{ml_eco}{ml_pat}{ml_fin}" # Es: "AAA"
     else:
         ml_ricavi, ml_attivo, ml_bench = "n.d.", "n.d.", "N.D."
 
     # Valori Mediana Settore
-    med_ricavi = format_euro(df_raw['Totale valore della produzione migl EUR 2024'].median(), 0)
-    med_attivo = format_euro(df_raw['Totale Attivo migl EUR 2024'].median(), 0)
+    med_ricavi = format_euro(df_raw['Totale valore della produzione migl EUR 2025'].median(), 0)
+    med_attivo = format_euro(df_raw['Totale Attivo migl EUR 2025'].median(), 0)
     med_bench = "BBB"
 
     # Valori Azienda Target
-    az_ricavi = format_euro(riga.get('Totale valore della produzione migl EUR 2024', 0), 0)
-    az_attivo = format_euro(riga.get('Totale Attivo migl EUR 2024', 0), 0)
+    az_ricavi = format_euro(riga.get('Totale valore della produzione migl EUR 2025', 0), 0)
+    az_attivo = format_euro(riga.get('Totale Attivo migl EUR 2025', 0), 0)
     az_bench = f"{rat_eco}{rat_pat}{rat_fin}" # Es: "ABA"
 
     # Costruzione Matrice Tabella (Colonna Benchmark singola e pulita)
@@ -1925,6 +1956,7 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # =================================================================
     prs = Presentation(template_path)
     revisione_layout_ppt(prs)
+    aggiorna_anni_ppt(prs)
 
     for slide in prs.slides:
         for shape in slide.shapes:
@@ -1991,13 +2023,13 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             unita = dati['unita']
             perc = (unita == '%')
 
-            # --- fotografia 2024 -------------------------------------------------
+            # --- fotografia dell'ultimo esercizio ---------------------------------
             img_2024 = crea_grafico_barre_confronto(
                 [dati['titolo']], [dati['mediana']], [REGIONALI_2024[chiave]], [dati['valore']],
                 regione_target_pulita, figsize=(11.0, 5.6), etichette_valori=True, suffisso=unita,
             )
             slide_2024 = prepara_slide_indicatore(
-                prs, modello_slide, f"{dati['titolo']} — 2024",
+                prs, modello_slide, f"{dati['titolo']} — {ULTIMO}",
                 f"{nome_area} · impresa a confronto con la mediana italiana e con quella "
                 f"{preposizione_regione_ppt(regione_target_pulita, 'di')}",
             )
@@ -2008,15 +2040,15 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
             )
             nuove_slide.append(slide_2024)
 
-            # --- percorso 2021-2024 ----------------------------------------------
+            # --- percorso del periodo ---------------------------------------------
             serie_az, serie_set, serie_reg = get_dati_grafico(COLONNE_SERIE[chiave])
             img_trend = crea_grafico_mini(
-                ['2021', '2022', '2023', '2024'], serie_az, serie_set, serie_reg,
+                list(ANNI), serie_az, serie_set, serie_reg,
                 titolo='', is_percentage=perc, figsize=(11.0, 5.4), pagina_intera=True,
             )
             slide_trend = prepara_slide_indicatore(
-                prs, modello_slide, f"{dati['titolo']} — andamento 2021-2024",
-                f"{nome_area} · serie 2021-2024 dell'impresa, del settore e della regione",
+                prs, modello_slide, f"{dati['titolo']} — andamento {PERIODO}",
+                f"{nome_area} · serie {PERIODO} dell'impresa, del settore e della regione",
             )
             slide_trend.shapes.add_picture(img_trend, GRAFICO_SX, GRAFICO_ALTO, width=GRAFICO_LARGO)
             aggiungi_card_commento(

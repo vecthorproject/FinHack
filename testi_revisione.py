@@ -4,7 +4,7 @@ Testi del report e della presentazione nello stile della revisione di settembre.
 
 La revisione ha riscritto quasi tutti i commenti agli indicatori seguendo alcuni
 criteri costanti:
-- il percorso 2021-2024 si racconta con gli anni e i valori dei punti di svolta;
+- il percorso si racconta con gli anni e i valori dei punti di svolta;
 - la dinamica dell'impresa si confronta sempre con quella della mediana di
   settore, anno per anno quando le due divergono;
 - per i margini si dice di quanti punti percentuali e' cambiato il valore
@@ -23,7 +23,7 @@ import math
 
 from report_corp import con_articolo, format_euro
 
-ANNI = ('2021', '2022', '2023', '2024')
+from periodo import ANNI, ULTIMO, NOME_PERIODO
 
 # Soglie di lettura.
 LIEVE = 5.0          # % : sotto, una variazione e' "lieve"
@@ -70,7 +70,7 @@ class Serie:
         self.punti = [(int(a), round(float(valori[a]), 2)) for a in ANNI if _ok(valori.get(a))]
         self.valida = len(self.punti) >= 2
         # anno e valore piu' recenti servono anche quando manca lo storico
-        self.aN, self.vN = self.punti[-1] if self.punti else (2024, None)
+        self.aN, self.vN = self.punti[-1] if self.punti else (int(ULTIMO), None)
         if not self.valida:
             return
         (self.a0, self.v0), (self.aN, self.vN) = self.punti[0], self.punti[-1]
@@ -88,7 +88,7 @@ class Serie:
 
     @property
     def completa(self):
-        """Copre tutti gli anni dal primo all'ultimo: solo allora e' un quadriennio."""
+        """Copre tutti gli anni del periodo, dal primo all'ultimo."""
         return self.valida and self.a0 == int(ANNI[0]) and self.aN == int(ANNI[-1])
 
     def _sale_fino_a(self, anno):
@@ -153,15 +153,15 @@ def percorso_margine(az, variante):
 
 
 def nel_periodo(s):
-    return "Nel quadriennio" if s.completa else f"Tra il {s.a0} e il {s.aN}"
+    return f"Nel {NOME_PERIODO}" if s.completa else f"Tra il {s.a0} e il {s.aN}"
 
 
 def tutto_il_periodo(s, prep):
-    return f"{prep} tutto il quadriennio" if s.completa else "in tutti gli anni disponibili"
+    return f"{prep} tutto il {NOME_PERIODO}" if s.completa else "in tutti gli anni disponibili"
 
 
 def periodo_anni(s):
-    return f"Nel {'quadriennio' if s.completa else 'periodo'} {s.a0}-{s.aN}"
+    return f"Nel {NOME_PERIODO if s.completa else 'periodo'} {s.a0}-{s.aN}"
 
 
 def passo_per_passo(az, u=''):
@@ -241,7 +241,7 @@ def movimento_settore(sett, u=''):
 
 def _testa(nome_art, az_val, med, u):
     if not _ok(az_val):
-        return f"• {nome_art} non risulta disponibile per il 2024."
+        return f"• {nome_art} non risulta disponibile per il {ULTIMO}."
     base = f"• {nome_art} è pari {na(az_val, u, 'a')}"
     if _ok(med):
         base += f", contro {na(med, u)} della mediana settoriale"
@@ -251,7 +251,7 @@ def _testa(nome_art, az_val, med, u):
 def bullet_margine(chiave, nome_art, az, sett):
     """EBITDA, EBIT e Margine di Profitto."""
     u = '%'
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), u)]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), u)]
     if not az.valida:
         return frasi[0]
     percorso = percorso_margine(az, chiave)
@@ -308,7 +308,7 @@ def bullet_margine(chiave, nome_art, az, sett):
 
 
 def bullet_struttura1(nome_art, az, sett):
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), '')]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), '')]
     if not az.valida:
         return frasi[0]
     if az.vN > 1:
@@ -346,15 +346,15 @@ def _evoluzione_struttura1(az, sett):
         cresciuta = 'cresciuta' if sett.vN > sett.v0 else 'scesa'
         if az.vN < sett.vN:
             frase += (f", ma rimane inferiore alla mediana del settore, {cresciuta} "
-                      f"{na(sett.v0, '', 'da')} {na(sett.vN, '', 'a')} nel quadriennio")
+                      f"{na(sett.v0, '', 'da')} {na(sett.vN, '', 'a')} nel {NOME_PERIODO}")
         else:
             frase += (f" e si colloca sopra la mediana del settore, {cresciuta} "
-                      f"{na(sett.v0, '', 'da')} {na(sett.vN, '', 'a')} nel quadriennio")
+                      f"{na(sett.v0, '', 'da')} {na(sett.vN, '', 'a')} nel {NOME_PERIODO}")
     return frase
 
 
 def bullet_struttura2(nome_art, az, sett):
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), '')]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), '')]
     if not az.valida:
         return frasi[0]
     if az.vN > 1:
@@ -425,7 +425,7 @@ def percorso_gearing(az, sett):
 
 def bullet_gearing(nome_art, az, sett):
     u = '%'
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), u)]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), u)]
     if not az.valida:
         return frasi[0]
     frasi.append(percorso_gearing(az, sett) + ".")
@@ -465,7 +465,7 @@ def percorso_liquidita(az, chiave):
 
 
 def bullet_current_ratio(nome_art, az, sett):
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), '')]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), '')]
     if not az.valida:
         return frasi[0]
     frasi.append(percorso_liquidita(az, 'cr') + ".")
@@ -490,7 +490,7 @@ def lettura_calo_current_ratio(az):
 
 
 def bullet_quick_ratio(nome_art, az, sett):
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), '')]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), '')]
     if not az.valida:
         return frasi[0]
     sopra, sotto = sopra_in_tutti(az, sett) if sett.valida else ([], [1])
@@ -551,7 +551,7 @@ def salto_ultimo_anno(az):
 
 
 def bullet_rotazione(nome_art, az, sett):
-    frasi = [_testa(nome_art, az.valore(2024), sett.valore(2024), '')]
+    frasi = [_testa(nome_art, az.valore(int(ULTIMO)), sett.valore(int(ULTIMO)), '')]
     if not az.valida:
         return frasi[0]
     if sett.valida:
@@ -765,12 +765,12 @@ def descr_rating_eco(dati, testo_attuale_coda):
     margini = {k: _serie(dati, k) for k in nomi}
     sotto = [k for k, (a, s) in margini.items() if _sotto_mediana(a, s)]
     if len(sotto) == 3:
-        testa = "nel 2024 i tre margini analizzati risultano inferiori alle rispettive mediane settoriali"
+        testa = f"nel {ULTIMO} i tre margini analizzati risultano inferiori alle rispettive mediane settoriali"
     elif sotto:
-        testa = ("nel 2024 risultano sotto la mediana di settore i margini "
+        testa = (f"nel {ULTIMO} risultano sotto la mediana di settore i margini "
                  + _elenco([nomi[k] for k in sotto]))
     else:
-        testa = "nel 2024 i tre margini si collocano sopra le rispettive mediane settoriali"
+        testa = f"nel {ULTIMO} i tre margini si collocano sopra le rispettive mediane settoriali"
     if sotto:
         # divario relativo: quanto manca in proporzione alla mediana
         relativi = {k: (margini[k][1].vN - margini[k][0].vN) / abs(margini[k][1].vN) * 100
@@ -928,7 +928,7 @@ def sintesi_finale(dati):
     parti.append("una buona tenuta finanziaria" if tenuta else "una tenuta finanziaria da presidiare")
     struttura = ("una struttura patrimoniale in grado di coprire gli investimenti mediante fonti durevoli"
                  if copertura else "una struttura patrimoniale che non copre integralmente gli investimenti")
-    frase = f"In sintesi, il profilo {g.aN if g.valida else 2024} combina {parti[0]} con {struttura}"
+    frase = f"In sintesi, il profilo {g.aN if g.valida else int(ULTIMO)} combina {parti[0]} con {struttura}"
     if debito_alto:
         frase += ", ma con un ricorso al debito ancora elevato"
     frasi = [frase + "."]
@@ -982,7 +982,7 @@ def ebitda_composizione(dati):
     if not ca or not cs:
         return ''
     divario = ("il divario" if az.valida and sett.valida and az.vN < sett.vN else "il differenziale")
-    return (f"Nel {az.aN if az.valida else 2024} {divario} dell'EBITDA rispetto al settore è "
+    return (f"Nel {az.aN if az.valida else int(ULTIMO)} {divario} dell'EBITDA rispetto al settore è "
             f"riconducibile soprattutto alla diversa composizione del Valore della Produzione. Ponendo "
             f"quest'ultimo pari a 100, {dati['nome']} presenta un'incidenza del costo del venduto pari "
             f"{na(ca.get('venduto'), '%', 'a')}, contro {na(cs.get('venduto'), '%')} della mediana "
@@ -1052,7 +1052,7 @@ def ebit_paragrafo(dati):
                          f"{na(sett.vP, '%', 'da')} {na(sett.vN, '%', 'a')}: il ridimensionamento della "
                          f"redditività operativa riflette in parte una dinamica comune al comparto")
         else:
-            frasi.append(f"Nel quadriennio la mediana di settore passa {na(sett.v0, '%', 'da')} del "
+            frasi.append(f"Nel {NOME_PERIODO} la mediana di settore passa {na(sett.v0, '%', 'da')} del "
                          f"{sett.a0} {na(sett.vN, '%', 'a')} del {sett.aN}")
     return " ".join(frasi) + " (Tabella 9 e Figura 5)."
 
@@ -1100,7 +1100,7 @@ def profitto_struttura(dati):
              > (cs.get('venduto', 0) + cs.get('oneri_gestione', 0)) else
              "Il confronto tra la società e il settore mostra una gestione caratteristica meno onerosa "
              "di quella mediana."]
-    frasi.append(f"Nel 2024 il costo del venduto incide sul Valore della Produzione per "
+    frasi.append(f"Nel {ULTIMO} il costo del venduto incide sul Valore della Produzione per "
                  f"{na(ca.get('venduto'), '%')}, contro {na(cs.get('venduto'), '%')} della mediana, mentre "
                  f"gli oneri di gestione incidono per {na(ca.get('oneri_gestione'), '%')}, contro "
                  f"{na(cs.get('oneri_gestione'), '%')} del settore.")
@@ -1138,7 +1138,7 @@ def eco_conclusione_1(dati):
     if settore_su and picco_az:
         frasi.append(f"Il confronto temporale aggiunge un elemento importante: il settore ha progressivamente "
                      f"migliorato i propri valori mediani tra il {a0.a0} e il {a0.aP} e mantenuto, nel "
-                     f"{a0.aN}, livelli di redditività superiori a quelli iniziali del quadriennio; la "
+                     f"{a0.aN}, livelli di redditività superiori a quelli iniziali del {NOME_PERIODO}; la "
                      f"società, invece, dopo il miglioramento fino al {a0.aP}, ha registrato nell'ultimo "
                      f"esercizio una riduzione di tutti e tre i margini.")
         frasi.append(f"Ne deriva che il {a0.aN} rappresenta per l'impresa non solo un arretramento rispetto al "
@@ -1173,7 +1173,7 @@ def patr_intro_1(dati):
     if s1.valida and s2.valida and s1.vN < s1.v0 and s2.vN < s2.v0:
         return (f"{periodo_anni(s1)} la struttura patrimoniale mostra un indebolimento degli "
                 f"indici di copertura delle immobilizzazioni.")
-    return (f"Nel quadriennio la struttura patrimoniale mostra un andamento differenziato fra i due indici "
+    return (f"Nel {NOME_PERIODO} la struttura patrimoniale mostra un andamento differenziato fra i due indici "
             f"di copertura delle immobilizzazioni.")
 
 
@@ -1248,7 +1248,7 @@ def struttura2_paragrafo(dati):
     if t2.valida:
         dinamica = "una dinamica crescente" if t2.sale_sempre or t2.vN > t2.v0 else "una dinamica decrescente"
         invece = " invece" if (t2.vN > t2.vP) != (s2.vN > s2.vP) else ""
-        frasi.append(f"La mediana settoriale segue{invece} {dinamica} nel quadriennio, da {n(t2.v0)} nel "
+        frasi.append(f"La mediana settoriale segue{invece} {dinamica} nel {NOME_PERIODO}, da {n(t2.v0)} nel "
                      f"{t2.a0} a {n(t2.vN)} nel {t2.aN}.")
         if s2.vN > s2.v0 and s2.vN < s2.vP and t2.vN >= t2.vP:
             frasi.append(f"La società presenta quindi un miglioramento complessivo rispetto al {s2.a0}, ma "
@@ -1336,7 +1336,7 @@ def patr_conclusioni(dati):
     g, gs = _serie(dati, 'gearing')
     copertura = s1.valida and s2.valida and s1.vN > 1 and s2.vN > 1
     leva_alta = g.valida and gs.valida and g.vN > gs.vN
-    anno = s1.aN if s1.valida else 2024
+    anno = s1.aN if s1.valida else int(ULTIMO)
 
     p1 = f"Nel {anno} l'Equilibrio Patrimoniale appartiene alla classe “{dati['rating_patr']}”."
     if copertura and leva_alta:
@@ -1349,7 +1349,7 @@ def patr_conclusioni(dati):
     else:
         p1 += " La copertura delle immobilizzazioni mediante fonti durevoli non è piena."
 
-    # Il quadriennio: si confrontano gli spostamenti veri, non si presume che il
+    # Il periodo: si confrontano gli spostamenti veri, non si presume che il
     # settore abbia fatto meglio.
     p2 = ''
     if s1.valida and t1.valida and g.valida and gs.valida:
@@ -1357,12 +1357,12 @@ def patr_conclusioni(dati):
         leva_giu = g.vN < g.v0
         pezzi = []
         if struttura_su and leva_giu:
-            pezzi.append(f"La lettura del quadriennio mostra un miglioramento degli indici di struttura e una "
+            pezzi.append(f"La lettura del {NOME_PERIODO} mostra un miglioramento degli indici di struttura e una "
                          f"riduzione del Gearing rispetto al {g.a0}")
         elif struttura_su:
-            pezzi.append("La lettura del quadriennio mostra un miglioramento degli indici di struttura")
+            pezzi.append(f"La lettura del {NOME_PERIODO} mostra un miglioramento degli indici di struttura")
         elif leva_giu:
-            pezzi.append(f"La lettura del quadriennio mostra una riduzione del Gearing rispetto al {g.a0}")
+            pezzi.append(f"La lettura del {NOME_PERIODO} mostra una riduzione del Gearing rispetto al {g.a0}")
         recupero_struttura = (t1.vN - s1.vN) < (t1.v0 - s1.v0) and (t2.vN - s2.vN) < (t2.v0 - s2.v0)
         sett_leva_giu_piu = (gs.var or 0) < (g.var or 0)
         dettaglio = []
@@ -1600,7 +1600,7 @@ def _posizione_nove(dati):
     favorevoli = sfavorevoli = allineati = 0
     for chiave in NOMI_ART:
         az, sett = _serie(dati, chiave)
-        valore, mediana = az.valore(2024), sett.valore(2024)
+        valore, mediana = az.valore(int(ULTIMO)), sett.valore(int(ULTIMO))
         if valore is None or mediana is None:
             continue
         if valore == mediana:
@@ -1676,9 +1676,9 @@ def _nome_minuscolo(chiave):
     return nome[0].lower() + nome[1:]
 
 
-def _valori_2024(dati, chiave):
+def _valori_ultimo_anno(dati, chiave):
     az, sett = _serie(dati, chiave)
-    return az.valore(2024), sett.valore(2024)
+    return az.valore(int(ULTIMO)), sett.valore(int(ULTIMO))
 
 
 def _scarto_relativo(valore, mediana, chiave):
@@ -1704,7 +1704,7 @@ def _estremi_posizione(dati):
     """L'indicatore piu' avanti e quello piu' indietro rispetto alla mediana."""
     misure = []
     for chiave in NOMI_ART:
-        valore, mediana = _valori_2024(dati, chiave)
+        valore, mediana = _valori_ultimo_anno(dati, chiave)
         scarto = _scarto_relativo(valore, mediana, chiave)
         if scarto is None:
             continue
@@ -1720,7 +1720,7 @@ def _estremi_posizione(dati):
 
 
 def _estremi_percorso(dati):
-    """Il movimento piu' ampio del quadriennio, in meglio e in peggio."""
+    """Il movimento piu' ampio del periodo, in meglio e in peggio."""
     movimenti = []
     for chiave in NOMI_ART:
         az, _ = _serie(dati, chiave)
@@ -1784,17 +1784,17 @@ def chiusura_posizione(dati):
 
 
 def chiusura_percorso(dati):
-    """Come ci e' arrivata: i movimenti che contano del quadriennio."""
+    """Come ci e' arrivata: i movimenti che contano del periodo."""
     a0, aN = _anni_periodo(dati)
     migliore, peggiore = _estremi_percorso(dati)
     frasi = []
     if migliore:
         _v, chiave, az = migliore
-        frasi.append(f"Nel quadriennio il miglioramento più ampio riguarda "
+        frasi.append(f"Nel {NOME_PERIODO} il miglioramento più ampio riguarda "
                      f"{_passaggio(chiave, az, relativa=True)}.")
     if peggiore:
         _v, chiave, az = peggiore
-        attacco = "In direzione opposta," if migliore else "Nel quadriennio"
+        attacco = "In direzione opposta," if migliore else f"Nel {NOME_PERIODO}"
         frasi.append(f"{attacco} {_passaggio(chiave, az)}.")
     if not frasi:
         frasi.append(f"Fra il {a0} e il {aN} gli indicatori restano sui livelli di partenza.")

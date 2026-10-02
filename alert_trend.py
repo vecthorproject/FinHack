@@ -4,7 +4,7 @@ Foglio di alert sulle oscillazioni, per chi deve commentare il trend.
 
 Il report e la presentazione raccontano il percorso di ogni indicatore, ma chi
 scrive il commento finale ha bisogno di sapere in fretta *dove guardare*: quali
-indicatori si sono mossi davvero nel quadriennio, fra quali anni, e di quanto.
+indicatori si sono mossi davvero nel periodo, fra quali anni, e di quanto.
 Questo foglio mette in fila i nove indicatori ordinati per quanto hanno oscillato,
 con la domanda a cui il commento dovrebbe rispondere.
 
@@ -20,7 +20,7 @@ import xlsxwriter
 from identificazione_azienda import riga_target
 from report_breve_corp import analizza_percorso
 
-ANNI = ('2021', '2022', '2023', '2024')
+from periodo import ANNI, ULTIMO, PERIODO, NOME_PERIODO
 
 # (chiave, colonna base, nome leggibile, nome con l'articolo, unita', indicatore inverso)
 INDICATORI_ALERT = [
@@ -72,17 +72,17 @@ def _domanda(nome_con_articolo, dati, variazione_periodo):
     anno_da, anno_a, variazione = salto
     escursione = dati.get('escursione_pct', 0)
     if abs(variazione) < SOGLIA_MEDIA_SALTO and escursione < SOGLIA_MEDIA_ESCURSIONE:
-        # Nessuno scalino, ma il quadriennio puo' comunque essersi spostato piano piano.
+        # Nessuno scalino, ma il periodo puo' comunque essersi spostato piano piano.
         if abs(variazione_periodo) >= 10:
             return ("Il valore si sposta in modo graduale, senza strappi fra un esercizio e "
-                    "l'altro: al commento basta la direzione complessiva del quadriennio.")
+                    f"l'altro: al commento basta la direzione complessiva del {NOME_PERIODO}.")
         return "Nessun movimento rilevante: si pu\u00f2 confermare la stabilit\u00e0 del periodo."
     verso = 'salito' if variazione > 0 else 'sceso'
     domanda = (f"Che cosa spiega {nome_con_articolo} {verso} del {_numero(abs(variazione))}% "
                f"fra il {anno_da} e il {anno_a}?")
     if dati.get('trend') == 'altalenante':
         domanda += (" Attenzione: il valore torna vicino al punto di partenza, quindi il "
-                    "confronto 2021-2024 da solo nasconde il movimento.")
+                    f"confronto {PERIODO} da solo nasconde il movimento.")
     return domanda
 
 
@@ -143,7 +143,7 @@ def genera_foglio_alert(df_orbis, azienda_target, settore_nace, chiave_target=No
                                'text_wrap': True, 'border': 1, 'border_color': '#D9D9D9'})
     f_num = libro.add_format({'font_size': 10, 'align': 'right', 'valign': 'vcenter',
                               'border': 1, 'border_color': '#D9D9D9'})
-    f_num_2024 = libro.add_format({'font_size': 10, 'bold': True, 'align': 'right',
+    f_num_ultimo = libro.add_format({'font_size': 10, 'bold': True, 'align': 'right',
                                    'valign': 'vcenter', 'border': 1, 'border_color': '#D9D9D9'})
     f_testo = libro.add_format({'font_size': 10, 'valign': 'top', 'text_wrap': True,
                                 'border': 1, 'border_color': '#D9D9D9'})
@@ -156,15 +156,15 @@ def genera_foglio_alert(df_orbis, azienda_target, settore_nace, chiave_target=No
         for nome, colori in COLORI.items()
     }
 
-    foglio.write(0, 0, 'Alert sulle oscillazioni del quadriennio', f_titolo)
-    foglio.write(1, 0, f"{azienda_target} · settore {settore_nace} · esercizi 2021-2024", f_sotto)
+    foglio.write(0, 0, f'Alert sulle oscillazioni del {NOME_PERIODO}', f_titolo)
+    foglio.write(1, 0, f"{azienda_target} · settore {settore_nace} · esercizi {PERIODO}", f_sotto)
     foglio.write(2, 0, 'Gli indicatori sono ordinati da quello che si è mosso di più: '
                        'la colonna "Da chiarire nel commento" dice a cosa rispondere.', f_sotto)
 
-    colonne = ['Indicatore', '2021', '2022', '2023', '2024', 'Andamento',
+    colonne = ['Indicatore', *ANNI, 'Andamento',
                'Escursione max-min', 'Scalino più forte', '%', 'Attenzione',
                'Il percorso', 'Da chiarire nel commento']
-    larghezze = [30, 11, 11, 11, 11, 16, 17, 16, 10, 12, 52, 62]
+    larghezze = [30, *[11] * len(ANNI), 16, 17, 16, 10, 12, 52, 62]
     for i, (testo, larghezza) in enumerate(zip(colonne, larghezze)):
         foglio.set_column(i, i, larghezza)
         foglio.write(4, i, testo, f_intest)
@@ -178,14 +178,15 @@ def genera_foglio_alert(df_orbis, azienda_target, settore_nace, chiave_target=No
         for j, anno in enumerate(ANNI, start=1):
             valore = r['valori'].get(anno)
             testo = 'n.d.' if valore is None or pd.isna(valore) else f"{_numero(valore)}{r['unita']}"
-            foglio.write(riga_xl, j, testo, f_num_2024 if anno == '2024' else f_num)
-        foglio.write(riga_xl, 5, r['trend'].capitalize(), f_num)
-        foglio.write(riga_xl, 6, f"{_numero(r['escursione'])}%", f_num)
-        foglio.write(riga_xl, 7, r['salto_anni'], f_num)
-        foglio.write(riga_xl, 8, f"{_numero(r['salto_pct'])}%", f_num)
-        foglio.write(riga_xl, 9, r['livello'], livelli[r['livello']])
-        foglio.write(riga_xl, 10, r['percorso'], f_testo)
-        foglio.write(riga_xl, 11, r['domanda'], f_testo)
+            foglio.write(riga_xl, j, testo, f_num_ultimo if anno == ULTIMO else f_num)
+        dopo = 1 + len(ANNI)          # la prima colonna dopo gli anni
+        foglio.write(riga_xl, dopo, r['trend'].capitalize(), f_num)
+        foglio.write(riga_xl, dopo + 1, f"{_numero(r['escursione'])}%", f_num)
+        foglio.write(riga_xl, dopo + 2, r['salto_anni'], f_num)
+        foglio.write(riga_xl, dopo + 3, f"{_numero(r['salto_pct'])}%", f_num)
+        foglio.write(riga_xl, dopo + 4, r['livello'], livelli[r['livello']])
+        foglio.write(riga_xl, dopo + 5, r['percorso'], f_testo)
+        foglio.write(riga_xl, dopo + 6, r['domanda'], f_testo)
 
     # --- come si leggono questi numeri ---------------------------------------
     metodo = libro.add_worksheet('Come si legge')
@@ -196,7 +197,7 @@ def genera_foglio_alert(df_orbis, azienda_target, settore_nace, chiave_target=No
     f_tit = libro.add_format({'bold': True, 'font_size': 13, 'font_color': '#1F3352'})
     testi = [
         ('Escursione max-min',
-         "Differenza fra il valore piu' alto e il piu' basso del quadriennio, rapportata al "
+         "Differenza fra il valore piu' alto e il piu' basso del periodo, rapportata al "
          "valore di partenza. Dice quanto l'indicatore si e' mosso, a prescindere da dove ha "
          "chiuso: un indicatore che parte e finisce allo stesso livello puo' avere "
          "un'escursione molto ampia."),

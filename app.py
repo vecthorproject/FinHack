@@ -11,6 +11,10 @@ import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
 from report_corp import genera_report_word, pulisci_nome_orbis
 from statistica_robusta import soglie as soglie_robuste, COEFFICIENTE_BAFFI
+from periodo import ANNI, PRIMO, ULTIMO, PENULTIMO, PERIODO, NOME_PERIODO
+
+# Nome interno della colonna dei ricavi aggregati nei fogli Excel.
+COL_RICAVI_AGG = f'Totale Ricavi migl EUR {ULTIMO}'
 from report_breve_corp import genera_presentazione_ppt
 from identificazione_azienda import (
     maschera_target, riga_target, risolvi_ricerca, chiave_da_riga,
@@ -189,13 +193,13 @@ def elabora_capitolo_1(df_filtered, azienda_target, chiave_target=None):
     fg_macro.loc[m_mac] = ['Totale', f'=SUM(F5:F{tot_row_excel-1})', f'=SUM(G5:G{tot_row_excel-1})']
 
     # FOGLIO "Liv.Agg. per FG"
-    col_attivo = 'Totale Attivo migl EUR 2024'
-    col_ricavi = 'Totale valore della produzione migl EUR 2024'
+    col_attivo = 'Totale Attivo migl EUR 2025'
+    col_ricavi = 'Totale valore della produzione migl EUR 2025'
 
     fin_detail = df_cap1.groupby('Forma Giuridica Pulita')[[col_attivo, col_ricavi]].sum().reset_index()
-    fin_detail.columns = ['Etichette di riga', 'Somma di Totale Attivo migl EUR 2024', 'Somma di Totale valore della produzione migl EUR 2024']
-    fin_detail['Somma di Totale Attivo migl EUR 2024'] = fin_detail['Somma di Totale Attivo migl EUR 2024'].round(2)
-    fin_detail['Somma di Totale valore della produzione migl EUR 2024'] = fin_detail['Somma di Totale valore della produzione migl EUR 2024'].round(2)
+    fin_detail.columns = ['Etichette di riga', 'Somma di Totale Attivo migl EUR 2025', 'Somma di Totale valore della produzione migl EUR 2025']
+    fin_detail['Somma di Totale Attivo migl EUR 2025'] = fin_detail['Somma di Totale Attivo migl EUR 2025'].round(2)
+    fin_detail['Somma di Totale valore della produzione migl EUR 2025'] = fin_detail['Somma di Totale valore della produzione migl EUR 2025'].round(2)
     fin_detail = fin_detail.sort_values('Etichette di riga').reset_index(drop=True)
     m_fin_det = len(fin_detail)
     fin_detail.loc[m_fin_det] = ['Totale complessivo', f'=SUM(B2:B{m_fin_det+1})', f'=SUM(C2:C{m_fin_det+1})']
@@ -375,8 +379,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     # --- LOGICA PANDAS ---
     cols = [
-        'Ragione socialeCaratteri latini', 'NUTS2', 'Totale Attivo migl EUR 2024', 
-        'Totale valore della produzione migl EUR 2024', 'Numero dipendenti 2024'
+        'Ragione socialeCaratteri latini', 'NUTS2', 'Totale Attivo migl EUR 2025', 
+        'Totale valore della produzione migl EUR 2025', 'Numero dipendenti 2025'
     ]
     # Filtriamo solo le colonne che esistono realmente nel file
     cols_to_use = [c for c in cols if c in df_base.columns]
@@ -384,7 +388,7 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     
     df_base.rename(columns={
         'NUTS2': 'Regione', 
-        'Totale valore della produzione migl EUR 2024': 'Totale Ricavi migl EUR 2024',
+        'Totale valore della produzione migl EUR 2025': COL_RICAVI_AGG,
         'Ragione socialeCaratteri latini': 'Ragione Sociale'
     }, inplace=True)
 
@@ -398,12 +402,12 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     else:
         df_base['Nome Regione'] = 'Altro'
 
-    for col in ['Totale Attivo migl EUR 2024', 'Totale Ricavi migl EUR 2024']:
+    for col in ['Totale Attivo migl EUR 2025', COL_RICAVI_AGG]:
         if col in df_base.columns:
             df_base[col] = pd.to_numeric(df_base[col], errors='coerce')
             
-    if 'Numero dipendenti 2024' in df_base.columns:
-        df_base['Numero dipendenti 2024'] = pd.to_numeric(df_base['Numero dipendenti 2024'], errors='coerce')
+    if 'Numero dipendenti 2025' in df_base.columns:
+        df_base['Numero dipendenti 2025'] = pd.to_numeric(df_base['Numero dipendenti 2025'], errors='coerce')
 
     def get_macro(nuts2):
         if pd.isna(nuts2): return 'Altro'
@@ -421,14 +425,14 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     pivot_reg = df_base.groupby(['Macroregione', 'Nome Regione']).agg({
         'Ragione Sociale': 'count',
-        'Totale Ricavi migl EUR 2024': 'sum',
-        'Totale Attivo migl EUR 2024': 'sum',
-        'Numero dipendenti 2024': 'sum'
+        COL_RICAVI_AGG: 'sum',
+        'Totale Attivo migl EUR 2025': 'sum',
+        'Numero dipendenti 2025': 'sum'
     }).rename(columns={'Ragione Sociale': 'Imprese'})
 
-    pivot_reg['Totale Ricavi migl EUR 2024'] = pivot_reg['Totale Ricavi migl EUR 2024'].round(2)
-    pivot_reg['Totale Attivo migl EUR 2024'] = pivot_reg['Totale Attivo migl EUR 2024'].round(2)
-    pivot_reg['Numero dipendenti 2024'] = pivot_reg['Numero dipendenti 2024'].fillna(0).astype(int)
+    pivot_reg[COL_RICAVI_AGG] = pivot_reg[COL_RICAVI_AGG].round(2)
+    pivot_reg['Totale Attivo migl EUR 2025'] = pivot_reg['Totale Attivo migl EUR 2025'].round(2)
+    pivot_reg['Numero dipendenti 2025'] = pivot_reg['Numero dipendenti 2025'].fillna(0).astype(int)
     pivot_reg['Imprese'] = pivot_reg['Imprese'].fillna(0).astype(int)
 
     # 🟢 ESTRATTO TARGET: Trova la regione (NUTS2) e la macroregione dell'azienda bersaglio
@@ -512,9 +516,9 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
             worksheet.write(current_idx, 0, reg, f_r)
             worksheet.write(current_idx, 1, row_data['Imprese'], f_i)
-            worksheet.write(current_idx, 3, row_data['Totale Ricavi migl EUR 2024'], f_d)
-            worksheet.write(current_idx, 5, row_data['Totale Attivo migl EUR 2024'], f_d)
-            worksheet.write(current_idx, 7, row_data['Numero dipendenti 2024'], f_i)
+            worksheet.write(current_idx, 3, row_data[COL_RICAVI_AGG], f_d)
+            worksheet.write(current_idx, 5, row_data['Totale Attivo migl EUR 2025'], f_d)
+            worksheet.write(current_idx, 7, row_data['Numero dipendenti 2025'], f_i)
             for c, v_col in zip([2, 4, 6, 8], ['B', 'D', 'F', 'H']):
                 worksheet.write_formula(current_idx, c, f"={v_col}{current_idx+1}/{v_col}${riga_italia_excel}", f_p)
             current_idx += 1
@@ -622,15 +626,15 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     ws_quartili = workbook.add_worksheet('Quartili')
     
-    df_raw = df_base[['Totale Attivo migl EUR 2024', 'Totale Ricavi migl EUR 2024']].dropna()
-    df_raw = df_raw.sort_values(by='Totale Ricavi migl EUR 2024', ascending=False)
+    df_raw = df_base[['Totale Attivo migl EUR 2025', COL_RICAVI_AGG]].dropna()
+    df_raw = df_raw.sort_values(by=COL_RICAVI_AGG, ascending=False)
     
-    ws_quartili.write(0, 0, 'Totale Attivo mgl EUR 2024', format_header_blue)
-    ws_quartili.write(0, 1, 'Totale valore della produzione mgl EUR 2024', format_header_blue)
+    ws_quartili.write(0, 0, f'Totale Attivo mgl EUR {ULTIMO}', format_header_blue)
+    ws_quartili.write(0, 1, f'Totale valore della produzione mgl EUR {ULTIMO}', format_header_blue)
     
     for r_idx, (_, row) in enumerate(df_raw.iterrows(), 1):
-        ws_quartili.write(r_idx, 0, row['Totale Attivo migl EUR 2024'], f_dec)
-        ws_quartili.write(r_idx, 1, row['Totale Ricavi migl EUR 2024'], f_dec)
+        ws_quartili.write(r_idx, 0, row['Totale Attivo migl EUR 2025'], f_dec)
+        ws_quartili.write(r_idx, 1, row[COL_RICAVI_AGG], f_dec)
 
     ws_quartili.set_column('A:B', 35)
     ultima_riga_dati = len(df_raw) + 1
@@ -694,9 +698,9 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
             ('Ragione Sociale', riga_g['Ragione Sociale'], format_regione),
             ('Macroregione Appartenenza', riga_g['Macroregione'], format_regione),
             ('Regione Specifica (NUTS2)', riga_g['Nome Regione'], format_regione),
-            ('Totale Ricavi - mgl EUR 2024', riga_g['Totale Ricavi migl EUR 2024'], f_dec),
-            ('Totale Attivo - mgl EUR 2024', riga_g['Totale Attivo migl EUR 2024'], f_dec),
-            ('Numero Dipendenti 2024', riga_g['Numero dipendenti 2024'], f_int)
+            (f'Totale Ricavi - mgl EUR {ULTIMO}', riga_g[COL_RICAVI_AGG], f_dec),
+            (f'Totale Attivo - mgl EUR {ULTIMO}', riga_g['Totale Attivo migl EUR 2025'], f_dec),
+            (f'Numero Dipendenti {ULTIMO}', riga_g['Numero dipendenti 2025'], f_int)
         ]
         
         for idx, (voce, valore, formato_cella) in enumerate(voci_geo, 1):
@@ -993,7 +997,7 @@ def elabora_capitolo_3(df_filtered, azienda_target, chiave_target=None):
             chart_storico.set_size({'width': 550, 'height': 350}) 
             chart_storico.set_style(11)
             
-            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - Solo anno 2024)
+            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - solo ultimo esercizio)
             chart_col_singolo = workbook.add_chart({'type': 'column'})
             
             serie_settore_col = {
@@ -1010,7 +1014,7 @@ def elabora_capitolo_3(df_filtered, azienda_target, chiave_target=None):
             }
             chart_col_singolo.add_series(serie_azienda_col)
             chart_col_singolo.add_series(serie_settore_col)
-            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno 2024)'})
+            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno {ULTIMO})'})
             chart_col_singolo.set_legend({'position': 'bottom', 'font': font_assi})
             chart_col_singolo.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
             chart_col_singolo.set_y_axis({'name_font': font_assi, 'num_font': font_assi, 'major_gridlines': {'visible': False}})
@@ -1351,7 +1355,7 @@ def elabora_capitolo_4(df_filtered, azienda_target, chiave_target=None):
             chart_storico.set_size({'width': 550, 'height': 350}) 
             chart_storico.set_style(11)
             
-            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - Solo anno 2024)
+            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - solo ultimo esercizio)
             chart_col_singolo = workbook.add_chart({'type': 'column'})
             
             serie_settore_col = {
@@ -1368,7 +1372,7 @@ def elabora_capitolo_4(df_filtered, azienda_target, chiave_target=None):
             }
             chart_col_singolo.add_series(serie_azienda_col)
             chart_col_singolo.add_series(serie_settore_col)
-            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno 2024)'})
+            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno {ULTIMO})'})
             chart_col_singolo.set_legend({'position': 'bottom', 'font': font_assi})
             chart_col_singolo.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
             # 🟢 Rimuove la griglia orizzontale di sfondo dall'istogramma
@@ -1702,7 +1706,7 @@ def elabora_capitolo_5(df_filtered, azienda_target, chiave_target=None):
             chart_storico.set_size({'width': 550, 'height': 350}) 
             chart_storico.set_style(11)
             
-            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - Solo anno 2024)
+            # B) Grafico a Colonne / Istogramma (Azienda vs Settore - solo ultimo esercizio)
             chart_col_singolo = workbook.add_chart({'type': 'column'})
             
             serie_settore_col = {
@@ -1719,7 +1723,7 @@ def elabora_capitolo_5(df_filtered, azienda_target, chiave_target=None):
             }
             chart_col_singolo.add_series(serie_azienda_col)
             chart_col_singolo.add_series(serie_settore_col)
-            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno 2024)'})
+            chart_col_singolo.set_title({'name': f'Posizionamento {metric} (Anno {ULTIMO})'})
             chart_col_singolo.set_legend({'position': 'bottom', 'font': font_assi})
             chart_col_singolo.set_x_axis({'name_font': font_assi, 'num_font': font_assi, 'label_position': 'low'})
             # 🟢 Rimuove la griglia orizzontale di sfondo dall'istogramma
@@ -1810,15 +1814,15 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
         'Ragione Sociale': trova_col(['ragione']),
         'Macro-Regione': col_macro, 
         'Regione': col_regione,
-        'M. Profitto 2024': trova_col(['marg', 'profitto', '2024']),
-        'M. EBITDA 2024': trova_col(['marg', 'ebitda', '2024']),
-        'M. EBIT 2024': trova_col(['marg', 'ebit', '2024'], exclude=['ebitda']),
-        'Rotazione C.Inv. 2024': trova_col(['rotazione', '2024']),
-        'Quick Ratio 2024': trova_col(['quick', '2024']),
-        'Current Ratio 2024': trova_col(['current', '2024']),
-        'Indice 1° Liv. 2024': trova_col(['struttura 1', '2024']),
-        'Indice 2° Liv. 2024': trova_col(['struttura 2', '2024']),
-        'Gearing 2024': trova_col(['gearing', '2024'])
+        f'M. Profitto {ULTIMO}': trova_col(['marg', 'profitto', ULTIMO]),
+        f'M. EBITDA {ULTIMO}': trova_col(['marg', 'ebitda', ULTIMO]),
+        f'M. EBIT {ULTIMO}': trova_col(['marg', 'ebit', ULTIMO], exclude=['ebitda']),
+        f'Rotazione C.Inv. {ULTIMO}': trova_col(['rotazione', ULTIMO]),
+        f'Quick Ratio {ULTIMO}': trova_col(['quick', ULTIMO]),
+        f'Current Ratio {ULTIMO}': trova_col(['current', ULTIMO]),
+        f'Indice 1° Liv. {ULTIMO}': trova_col(['struttura 1', ULTIMO]),
+        f'Indice 2° Liv. {ULTIMO}': trova_col(['struttura 2', ULTIMO]),
+        f'Gearing {ULTIMO}': trova_col(['gearing', ULTIMO])
     }
 
     if cols_dict['Regione'] is None:
@@ -1850,11 +1854,11 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
     col_finali = [
         'Ragione Sociale', 'Società ID',
         ' ', 
-        'M. Profitto 2024', 'M. EBITDA 2024', 'M. EBIT 2024',
+        f'M. Profitto {ULTIMO}', f'M. EBITDA {ULTIMO}', f'M. EBIT {ULTIMO}',
         '  ', 
-        'Rotazione C.Inv. 2024', 'Quick Ratio 2024', 'Current Ratio 2024',
+        f'Rotazione C.Inv. {ULTIMO}', f'Quick Ratio {ULTIMO}', f'Current Ratio {ULTIMO}',
         '   ', 
-        'Indice 1° Liv. 2024', 'Indice 2° Liv. 2024', 'Gearing 2024',
+        f'Indice 1° Liv. {ULTIMO}', f'Indice 2° Liv. {ULTIMO}', f'Gearing {ULTIMO}',
         '    ', 
         'Benchmark Economico', 'Benchmark Finanziario', 'Benchmark Patrimoniale', 'Benchmark Totale',
         'Regione', 'Rating Combinato'
@@ -1870,7 +1874,7 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
     # 6. Scrittura su Excel (Foglio 7)
     writer = pd.ExcelWriter(output_buffer, engine='xlsxwriter')
     workbook = writer.book
-    worksheet = workbook.add_worksheet('7. Rating e Benchmark 2024')
+    worksheet = workbook.add_worksheet(f'7. Rating e Benchmark {ULTIMO}')
     
     fmt_header = workbook.add_format({'bold': True, 'bg_color': '#002060', 'font_color': 'white', 'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True})
     fmt_header_metric = workbook.add_format({'bold': True, 'bg_color': '#4F81BD', 'font_color': 'white', 'border': 1, 'align': 'center', 'valign': 'vcenter', 'text_wrap': True})
@@ -1884,7 +1888,7 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
         if col_name.strip() == '':
             worksheet.write(0, col_num, "", fmt_space)
         else:
-            formato = fmt_header_metric if '2024' in col_name else fmt_header
+            formato = fmt_header_metric if ULTIMO in col_name else fmt_header
             worksheet.write(0, col_num, pulisci_nome_orbis(col_name), formato)
         
     # Creazione degli stili di evidenziazione per l'azienda target nella lista
@@ -1983,7 +1987,7 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
         worksheet.write_formula(3, start_col_tbl + 2, f"=U{idx_target_salvata}", fmt_center)
 
     # Scrittura standard delle soglie spostata più in basso (riga 6 anziché riga 1) per fare spazio al box sopra
-    worksheet.write(5, start_col_tbl, "SOGLIE CALCOLATE 2024", fmt_header)
+    worksheet.write(5, start_col_tbl, f"SOGLIE CALCOLATE {ULTIMO}", fmt_header)
     worksheet.write(6, start_col_tbl, "Metrica", fmt_header)
     intestazioni_tbl = ["MIN", "Soglia 2° Terzile", "Soglia 1° Terzile", "MAX"]
     for i, h in enumerate(intestazioni_tbl):
@@ -2023,7 +2027,7 @@ def elabora_capitolo_6(df_filtered, azienda_target, chiave_target=None):
         'Benchmark Patrimoniale': 'R',
         'Benchmark Totale': 'S'
     }
-    main_sheet = "'7. Rating e Benchmark 2024'"
+    main_sheet = f"'7. Rating e Benchmark {ULTIMO}'"
     range_reg = f"{main_sheet}!$T$2:$T${num_rows+1}"
 
     # --- Foglio 8: Pivot Analisi Benchmark ---
@@ -2187,7 +2191,7 @@ def elabora_capitolo_7_5(df_input, azienda_target, chiave_target=None):
     import xlsxwriter
 
     df_base = df_input.copy()
-    all_years = ['2021', '2022', '2023', '2024']
+    all_years = list(ANNI)
 
     componenti_nomi = {
         'Costo del venduto': 'Costo del venduto migl EUR',
@@ -2391,9 +2395,9 @@ def elabora_capitolo_7_5(df_input, azienda_target, chiave_target=None):
     ws_stats.set_column(col_tbl_az, col_tbl_az, 28)
 
     ws_stats.write(row_pie_tables, col_tbl_set, "Componente (Settore)", fmt_tbl_hdr)
-    ws_stats.write(row_pie_tables, col_tbl_set + 1, "Quota 2024", fmt_tbl_hdr)
+    ws_stats.write(row_pie_tables, col_tbl_set + 1, f"Quota {ULTIMO}", fmt_tbl_hdr)
     ws_stats.write(row_pie_tables, col_tbl_az, "Componente (Azienda)", fmt_tbl_hdr)
-    ws_stats.write(row_pie_tables, col_tbl_az + 1, "Quota 2024", fmt_tbl_hdr)
+    ws_stats.write(row_pie_tables, col_tbl_az + 1, f"Quota {ULTIMO}", fmt_tbl_hdr)
 
     for i, comp in enumerate(componenti_nomi.keys()):
         pos = posizioni_grafici[comp]
@@ -2404,12 +2408,12 @@ def elabora_capitolo_7_5(df_input, azienda_target, chiave_target=None):
         ws_stats.write_formula(row_pie_tables + 1 + i, col_tbl_az + 1, f"='7b. Stat. Indici Composizione'!{xlsxwriter.utility.xl_rowcol_to_cell(pos['azienda_row'], len(all_years))}", fmt_tbl_cell)
 
     chart_pie_settore = workbook.add_chart({'type': 'pie'})
-    chart_pie_settore.set_title({'name': 'Composizione 2024 - MEDIANE SETTORE'})
+    chart_pie_settore.set_title({'name': f'Composizione {ULTIMO} - MEDIANE SETTORE'})
     chart_pie_settore.set_size({'width': 420, 'height': 340})
     chart_pie_settore.set_legend({'position': 'bottom', 'font': font_assi})
 
     chart_pie_target = workbook.add_chart({'type': 'pie'})
-    chart_pie_target.set_title({'name': f'Composizione 2024 - {azienda_target}'})
+    chart_pie_target.set_title({'name': f'Composizione {ULTIMO} - {azienda_target}'})
     chart_pie_target.set_size({'width': 420, 'height': 340})
     chart_pie_target.set_legend({'position': 'bottom', 'font': font_assi})
 
@@ -2507,15 +2511,15 @@ def elabora_capitolo_7(df_filtered, azienda_target, chiave_target=None):
 
     # Ricreiamo le metriche usate per il ranking
     metriche_utili = {
-        'M. Profitto 2024': trova_col(['marg', 'profitto', '2024']),
-        'M. EBITDA 2024': trova_col(['marg', 'ebitda', '2024']),
-        'M. EBIT 2024': trova_col(['marg', 'ebit', '2024'], exclude=['ebitda']),
-        'Rotazione C.Inv. 2024': trova_col(['rotazione', '2024']),
-        'Quick Ratio 2024': trova_col(['quick', '2024']),
-        'Current Ratio 2024': trova_col(['current', '2024']),
-        'Indice 1° Liv. 2024': trova_col(['struttura 1', '2024']),
-        'Indice 2° Liv. 2024': trova_col(['struttura 2', '2024']),
-        'Gearing 2024': trova_col(['gearing', '2024'])
+        f'M. Profitto {ULTIMO}': trova_col(['marg', 'profitto', ULTIMO]),
+        f'M. EBITDA {ULTIMO}': trova_col(['marg', 'ebitda', ULTIMO]),
+        f'M. EBIT {ULTIMO}': trova_col(['marg', 'ebit', ULTIMO], exclude=['ebitda']),
+        f'Rotazione C.Inv. {ULTIMO}': trova_col(['rotazione', ULTIMO]),
+        f'Quick Ratio {ULTIMO}': trova_col(['quick', ULTIMO]),
+        f'Current Ratio {ULTIMO}': trova_col(['current', ULTIMO]),
+        f'Indice 1° Liv. {ULTIMO}': trova_col(['struttura 1', ULTIMO]),
+        f'Indice 2° Liv. {ULTIMO}': trova_col(['struttura 2', ULTIMO]),
+        f'Gearing {ULTIMO}': trova_col(['gearing', ULTIMO])
     }
 
     df = pd.DataFrame()
@@ -2533,19 +2537,19 @@ def elabora_capitolo_7(df_filtered, azienda_target, chiave_target=None):
 
     categorie_kpi = {
         'Equilibrio_Economico': {
-            'Prof_Mg': ('M. Profitto 2024', False),
-            'EBITDA_Mg': ('M. EBITDA 2024', False),
-            'EBIT_Mg': ('M. EBIT 2024', False)
+            'Prof_Mg': (f'M. Profitto {ULTIMO}', False),
+            'EBITDA_Mg': (f'M. EBITDA {ULTIMO}', False),
+            'EBIT_Mg': (f'M. EBIT {ULTIMO}', False)
         },
         'Equilibrio_Finanziario': {
-            'Rotazione_Cap': ('Rotazione C.Inv. 2024', False),
-            'Quick_Rat': ('Quick Ratio 2024', False),
-            'Current_Rat': ('Current Ratio 2024', False)
+            'Rotazione_Cap': (f'Rotazione C.Inv. {ULTIMO}', False),
+            'Quick_Rat': (f'Quick Ratio {ULTIMO}', False),
+            'Current_Rat': (f'Current Ratio {ULTIMO}', False)
         },
         'Equilibrio_Patrimoniale': {
-            'IndStrut1': ('Indice 1° Liv. 2024', False),
-            'IndStrut2': ('Indice 2° Liv. 2024', False),
-            'Gearing': ('Gearing 2024', True) 
+            'IndStrut1': (f'Indice 1° Liv. {ULTIMO}', False),
+            'IndStrut2': (f'Indice 2° Liv. {ULTIMO}', False),
+            'Gearing': (f'Gearing {ULTIMO}', True) 
         }
     }
 
@@ -2553,7 +2557,7 @@ def elabora_capitolo_7(df_filtered, azienda_target, chiave_target=None):
     for kpi_dict in categorie_kpi.values():
         tutti_kpi_cols.extend([v[0] for v in kpi_dict.values()])
 
-    metriche_inverse = ['Gearing 2024']
+    metriche_inverse = [f'Gearing {ULTIMO}']
 
     for m in tutti_kpi_cols:
         if m in df.columns:
@@ -2564,18 +2568,18 @@ def elabora_capitolo_7(df_filtered, azienda_target, chiave_target=None):
             else:
                 df[f'Pts_{m}'] = df[m].apply(lambda x: calcola_punteggi_diretto(x, t1, t2))
 
-    if all(f'Pts_{x}' in df.columns for x in ['M. Profitto 2024', 'M. EBITDA 2024', 'M. EBIT 2024']):
-        df['Sum_Eco'] = df['Pts_M. Profitto 2024'] + df['Pts_M. EBITDA 2024'] + df['Pts_M. EBIT 2024']
+    if all(f'Pts_{x}' in df.columns for x in [f'M. Profitto {ULTIMO}', f'M. EBITDA {ULTIMO}', f'M. EBIT {ULTIMO}']):
+        df['Sum_Eco'] = df[f'Pts_M. Profitto {ULTIMO}'] + df[f'Pts_M. EBITDA {ULTIMO}'] + df[f'Pts_M. EBIT {ULTIMO}']
         df['Benchmark Economico'] = df['Sum_Eco'].apply(assegna_lettera_area)  # MODIFICATO: era assegna_lettera(x, 8, 5)
     else: df['Benchmark Economico'] = 'C'
 
-    if all(f'Pts_{x}' in df.columns for x in ['Rotazione C.Inv. 2024', 'Quick Ratio 2024', 'Current Ratio 2024']):
-        df['Sum_Fin'] = df['Pts_Rotazione C.Inv. 2024'] + df['Pts_Quick Ratio 2024'] + df['Pts_Current Ratio 2024']
+    if all(f'Pts_{x}' in df.columns for x in [f'Rotazione C.Inv. {ULTIMO}', f'Quick Ratio {ULTIMO}', f'Current Ratio {ULTIMO}']):
+        df['Sum_Fin'] = df[f'Pts_Rotazione C.Inv. {ULTIMO}'] + df[f'Pts_Quick Ratio {ULTIMO}'] + df[f'Pts_Current Ratio {ULTIMO}']
         df['Benchmark Finanziario'] = df['Sum_Fin'].apply(assegna_lettera_area)  # MODIFICATO: era assegna_lettera(x, 8, 5)
     else: df['Benchmark Finanziario'] = 'C'
 
-    if all(f'Pts_{x}' in df.columns for x in ['Indice 1° Liv. 2024', 'Indice 2° Liv. 2024', 'Gearing 2024']):
-        df['Sum_Pat'] = df['Pts_Indice 1° Liv. 2024'] + df['Pts_Indice 2° Liv. 2024'] + df['Pts_Gearing 2024']
+    if all(f'Pts_{x}' in df.columns for x in [f'Indice 1° Liv. {ULTIMO}', f'Indice 2° Liv. {ULTIMO}', f'Gearing {ULTIMO}']):
+        df['Sum_Pat'] = df[f'Pts_Indice 1° Liv. {ULTIMO}'] + df[f'Pts_Indice 2° Liv. {ULTIMO}'] + df[f'Pts_Gearing {ULTIMO}']
         df['Benchmark Patrimoniale'] = df['Sum_Pat'].apply(assegna_lettera_area)  # MODIFICATO: era assegna_lettera(x, 8, 5)
     else: df['Benchmark Patrimoniale'] = 'C'
 
@@ -2836,30 +2840,27 @@ if uploaded_file is not None:
 
 
         # --- 2. VERIFICA STRUTTURA DELLE COLONNE ---
-        # La tua "Lista Universal" rigorosa AGGIORNATA
-        colonne_attese = [
-            'Ragione socialeCaratteri latini', 'Numero BvD ID', 'Forma giuridica nazionale', 
-            'NUTS1', 'NUTS2', 'NUTS3', 'Numero dipendenti 2024', 
-            'Totale valore della produzione migl EUR 2024', 'Totale valore della produzione migl EUR 2023', 'Totale valore della produzione migl EUR 2022', 'Totale valore della produzione migl EUR 2021', 
-            'Totale Attivo migl EUR 2024', 'Totale Attivo migl EUR 2023', 'Totale Attivo migl EUR 2022', 'Totale Attivo migl EUR 2021', 
-            'Margine di Profitto (*) % 2024', 'Margine di Profitto (*) % 2023', 'Margine di Profitto (*) % 2022', 'Margine di Profitto (*) % 2021', 
-            'Margine EBITDA (*) % 2024', 'Margine EBITDA (*) % 2023', 'Margine EBITDA (*) % 2022', 'Margine EBITDA (*) % 2021', 
-            'Margine EBIT (*) % 2024', 'Margine EBIT (*) % 2023', 'Margine EBIT (*) % 2022', 'Margine EBIT (*) % 2021', 
-            'Indice di Struttura 1° livello (*) 2024', 'Indice di Struttura 1° livello (*) 2023', 'Indice di Struttura 1° livello (*) 2022', 'Indice di Struttura 1° livello (*) 2021', 
-            'Indice di Struttura 2° livello (*) 2024', 'Indice di Struttura 2° livello (*) 2023', 'Indice di Struttura 2° livello (*) 2022', 'Indice di Struttura 2° livello (*) 2021', 
-            'Gearing (*) % 2024', 'Gearing (*) % 2023', 'Gearing (*) % 2022', 'Gearing (*) % 2021', 
-            'Current Ratio (*) 2024', 'Current Ratio (*) 2023', 'Current Ratio (*) 2022', 'Current Ratio (*) 2021', 
-            'Quick Ratio (*) 2024', 'Quick Ratio (*) 2023', 'Quick Ratio (*) 2022', 'Quick Ratio (*) 2021', 
-            'Indice di Rotazione del Capitale Investito (*) 2024', 'Indice di Rotazione del Capitale Investito (*) 2023', 'Indice di Rotazione del Capitale Investito (*) 2022', 'Indice di Rotazione del Capitale Investito (*) 2021',
-            # 🟢 NUOVE COLONNE AGGIUNTE INTEGRATE NELLA VALIDAZIONE
-            'Costo del venduto migl EUR 2024', 'Costo del venduto migl EUR 2023', 'Costo del venduto migl EUR 2022', 'Costo del venduto migl EUR 2021',
-            'Oneri diversi di gestione migl EUR 2024', 'Oneri diversi di gestione migl EUR 2023', 'Oneri diversi di gestione migl EUR 2022', 'Oneri diversi di gestione migl EUR 2021',
-            'Proventi/oneri finanziari migl EUR 2024', 'Proventi/oneri finanziari migl EUR 2023', 'Proventi/oneri finanziari migl EUR 2022', 'Proventi/oneri finanziari migl EUR 2021',
-            'Totale imposte migl EUR 2024', 'Totale imposte migl EUR 2023', 'Totale imposte migl EUR 2022', 'Totale imposte migl EUR 2021',
-            'Utile/Perdita al netto delle imposte migl EUR 2024', 'Utile/Perdita al netto delle imposte migl EUR 2023', 'Utile/Perdita al netto delle imposte migl EUR 2022', 'Utile/Perdita al netto delle imposte migl EUR 2021',
-            'Codice fiscale/Partita IVA', 'Indirizzo sito web', 'Indirizzo e-mail'
+        # La "Lista Universal": le colonne anagrafiche, piu' una colonna per ogni
+        # variabile e ogni esercizio del periodo. Gli anni li decide periodo.py:
+        # quando l'estrazione ne aggiunge uno, qui non si tocca nulla.
+        VARIABILI_PER_ANNO = [
+            'Totale valore della produzione migl EUR', 'Totale Attivo migl EUR',
+            'Margine di Profitto (*) %', 'Margine EBITDA (*) %', 'Margine EBIT (*) %',
+            'Indice di Struttura 1° livello (*)', 'Indice di Struttura 2° livello (*)',
+            'Gearing (*) %', 'Current Ratio (*)', 'Quick Ratio (*)',
+            'Indice di Rotazione del Capitale Investito (*)',
+            'Costo del venduto migl EUR', 'Oneri diversi di gestione migl EUR',
+            'Proventi/oneri finanziari migl EUR', 'Totale imposte migl EUR',
+            'Utile/Perdita al netto delle imposte migl EUR',
         ]
-            
+        colonne_attese = [
+            'Ragione socialeCaratteri latini', 'Numero BvD ID', 'Forma giuridica nazionale',
+            'NUTS1', 'NUTS2', 'NUTS3', f'Numero dipendenti {ULTIMO}',
+        ]
+        for base in VARIABILI_PER_ANNO:
+            colonne_attese += [f'{base} {anno}' for anno in ANNI]
+        colonne_attese += ['Codice fiscale/Partita IVA', 'Indirizzo sito web', 'Indirizzo e-mail']
+
         # Pulisce gli spazi laterali dalle colonne per un controllo accurato
         colonne_file = [str(c).strip() for c in df_orbis.columns]
         colonne_mancanti = [col for col in colonne_attese if col not in colonne_file]
@@ -2873,11 +2874,11 @@ if uploaded_file is not None:
 
         # --- 3. PULIZIA DATI E FILTRAGGIO VALORI (n.d., Rotazione e Gearing) ---
         righe_iniziali = len(df_orbis)
-        col_att_24 = 'Totale Attivo migl EUR 2024'
-        col_ric_24 = 'Totale valore della produzione migl EUR 2024'
-        col_rot_24 = 'Indice di Rotazione del Capitale Investito (*) 2024'
+        col_att_24 = 'Totale Attivo migl EUR 2025'
+        col_ric_24 = 'Totale valore della produzione migl EUR 2025'
+        col_rot_24 = 'Indice di Rotazione del Capitale Investito (*) 2025'
         
-        col_g24 = 'Gearing (*) % 2024'
+        col_g24 = 'Gearing (*) % 2025'
         col_g23 = 'Gearing (*) % 2023'
         col_g22 = 'Gearing (*) % 2022'
         col_g21 = 'Gearing (*) % 2021'
@@ -2895,7 +2896,7 @@ if uploaded_file is not None:
         scartate_rotazione = righe_iniziali - righe_post_rotazione
         
         # --- ⚙️ FILTRO GEARING: OPZIONI AVANZATE ---
-        # Comportamento di default (storico): il Gearing 2024 pari a zero viene trattato
+        # Comportamento di default (storico): il Gearing dell'ultimo esercizio pari a zero
         # come dato non disponibile e l'impresa esce dal campione; gli zeri degli anni
         # precedenti vengono nascosti come 'n.d.'.
         #
@@ -2928,7 +2929,7 @@ if uploaded_file is not None:
         if aziende_a_rischio_gearing:
             etichetta_expander = (
                 f"⚙️ Filtro Gearing: {len(aziende_a_rischio_gearing)} aziende a rischio scarto"
-                f" (di cui {n_gearing_nullo} con Gearing 2024 pari a zero) — opzioni avanzate"
+                f" (di cui {n_gearing_nullo} con Gearing {ULTIMO} pari a zero) — opzioni avanzate"
             )
             with st.expander(etichetta_expander):
                 disattiva_filtro_gearing = st.toggle(
@@ -2942,7 +2943,7 @@ if uploaded_file is not None:
                         f"0️⃣ Tratta il Gearing pari a zero come dato non disponibile "
                         f"({n_gearing_nullo} aziende scartate)",
                         value=True,
-                        help="ATTIVO (default storico): le imprese con Gearing 2024 = 0 vengono scartate "
+                        help=f"ATTIVO (default storico): le imprese con Gearing {ULTIMO} = 0 vengono scartate "
                              "e gli zeri degli anni 2021-2023 diventano 'n.d.'.\n\n"
                              "DISATTIVATO: lo zero viene letto come 'nessun debito finanziario', quindi un "
                              "valore reale. Le imprese restano nel campione e la mediana settoriale del "
@@ -2964,7 +2965,7 @@ if uploaded_file is not None:
                 maschera_gearing_ok = pd.Series(True, index=df_orbis.index)
             else:
                 if tratta_zero_come_nd:
-                    # Elimina chi ha Gearing nullo o negativo nel 2024
+                    # Elimina chi ha Gearing nullo o negativo nell'ultimo esercizio
                     maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)
                 else:
                     # Lo zero e' un valore reale ("nessun debito finanziario"): si scartano
@@ -2986,7 +2987,7 @@ if uploaded_file is not None:
 
         # --- FILTRO 3 (opzionale): VALORI ANOMALI SULLE NOVE VARIABILI ---
         # Le distribuzioni degli indicatori hanno code lunghissime: sul NACE 41.20 il
-        # Gearing 2024 arriva a 545.909% e la Rotazione del Capitale Investito a 489.597,
+        # Gearing arriva a 545.909% e la Rotazione del Capitale Investito a 489.597,
         # valori che nascono da denominatori vicini a zero e non da imprese reali. Non
         # spostano la mediana, ma travolgono media, deviazione standard, asimmetria e
         # curtosi, cioe' proprio le statistiche descrittive della Nota Metodologica.
@@ -3060,7 +3061,7 @@ if uploaded_file is not None:
 
         attiva_filtro_outlier = False
         percentile_outlier = 1.0
-        perimetro_outlier = '2021-2024'
+        perimetro_outlier = PERIODO
         metodo_outlier = 'Winsorizzazione'
         criterio_outlier = 'Percentili'
         coefficiente_baffi = COEFFICIENTE_BAFFI
@@ -3119,11 +3120,11 @@ if uploaded_file is not None:
                     )
                 perimetro_outlier = st.radio(
                     "Su quali esercizi applicarlo",
-                    options=['2021-2024', 'solo 2024'],
+                    options=[PERIODO, f'solo {ULTIMO}'],
                     horizontal=True,
-                    help="'2021-2024' ripulisce anche le statistiche storiche della Nota "
-                         "Metodologica; 'solo 2024' tocca solo l'anno che determina il "
-                         "posizionamento e interessa molte meno imprese.",
+                    help=f"'{PERIODO}' ripulisce anche le statistiche storiche della Nota "
+                         f"Metodologica; 'solo {ULTIMO}' tocca solo l'anno che determina il "
+                         f"posizionamento e interessa molte meno imprese.",
                     key="perimetro_outlier",
                 )
                 metodo_outlier = st.radio(
@@ -3137,7 +3138,7 @@ if uploaded_file is not None:
                          "campione, quindi il panel si riduce.",
                     key="metodo_outlier",
                 )
-                anni_outlier = ['2024'] if perimetro_outlier == 'solo 2024' else ['2021', '2022', '2023', '2024']
+                anni_outlier = [ULTIMO] if perimetro_outlier == f'solo {ULTIMO}' else list(ANNI)
                 soglie_outlier = lambda valori: soglie_robuste(
                     valori,
                     'boxplot' if criterio_outlier == 'Boxplot adattato' else 'percentili',
@@ -3306,11 +3307,11 @@ if uploaded_file is not None:
             
             # ⚠️ DA QUI IN POI TUTTO IL TUO CODICE HA 4 SPAZI (1 TAB) DI INDENTAZIONE ⚠️
 
-            # 1. Pesca TUTTI gli indicatori, i margini e i ratio del 2024 presenti nel file
-            colonne_kpi_2024 = [c for c in df_orbis.columns if '2024' in str(c) and any(x in str(c).lower() for x in ['margine', 'indice', 'ratio', 'gearing'])]
+            # 1. Pesca TUTTI gli indicatori, i margini e i ratio dell'ultimo esercizio
+            colonne_kpi_ultimo = [c for c in df_orbis.columns if ULTIMO in str(c) and any(x in str(c).lower() for x in ['margine', 'indice', 'ratio', 'gearing'])]
             
             # Tieni solo chi ha i dati completi (se il file è vuoto fa un fallback)
-            df_candidati = df_orbis.dropna(subset=colonne_kpi_2024).copy()
+            df_candidati = df_orbis.dropna(subset=colonne_kpi_ultimo).copy()
             if df_candidati.empty: 
                 df_candidati = df_orbis.copy()
                 
@@ -3318,7 +3319,7 @@ if uploaded_file is not None:
             df_candidati['Picco_Anomalia_Singola'] = 0 
             
             # 2. Calcola lo scostamento (Z-Score) per ogni singola metrica
-            for col in colonne_kpi_2024:
+            for col in colonne_kpi_ultimo:
                 df_candidati[col] = pd.to_numeric(df_candidati[col], errors='coerce')
                 mediana_settore = df_candidati[col].median()
                 deviazione_std = df_candidati[col].std()
@@ -3335,8 +3336,8 @@ if uploaded_file is not None:
                 df_puliti = df_candidati.copy()
 
             # MINIMO INTERVENTO: Preferenza per chi ha dichiarato i dipendenti
-            if 'Numero dipendenti 2024' in df_puliti.columns:
-                df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti['Numero dipendenti 2024'], errors='coerce').notna()]
+            if 'Numero dipendenti 2025' in df_puliti.columns:
+                df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti['Numero dipendenti 2025'], errors='coerce').notna()]
                 if not df_con_dipendenti.empty:
                     df_puliti = df_con_dipendenti.copy()
 
@@ -3592,7 +3593,7 @@ if uploaded_file is not None:
         with col_word:
             st.info("Report testuale approfondito con tutte le analisi e le narrative.")
 
-            attiva_watermark = st.toggle("🔒 Applica Watermark", value=False, help="Copre i dati sensibili del 2024 con logo F&V")
+            attiva_watermark = st.toggle("🔒 Applica Watermark", value=False, help=f"Copre i dati sensibili del {ULTIMO} con logo F&V")
 
             if st.button("✨ GENERA REPORT WORD", type="primary", use_container_width=True, key="btn_word"):
                 import os
@@ -3752,7 +3753,7 @@ if uploaded_file is not None:
         st.divider()
         st.markdown("#### 🔎 Supporto al commento")
         st.caption(
-            "Foglio di lavoro con le oscillazioni del quadriennio indicatore per indicatore, "
+            f"Foglio di lavoro con le oscillazioni del {NOME_PERIODO} indicatore per indicatore, "
             "ordinate da quella piu' forte, con lo scalino fra due esercizi da spiegare. "
             "Non fa parte dei documenti consegnati al cliente."
         )
@@ -3777,7 +3778,7 @@ if uploaded_file is not None:
                             f"({da_spiegare[0]['salto_pct']:+.1f}%)."
                         )
                     else:
-                        st.success("Nessun indicatore presenta oscillazioni rilevanti nel quadriennio.")
+                        st.success(f"Nessun indicatore presenta oscillazioni rilevanti nel {NOME_PERIODO}.")
                     st.download_button(
                         label="📥 SCARICA FOGLIO ALERT (.xlsx)",
                         data=foglio_alert,

@@ -19,6 +19,8 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt, Mm, RGBColor
 from docx.text.paragraph import Paragraph
 from docx.text.run import Run
+from periodo import (ANNI, PRIMO, ULTIMO, PENULTIMO, PERIODO, NOME_PERIODO,
+                     ANNO_TEMPLATE, PERIODO_TEMPLATE, NOME_PERIODO_TEMPLATE)
 import tempfile
 import matplotlib.image as mpimg
 from PIL import Image
@@ -207,7 +209,7 @@ def inserisci_in_ordine(contenitore, elemento):
 # ruotano in base alla posizione del bullet, così nove commenti di fila non
 # risultano copie l'uno dell'altro.
 
-ANNI_SERIE = ['2021', '2022', '2023', '2024']
+ANNI_SERIE = list(ANNI)
 
 
 def _num(valore):
@@ -353,10 +355,10 @@ def _movimento_settore(sett, unita, dec, giro):
 def commento_indicatore(nome, az, sett, unita='', dec=2, soglia_unitaria=False,
                         inverso=False, lettura=None, giro=0):
     """Compone il commento di un indicatore nello schema a tre passaggi."""
-    v_az, v_set = az.get('2024'), sett.get('2024')
+    v_az, v_set = az.get(ULTIMO), sett.get(ULTIMO)
     art = _articolo_nome(nome)
     if v_az is None:
-        return f"• {art}{nome} non risulta disponibile per il 2024."
+        return f"• {art}{nome} non risulta disponibile per il {ULTIMO}."
 
     testa = f"• {art}{nome} è pari {_va(v_az, unita, dec, 'a')}"
     if v_set is not None:
@@ -424,9 +426,9 @@ def pulisci_nome_orbis(testo):
 
 def _ambito_percentili(perimetro):
     """Su che cosa si calcolano le code: il solo 2024 o tutti gli esercizi."""
-    perimetro = (perimetro or '2021-2024').strip().lower()
-    return ("per ogni variabile sul solo esercizio 2024" if perimetro == 'solo 2024'
-            else "per ogni variabile e ogni esercizio del periodo 2021-2024")
+    perimetro = (perimetro or PERIODO).strip().lower()
+    return (f"per ogni variabile sul solo esercizio {ULTIMO}" if perimetro == f'solo {ULTIMO}'
+            else f"per ogni variabile e ogni esercizio del periodo {PERIODO}")
 
 
 def _numero_pulito(valore):
@@ -563,13 +565,13 @@ def costruisci_catena_filtri(info_filtri):
         )
     if n_gearing:
         scarti.append(
-            f"{f'{n_gearing:,}'.replace(',', '.')} imprese il cui Gearing 2024 non "
+            f"{f'{n_gearing:,}'.replace(',', '.')} imprese il cui Gearing {ULTIMO} non "
             f"risulta valorizzato"
         )
     n_outlier = info_filtri.get('scartate_outlier') or 0
     if n_outlier:
         soglia = info_filtri.get('percentile_outlier')
-        perimetro = info_filtri.get('perimetro_outlier') or '2021-2024'
+        perimetro = info_filtri.get('perimetro_outlier') or PERIODO
         soglia = 1.0 if soglia is None else float(soglia)
         scarti.append(
             f"{f'{n_outlier:,}'.replace(',', '.')} imprese con almeno un valore fuori dalle "
@@ -590,7 +592,7 @@ def costruisci_catena_filtri(info_filtri):
     if n_winsor:
         soglia = info_filtri.get('percentile_outlier')
         soglia = 1.0 if soglia is None else float(soglia)
-        perimetro = info_filtri.get('perimetro_outlier') or '2021-2024'
+        perimetro = info_filtri.get('perimetro_outlier') or PERIODO
         valori = info_filtri.get('winsor_valori') or 0
         frase = (
             f"Ai valori estremi delle nove variabili è stata infine applicata una "
@@ -914,7 +916,8 @@ CORREZIONI_TEMPLATE = [
     (re.escape("Con questo risultato l\u2019azienda è classificata come una \u201c{{ classe_dimensionale }}\u201d. "
                "Rappresenta una quota pari a {{ perc_dip_area }}% sul totale dipendenti dell\u2019area "
                "{{ macroregione }} in cui l'impresa si colloca."),
-     "Sulla base dei parametri di legge del 2024 ({{ criteri_dimensionali }}) l\u2019azienda è "
+     "Sulla base dei parametri di legge (D.Lgs. 125/2024: {{ criteri_dimensionali }}) "
+     "l\u2019azienda è "
      "classificata come una \u201c{{ classe_dimensionale }}\u201d. {{ ragione_sociale }} occupa una "
      "quota pari a {{ perc_dip_area }}% del totale dipendenti delle comparables localizzate "
      "nell\u2019area geografica di riferimento ({{ macroregione }})."),
@@ -1337,25 +1340,27 @@ def colora_scritte_premium(documento):
                     _riscrivi_run(vuoti[0], ' ')
 
 
+def _paragrafi_ovunque(doc_temp):
+    """Tutti i capoversi visibili: corpo, celle di tabella e caselle di testo."""
+    for p in doc_temp.paragraphs:
+        yield p
+    for table in doc_temp.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    yield p
+    # Le caselle di testo (w:txbxContent) non compaiono in doc.paragraphs ne'
+    # in doc.tables, ma nel template contengono testo visibile: senza questo
+    # giro le correzioni non le raggiungono.
+    for txbx in doc_temp.element.body.iter(qn('w:txbxContent')):
+        for p_el in txbx.findall(qn('w:p')):
+            yield Paragraph(p_el, doc_temp)
+
+
 def correggi_testi_template(doc_temp):
     """Applica CORREZIONI_TEMPLATE a tutti i paragrafi, tabelle e caselle di testo."""
-    def paragrafi_ovunque():
-        for p in doc_temp.paragraphs:
-            yield p
-        for table in doc_temp.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        yield p
-        # Le caselle di testo (w:txbxContent) non compaiono in doc.paragraphs ne'
-        # in doc.tables, ma nel template contengono testo visibile: senza questo
-        # giro le correzioni non le raggiungono.
-        for txbx in doc_temp.element.body.iter(qn('w:txbxContent')):
-            for p_el in txbx.findall(qn('w:p')):
-                yield Paragraph(p_el, doc_temp)
-
     totale = 0
-    for p in paragrafi_ovunque():
+    for p in _paragrafi_ovunque(doc_temp):
         for pattern, sostituzione in CORREZIONI_TEMPLATE:
             totale += _sostituisci_testo_paragrafo(p, pattern, sostituzione)
 
@@ -1463,10 +1468,52 @@ def uniforma_didascalie(doc_temp):
     return sistemate
 
 
+# Gli anni scritti nel testo fisso del template, da riallineare al periodo corrente.
+# Non si tocca il testo che cita l'Istat o una norma: li' l'anno e' quello della fonte.
+_RE_FONTE_DATATA = re.compile(r'Istat|D\.?Lgs|art\.|2435|codice civile', re.IGNORECASE)
+
+
+def _tiene_il_suo_anno(m, quanto_prima=70):
+    """Vero se l'anno appartiene a una fonte datata (Istat, una norma): non si tocca."""
+    return bool(_RE_FONTE_DATATA.search(m.string[max(0, m.start() - quanto_prima):m.start()]))
+
+
+def _riallinea(nuovo):
+    def sostituzione(m):
+        return m.group(0) if _tiene_il_suo_anno(m) else nuovo
+    return sostituzione
+
+
+RIALLINEAMENTO_ANNI = (
+    (re.escape(PERIODO_TEMPLATE), _riallinea(PERIODO)),
+    (re.escape(NOME_PERIODO_TEMPLATE), _riallinea(NOME_PERIODO)),
+    (r'\b' + re.escape(ANNO_TEMPLATE) + r'\b', _riallinea(ULTIMO)),
+)
+
+
+def aggiorna_anni_template(doc_temp):
+    """Porta gli anni del testo fisso del template sul periodo di questa edizione.
+
+    Gli anni che appartengono a una fonte datata - il totale Istat, un riferimento
+    normativo - restano quelli della fonte.
+    """
+    if (PERIODO_TEMPLATE, NOME_PERIODO_TEMPLATE, ANNO_TEMPLATE) == (PERIODO, NOME_PERIODO, ULTIMO):
+        return 0
+    sistemati = 0
+    da_cercare = re.compile(r'\b20\d\d\b|' + re.escape(NOME_PERIODO_TEMPLATE))
+    for p in _paragrafi_ovunque(doc_temp):
+        if not p.text or not da_cercare.search(p.text):
+            continue
+        for schema, sostituzione in RIALLINEAMENTO_ANNI:
+            sistemati += _sostituisci_testo_paragrafo(p, schema, sostituzione)
+    return sistemati
+
+
 def lavatrice_nucleare(template_path):
     doc_temp = docx.Document(template_path)
     correggi_testi_template(doc_temp)
     applica_revisione_paragrafi(doc_temp)
+    aggiorna_anni_template(doc_temp)
     aggiungi_sintesi_conclusiva(doc_temp)
     elimina_paragrafi_sentinella(doc_temp)
     uniforma_titoli(doc_temp)
@@ -1533,11 +1580,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # ---------------------------------------------------------------
 
     colonne_da_convertire = [
-        'Totale valore della produzione migl EUR 2024', 'Totale Attivo migl EUR 2024',
-        'Numero dipendenti 2024', 'Margine di Profitto (*) % 2024', 'Margine EBITDA (*) % 2024',
-        'Margine EBIT (*) % 2024', 'Indice di Struttura 1° livello (*) 2024',
-        'Indice di Struttura 2° livello (*) 2024', 'Gearing (*) % 2024',
-        'Indice di Rotazione del Capitale Investito (*) 2024', 'Current Ratio (*) 2024', 'Quick Ratio (*) 2024'
+        'Totale valore della produzione migl EUR 2025', 'Totale Attivo migl EUR 2025',
+        'Numero dipendenti 2025', 'Margine di Profitto (*) % 2025', 'Margine EBITDA (*) % 2025',
+        'Margine EBIT (*) % 2025', 'Indice di Struttura 1° livello (*) 2025',
+        'Indice di Struttura 2° livello (*) 2025', 'Gearing (*) % 2025',
+        'Indice di Rotazione del Capitale Investito (*) 2025', 'Current Ratio (*) 2025', 'Quick Ratio (*) 2025'
     ]
     for c in colonne_da_convertire:
         if c in df_orbis.columns:
@@ -1603,9 +1650,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     else: df_orbis['Macroregione'] = 'Altro'
 
     tot_imprese_settore = len(df_orbis)
-    tot_ricavi_settore = df_orbis['Totale valore della produzione migl EUR 2024'].sum()
-    tot_attivo_settore = df_orbis['Totale Attivo migl EUR 2024'].sum()
-    tot_dipendenti_settore = df_orbis['Numero dipendenti 2024'].sum()
+    tot_ricavi_settore = df_orbis['Totale valore della produzione migl EUR 2025'].sum()
+    tot_attivo_settore = df_orbis['Totale Attivo migl EUR 2025'].sum()
+    tot_dipendenti_settore = df_orbis['Numero dipendenti 2025'].sum()
 
     # 🟢 LOGICA DETTAGLIATA FORME GIURIDICHE (Top 1, Top 2 e Altre)
     fg_counts = df_orbis['Forma Giuridica Pulita'].value_counts()
@@ -1646,15 +1693,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: pos_reg = "n.d."
         return format_euro(valore), pos_naz, pos_reg
 
-    mg_prof, rnk_naz_prof, rnk_reg_prof = get_val_and_rank('Margine di Profitto (*) % 2024', False)
-    mg_ebitda, rnk_naz_ebitda, rnk_reg_ebitda = get_val_and_rank('Margine EBITDA (*) % 2024', False)
-    mg_ebit, rnk_naz_ebit, rnk_reg_ebit = get_val_and_rank('Margine EBIT (*) % 2024', False)
-    ind_str1, rnk_naz_strut1, rnk_reg_strut1 = get_val_and_rank('Indice di Struttura 1° livello (*) 2024', False)
-    ind_str2, rnk_naz_strut2, rnk_reg_strut2 = get_val_and_rank('Indice di Struttura 2° livello (*) 2024', False)
-    gearing, rnk_naz_gear, rnk_reg_gear = get_val_and_rank('Gearing (*) % 2024', True) 
-    ind_rot, rnk_naz_rot, rnk_reg_rot = get_val_and_rank('Indice di Rotazione del Capitale Investito (*) 2024', False)
-    ind_cr, rnk_naz_cr, rnk_reg_cr = get_val_and_rank('Current Ratio (*) 2024', False)
-    ind_qr, rnk_naz_qr, rnk_reg_qr = get_val_and_rank('Quick Ratio (*) 2024', False)
+    mg_prof, rnk_naz_prof, rnk_reg_prof = get_val_and_rank('Margine di Profitto (*) % 2025', False)
+    mg_ebitda, rnk_naz_ebitda, rnk_reg_ebitda = get_val_and_rank('Margine EBITDA (*) % 2025', False)
+    mg_ebit, rnk_naz_ebit, rnk_reg_ebit = get_val_and_rank('Margine EBIT (*) % 2025', False)
+    ind_str1, rnk_naz_strut1, rnk_reg_strut1 = get_val_and_rank('Indice di Struttura 1° livello (*) 2025', False)
+    ind_str2, rnk_naz_strut2, rnk_reg_strut2 = get_val_and_rank('Indice di Struttura 2° livello (*) 2025', False)
+    gearing, rnk_naz_gear, rnk_reg_gear = get_val_and_rank('Gearing (*) % 2025', True) 
+    ind_rot, rnk_naz_rot, rnk_reg_rot = get_val_and_rank('Indice di Rotazione del Capitale Investito (*) 2025', False)
+    ind_cr, rnk_naz_cr, rnk_reg_cr = get_val_and_rank('Current Ratio (*) 2025', False)
+    ind_qr, rnk_naz_qr, rnk_reg_qr = get_val_and_rank('Quick Ratio (*) 2025', False)
 
     if not df_target.empty:
         riga = df_target.iloc[0]
@@ -1663,21 +1710,21 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         macroregione_target = riga.get('Macroregione', 'N.D.')
         num_fg_target = fg_counts.get(forma_giuridica, 0)
         perc_fg_target = (num_fg_target / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
-        ricavi_mgl = riga.get('Totale valore della produzione migl EUR 2024')
-        attivo_mgl = riga.get('Totale Attivo migl EUR 2024')
-        dipendenti = riga.get('Numero dipendenti 2024')
+        ricavi_mgl = riga.get('Totale valore della produzione migl EUR 2025')
+        attivo_mgl = riga.get('Totale Attivo migl EUR 2025')
+        dipendenti = riga.get('Numero dipendenti 2025')
         ricavi_mln = ricavi_mgl / 1000 if pd.notna(ricavi_mgl) else 0
         attivo_mln = attivo_mgl / 1000 if pd.notna(attivo_mgl) else 0
         perc_ricavi_panel = (ricavi_mgl / tot_ricavi_settore * 100) if tot_ricavi_settore > 0 and pd.notna(ricavi_mgl) else 0
         perc_attivo_panel = (attivo_mgl / tot_attivo_settore * 100) if tot_attivo_settore > 0 and pd.notna(attivo_mgl) else 0
-        tot_dip_area = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Numero dipendenti 2024'].sum()
+        tot_dip_area = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Numero dipendenti 2025'].sum()
         perc_dip_area = (dipendenti / tot_dip_area * 100) if tot_dip_area > 0 and pd.notna(dipendenti) else 0
         # --- NUOVI CALCOLI TERRITORIALI ---
         regione_grezza = str(riga.get(col_regione, 'N.D.'))
         regione_target_pulita = regione_grezza.split(' - ')[1] if ' - ' in regione_grezza else regione_grezza
         tot_imprese_regione = len(df_orbis[df_orbis[col_regione] == riga.get(col_regione)]) if col_regione else 0
         perc_imprese_regione = (tot_imprese_regione / tot_imprese_settore * 100) if tot_imprese_settore > 0 else 0
-        tot_ricavi_macro_mgl = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Totale valore della produzione migl EUR 2024'].sum()
+        tot_ricavi_macro_mgl = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Totale valore della produzione migl EUR 2025'].sum()
         tot_ricavi_macro_mln = tot_ricavi_macro_mgl / 1000
         perc_ricavi_macroregione = (tot_ricavi_macro_mgl / tot_ricavi_settore * 100) if tot_ricavi_settore > 0 else 0
         perc_ricavi_target_su_macro = (ricavi_mgl / tot_ricavi_macro_mgl * 100) if tot_ricavi_macro_mgl > 0 and pd.notna(ricavi_mgl) else 0
@@ -1688,15 +1735,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         # Filtriamo il database prendendo SOLO le aziende con la stessa forma giuridica (es. solo le S.p.A.)
         df_categoria = df_orbis[df_orbis['Forma Giuridica Pulita'] == forma_giuridica]
         
-        tot_ricavi_categoria = df_categoria['Totale valore della produzione migl EUR 2024'].sum()
-        tot_attivo_categoria = df_categoria['Totale Attivo migl EUR 2024'].sum()
+        tot_ricavi_categoria = df_categoria['Totale valore della produzione migl EUR 2025'].sum()
+        tot_attivo_categoria = df_categoria['Totale Attivo migl EUR 2025'].sum()
         
         perc_ricavi_categoria = (ricavi_mgl / tot_ricavi_categoria * 100) if tot_ricavi_categoria > 0 and pd.notna(ricavi_mgl) else 0
         perc_attivo_categoria = (attivo_mgl / tot_attivo_categoria * 100) if tot_attivo_categoria > 0 and pd.notna(attivo_mgl) else 0
 
-        try: quartile_ricavi_target = pd.qcut(df_orbis['Totale valore della produzione migl EUR 2024'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
+        try: quartile_ricavi_target = pd.qcut(df_orbis['Totale valore della produzione migl EUR 2025'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
         except: quartile_ricavi_target = "N.D."
-        try: quartile_attivo_target = pd.qcut(df_orbis['Totale Attivo migl EUR 2024'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
+        try: quartile_attivo_target = pd.qcut(df_orbis['Totale Attivo migl EUR 2025'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
         except: quartile_attivo_target = "N.D."
     else:
         p_iva, forma_giuridica, macroregione_target, num_fg_target, perc_fg_target, ricavi_mln, attivo_mln, dipendenti = "N.D.", "N.D.", "N.D.", 0, 0, 0, 0, 0
@@ -1914,15 +1961,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return 'A' if punti >= 8 else ('B' if punti >= 5 else 'C')
 
     # Identificatori metriche
-    c_prof = 'Margine di Profitto (*) % 2024'
-    c_ebitda = 'Margine EBITDA (*) % 2024'
-    c_ebit = 'Margine EBIT (*) % 2024'
-    c_rot = 'Indice di Rotazione del Capitale Investito (*) 2024'
-    c_quick = 'Quick Ratio (*) 2024'
-    c_curr = 'Current Ratio (*) 2024'
-    c_str1 = 'Indice di Struttura 1° livello (*) 2024'
-    c_str2 = 'Indice di Struttura 2° livello (*) 2024'
-    c_gear = 'Gearing (*) % 2024'
+    c_prof = 'Margine di Profitto (*) % 2025'
+    c_ebitda = 'Margine EBITDA (*) % 2025'
+    c_ebit = 'Margine EBIT (*) % 2025'
+    c_rot = 'Indice di Rotazione del Capitale Investito (*) 2025'
+    c_quick = 'Quick Ratio (*) 2025'
+    c_curr = 'Current Ratio (*) 2025'
+    c_str1 = 'Indice di Struttura 1° livello (*) 2025'
+    c_str2 = 'Indice di Struttura 2° livello (*) 2025'
+    c_gear = 'Gearing (*) % 2025'
 
     metriche_dirette = [c_prof, c_ebitda, c_ebit, c_rot, c_quick, c_curr, c_str1, c_str2]
     metriche_inverse = [c_gear]
@@ -2015,7 +2062,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         aggettivi di contorno: il dato e la sua scala bastano.
         """
         peso = {True: "una quota significativa", False: "una quota contenuta"}[perc >= 1.0]
-        return (f"Con un Valore della Produzione 2024 di € {ricavi_formattati} mln, {nome} "
+        return (f"Con un Valore della Produzione {ULTIMO} di € {ricavi_formattati} mln, {nome} "
                 f"rappresenta circa {con_articolo(format_euro(perc))}% dei ricavi complessivi delle "
                 f"imprese del settore localizzate nell'area {macroregione}, {peso} del comparto locale.")
 
@@ -2047,20 +2094,20 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                                      ('Margine di Profitto', (az_prof, set_prof)))
                  if pd.notna(a) and pd.notna(m) and a < m]
         if len(sotto) == 3:
-            testa = "nel 2024 i tre margini analizzati risultano inferiori alle rispettive mediane settoriali"
+            testa = f"nel {ULTIMO} i tre margini analizzati risultano inferiori alle rispettive mediane settoriali"
         elif sotto:
-            testa = f"nel 2024 risultano sotto la mediana di settore {' e '.join(sotto)}"
+            testa = f"nel {ULTIMO} risultano sotto la mediana di settore {' e '.join(sotto)}"
         else:
-            testa = "nel 2024 i tre margini si collocano sopra le rispettive mediane settoriali"
+            testa = f"nel {ULTIMO} i tre margini si collocano sopra le rispettive mediane settoriali"
         coda = ""
-        v23, v24 = serie_ebitda.get('2023'), serie_ebitda.get('2024')
+        v23, v24 = serie_ebitda.get(PENULTIMO), serie_ebitda.get(ULTIMO)
         if v23 is not None and v24 is not None:
             if v24 >= v23:
-                coda = ", in miglioramento rispetto al 2023"
+                coda = f", in miglioramento rispetto al {PENULTIMO}"
             elif sotto:
-                coda = ", e il divario si accompagna a una contrazione rispetto al 2023"
+                coda = f", e il divario si accompagna a una contrazione rispetto al {PENULTIMO}"
             else:
-                coda = ", pur in arretramento rispetto al 2023"
+                coda = f", pur in arretramento rispetto al {PENULTIMO}"
         return (f"{testa}{coda}. L'elemento da approfondire riguarda la capacità della gestione "
                 f"caratteristica di trasformare il Valore della Produzione in reddito operativo.")
 
@@ -2073,11 +2120,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             testa = ("gli indici di struttura non raggiungono l'unità: parte delle immobilizzazioni resta "
                      "finanziata da fonti a breve scadenza")
         if pd.notna(az_gear) and pd.notna(set_gear) and az_gear > set_gear:
-            v23, v24 = serie_gear.get('2023'), serie_gear.get('2024')
+            v23, v24 = serie_gear.get(PENULTIMO), serie_gear.get(ULTIMO)
             verso = ""
             if v23 is not None and v24 is not None:
-                verso = (", pur essendo diminuito rispetto al 2023" if v24 < v23
-                         else ", in aumento rispetto al 2023")
+                verso = (f", pur essendo diminuito rispetto al {PENULTIMO}" if v24 < v23
+                         else f", in aumento rispetto al {PENULTIMO}")
             return f"{testa}. Il Gearing resta tuttavia più elevato della mediana settoriale{verso}."
         return f"{testa}. Il Gearing si mantiene entro i riferimenti del comparto."
 
@@ -2113,11 +2160,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
         frase = "Nel complesso"
         if tiene:
-            frase += f", il 2024 mostra una buona tenuta {elenco(tiene)}"
+            frase += f", il {ULTIMO} mostra una buona tenuta {elenco(tiene)}"
         if attenzione:
             snodo = ", mentre l'attenzione va posta " if tiene else ", l'attenzione va posta "
             frase += snodo + elenco(attenzione)
-        return frase + ", alla luce dell'evoluzione osservata nel quadriennio."
+        return frase + f", alla luce dell'evoluzione osservata nel {NOME_PERIODO}."
 
     def get_intro_benchmark_eco(rating, az_ebitda, set_ebitda, az_ebit, set_ebit, az_prof, set_prof):
         """
@@ -2135,7 +2182,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         cifre = (f"EBITDA {format_euro(az_ebitda)}% contro {format_euro(set_ebitda)}%, "
                  f"EBIT {format_euro(az_ebit)}% contro {format_euro(set_ebit)}% e "
                  f"Margine di Profitto {format_euro(az_prof)}% contro {format_euro(set_prof)}%")
-        return f'Nel 2024 il Benchmark Economico appartiene alla classe "{rating}". {apertura}: {cifre}.'
+        return f'Nel {ULTIMO} il Benchmark Economico appartiene alla classe "{rating}". {apertura}: {cifre}.'
 
     # =================================================================
     # 🟢 INDICATORI ECONOMICI (Valore vs Mediana) - Formattati a Bullet Points
@@ -2179,7 +2226,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else:
             corpo = ("Gli indici di struttura restano al di sotto dell'unità, pur con un livello di "
                      "indebitamento allineato al comparto")
-        return f'Nel 2024 il Benchmark Patrimoniale appartiene alla classe "{rating}". {corpo}.'
+        return f'Nel {ULTIMO} il Benchmark Patrimoniale appartiene alla classe "{rating}". {corpo}.'
 
     def get_analisi_gearing(az_gear, set_gear):
         if az_gear <= set_gear:
@@ -2206,7 +2253,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                       "alla mediana settoriale")
         else:
             corpo += ", con una rotazione del capitale investito inferiore al riferimento di settore"
-        return f'Nel 2024 il Benchmark Finanziario appartiene alla classe "{rating}". {corpo}.'
+        return f'Nel {ULTIMO} il Benchmark Finanziario appartiene alla classe "{rating}". {corpo}.'
 
     def get_analisi_rotazione(az_rot, set_rot, descr_settore):
         if az_rot < set_rot:
@@ -2254,9 +2301,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =========================================================================================
     def get_analisi_trend_ebitda(az_ebitda, set_ebitda):
         if az_ebitda >= set_ebitda:
-            return f"ha registrato performance favorevoli, con un valore al 2024 pari {con_articolo(format_euro(az_ebitda), 'a')}%. Questo risultato dimostra una maggiore capacità della struttura economica di generare reddito dalla gestione caratteristica, superando la mediana del settore ({format_euro(set_ebitda)}%)."
+            return f"ha registrato performance favorevoli, con un valore al {ULTIMO} pari {con_articolo(format_euro(az_ebitda), 'a')}%. Questo risultato dimostra una maggiore capacità della struttura economica di generare reddito dalla gestione caratteristica, superando la mediana del settore ({format_euro(set_ebitda)}%)."
         else:
-            return f"ha registrato evidenti segnali di contrazione, con un valore al 2024 pari {con_articolo(format_euro(az_ebitda), 'a')}%. Questo risultato si colloca al di sotto della mediana settoriale ({format_euro(set_ebitda)}%), segnalando una minore efficienza nell'assorbimento dei costi correnti."
+            return f"ha registrato evidenti segnali di contrazione, con un valore al {ULTIMO} pari {con_articolo(format_euro(az_ebitda), 'a')}%. Questo risultato si colloca al di sotto della mediana settoriale ({format_euro(set_ebitda)}%), segnalando una minore efficienza nell'assorbimento dei costi correnti."
 
     def get_asimmetria_ebitda(az_ebitda, set_ebitda):
         if az_ebitda >= set_ebitda: return "una spiccata forza del Margine EBITDA dell'azienda rispetto ai parametri mediani di settore."
@@ -2546,16 +2593,16 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_sintesi_posizionamento_lungo_periodo(serie_ebitda, serie_gear):
         """Aggiunge la direzione presa dalle due grandezze che contano di più."""
-        margini = serie_ebitda.get('2023'), serie_ebitda.get('2024')
-        leva = serie_gear.get('2023'), serie_gear.get('2024')
+        margini = serie_ebitda.get(PENULTIMO), serie_ebitda.get(ULTIMO)
+        leva = serie_gear.get(PENULTIMO), serie_gear.get(ULTIMO)
         parti = []
         if None not in margini:
-            parti.append("i margini si sono ridotti rispetto al 2023" if margini[1] < margini[0]
-                         else "i margini sono migliorati rispetto al 2023")
+            parti.append(f"i margini si sono ridotti rispetto al {PENULTIMO}" if margini[1] < margini[0]
+                         else f"i margini sono migliorati rispetto al {PENULTIMO}")
         if None not in leva:
             parti.append("l'indebitamento è sceso" if leva[1] < leva[0] else "l'indebitamento è salito")
         if not parti:
-            return "Il quadriennio non offre elementi sufficienti per leggerne la direzione."
+            return f"Il {NOME_PERIODO} non offre elementi sufficienti per leggerne la direzione."
         return f"Nell'ultimo anno {' mentre '.join(parti)}."
 
     def get_conclusione_patrimoniale(az_str1, az_gear, set_gear):
@@ -2598,30 +2645,30 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     if not df_target.empty:
         riga_az_target = df_target.iloc[0]
-        val_az_ebitda_24 = pd.to_numeric(riga_az_target.get('Margine EBITDA (*) % 2024'), errors='coerce')
-        val_az_ebit_24 = pd.to_numeric(riga_az_target.get('Margine EBIT (*) % 2024'), errors='coerce')
-        val_az_profitto_24 = pd.to_numeric(riga_az_target.get('Margine di Profitto (*) % 2024'), errors='coerce')
-        val_az_strut1_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 1° livello (*) 2024'), errors='coerce')
-        val_az_strut2_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 2° livello (*) 2024'), errors='coerce')
-        val_az_gearing_24 = pd.to_numeric(riga_az_target.get('Gearing (*) % 2024'), errors='coerce')
-        val_az_cr_24 = pd.to_numeric(riga_az_target.get('Current Ratio (*) 2024'), errors='coerce')
-        val_az_qr_24 = pd.to_numeric(riga_az_target.get('Quick Ratio (*) 2024'), errors='coerce')
-        val_az_rot_24 = pd.to_numeric(riga_az_target.get('Indice di Rotazione del Capitale Investito (*) 2024'), errors='coerce')
+        val_az_ebitda_24 = pd.to_numeric(riga_az_target.get('Margine EBITDA (*) % 2025'), errors='coerce')
+        val_az_ebit_24 = pd.to_numeric(riga_az_target.get('Margine EBIT (*) % 2025'), errors='coerce')
+        val_az_profitto_24 = pd.to_numeric(riga_az_target.get('Margine di Profitto (*) % 2025'), errors='coerce')
+        val_az_strut1_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 1° livello (*) 2025'), errors='coerce')
+        val_az_strut2_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 2° livello (*) 2025'), errors='coerce')
+        val_az_gearing_24 = pd.to_numeric(riga_az_target.get('Gearing (*) % 2025'), errors='coerce')
+        val_az_cr_24 = pd.to_numeric(riga_az_target.get('Current Ratio (*) 2025'), errors='coerce')
+        val_az_qr_24 = pd.to_numeric(riga_az_target.get('Quick Ratio (*) 2025'), errors='coerce')
+        val_az_rot_24 = pd.to_numeric(riga_az_target.get('Indice di Rotazione del Capitale Investito (*) 2025'), errors='coerce')
     else:
         val_az_ebitda_24 = val_az_ebit_24 = val_az_profitto_24 = 0
         val_az_strut1_24 = val_az_strut2_24 = val_az_gearing_24 = 0
         val_az_cr_24 = val_az_qr_24 = val_az_rot_24 = 0
 
     # Mediane del settore (2024)
-    val_set_ebitda_24 = df_orbis['Margine EBITDA (*) % 2024'].median() if 'Margine EBITDA (*) % 2024' in df_orbis.columns else 0
-    val_set_ebit_24 = df_orbis['Margine EBIT (*) % 2024'].median() if 'Margine EBIT (*) % 2024' in df_orbis.columns else 0
-    val_set_profitto_24 = df_orbis['Margine di Profitto (*) % 2024'].median() if 'Margine di Profitto (*) % 2024' in df_orbis.columns else 0
-    val_set_strut1_24 = df_orbis['Indice di Struttura 1° livello (*) 2024'].median() if 'Indice di Struttura 1° livello (*) 2024' in df_orbis.columns else 0
-    val_set_strut2_24 = df_orbis['Indice di Struttura 2° livello (*) 2024'].median() if 'Indice di Struttura 2° livello (*) 2024' in df_orbis.columns else 0
-    val_set_gearing_24 = df_orbis['Gearing (*) % 2024'].median() if 'Gearing (*) % 2024' in df_orbis.columns else 0
-    val_set_cr_24 = df_orbis['Current Ratio (*) 2024'].median() if 'Current Ratio (*) 2024' in df_orbis.columns else 0
-    val_set_qr_24 = df_orbis['Quick Ratio (*) 2024'].median() if 'Quick Ratio (*) 2024' in df_orbis.columns else 0
-    val_set_rot_24 = df_orbis['Indice di Rotazione del Capitale Investito (*) 2024'].median() if 'Indice di Rotazione del Capitale Investito (*) 2024' in df_orbis.columns else 0
+    val_set_ebitda_24 = df_orbis['Margine EBITDA (*) % 2025'].median() if 'Margine EBITDA (*) % 2025' in df_orbis.columns else 0
+    val_set_ebit_24 = df_orbis['Margine EBIT (*) % 2025'].median() if 'Margine EBIT (*) % 2025' in df_orbis.columns else 0
+    val_set_profitto_24 = df_orbis['Margine di Profitto (*) % 2025'].median() if 'Margine di Profitto (*) % 2025' in df_orbis.columns else 0
+    val_set_strut1_24 = df_orbis['Indice di Struttura 1° livello (*) 2025'].median() if 'Indice di Struttura 1° livello (*) 2025' in df_orbis.columns else 0
+    val_set_strut2_24 = df_orbis['Indice di Struttura 2° livello (*) 2025'].median() if 'Indice di Struttura 2° livello (*) 2025' in df_orbis.columns else 0
+    val_set_gearing_24 = df_orbis['Gearing (*) % 2025'].median() if 'Gearing (*) % 2025' in df_orbis.columns else 0
+    val_set_cr_24 = df_orbis['Current Ratio (*) 2025'].median() if 'Current Ratio (*) 2025' in df_orbis.columns else 0
+    val_set_qr_24 = df_orbis['Quick Ratio (*) 2025'].median() if 'Quick Ratio (*) 2025' in df_orbis.columns else 0
+    val_set_rot_24 = df_orbis['Indice di Rotazione del Capitale Investito (*) 2025'].median() if 'Indice di Rotazione del Capitale Investito (*) 2025' in df_orbis.columns else 0
 
     # =================================================================
     # 🎯 POPOLAMENTO REALE DEL DIZIONARIO CON CHIAMATE POSIZIONALI CORRETTE
@@ -2667,7 +2714,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         serie_az[chiave], serie_set[chiave] = az, st
         lettura = LETTURE.get(chiave)
         # la riga di lettura vale solo se la soglia è davvero rispettata
-        if chiave in ('cr', 'qr', 'strut1', 'strut2') and (az.get('2024') is None or az['2024'] < 1):
+        if chiave in ('cr', 'qr', 'strut1', 'strut2') and (az.get(ULTIMO) is None or az[ULTIMO] < 1):
             lettura = None
         commenti[chiave] = commento_indicatore(
             nome, az, st, unita=unita, soglia_unitaria=soglia, inverso=inverso,
@@ -2810,17 +2857,17 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     def get_panoramica_economica(serie_ebitda, serie_set_ebitda):
         """Sostituisce le due frasi generiche di apertura dell'Equilibrio Economico."""
-        v0, v23, v24 = serie_ebitda.get('2021'), serie_ebitda.get('2023'), serie_ebitda.get('2024')
-        s0, s24 = serie_set_ebitda.get('2021'), serie_set_ebitda.get('2024')
+        v0, v23, v24 = serie_ebitda.get(PRIMO), serie_ebitda.get(PENULTIMO), serie_ebitda.get(ULTIMO)
+        s0, s24 = serie_set_ebitda.get(PRIMO), serie_set_ebitda.get(ULTIMO)
         if None in (v23, v24):
-            return "Nel quadriennio 2021-2024 la redditività aziendale viene letta insieme a quella del settore."
-        andamento = ("migliora fino al 2023 e arretra nel 2024" if v24 < v23
-                     else "prosegue in miglioramento anche nel 2024")
+            return f"Nel {NOME_PERIODO} {PERIODO} la redditività aziendale viene letta insieme a quella del settore."
+        andamento = (f"migliora fino al {PENULTIMO} e arretra nel {ULTIMO}" if v24 < v23
+                     else f"prosegue in miglioramento anche nel {ULTIMO}")
         coda = ""
         if None not in (s0, s24):
             coda = (" Il settore, nello stesso periodo, cresce complessivamente."
                     if s24 > s0 else " Anche il settore, nello stesso periodo, arretra.")
-        return (f"Nel quadriennio 2021-2024 la redditività aziendale {andamento}.{coda}")
+        return (f"Nel {NOME_PERIODO} {PERIODO} la redditività aziendale {andamento}.{coda}")
 
     context['panoramica_economica'] = get_panoramica_economica(serie_az['ebitda'], serie_set['ebitda'])
     context['sintesi_profilo_integrato'] = get_sintesi_profilo_integrato(val_az_ebitda_24, val_set_ebitda_24, val_az_gearing_24, val_set_gearing_24, val_az_cr_24, val_az_qr_24)
@@ -3795,7 +3842,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # FORMA DELLA DISTRIBUZIONE (Asimmetria e Curtosi sui Margini)
     # Utilizziamo l'EBITDA 2024 come proxy rappresentativo della redditività
     # =================================================================
-    col_ebitda = 'Margine EBITDA (*) % 2024'
+    col_ebitda = 'Margine EBITDA (*) % 2025'
     if col_ebitda in df_orbis.columns:
         skew_val = asimmetria_bowley(df_orbis[col_ebitda])
         kurt_val = df_orbis[col_ebitda].kurt() # In Pandas > 0 è leptocurtica
@@ -3827,7 +3874,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # FORMA DELLA DISTRIBUZIONE (Asimmetria e Curtosi Patrimoniale)
     # Utilizziamo l'Indice di Struttura 1° livello come proxy rappresentativo
     # =================================================================
-    col_strut = 'Indice di Struttura 1° livello (*) 2024'
+    col_strut = 'Indice di Struttura 1° livello (*) 2025'
     if col_strut in df_orbis.columns:
         skew_patr = asimmetria_bowley(df_orbis[col_strut])
         kurt_patr = df_orbis[col_strut].kurt()
@@ -3855,7 +3902,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # FORMA DELLA DISTRIBUZIONE (Asimmetria e Curtosi Finanziaria)
     # Utilizziamo il Current Ratio come proxy rappresentativo
     # =================================================================
-    col_fin = 'Current Ratio (*) 2024'
+    col_fin = 'Current Ratio (*) 2025'
     if col_fin in df_orbis.columns:
         skew_fin = asimmetria_bowley(df_orbis[col_fin])
         kurt_fin = df_orbis[col_fin].kurt()
@@ -3907,13 +3954,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     df_terr['Reg_Clean'] = df_terr[col_regione].apply(pulisci_regione) if col_regione else 'Altro'
 
     tot_imp = len(df_terr)
-    tot_ric = df_terr['Totale valore della produzione migl EUR 2024'].sum()
-    tot_att = df_terr['Totale Attivo migl EUR 2024'].sum()
-    tot_dip = df_terr['Numero dipendenti 2024'].sum()
+    tot_ric = df_terr['Totale valore della produzione migl EUR 2025'].sum()
+    tot_att = df_terr['Totale Attivo migl EUR 2025'].sum()
+    tot_dip = df_terr['Numero dipendenti 2025'].sum()
 
     pivot_terr = df_terr.groupby(['Macroregione', 'Reg_Clean']).agg({
-        col_ragione: 'count', 'Totale valore della produzione migl EUR 2024': 'sum', 
-        'Totale Attivo migl EUR 2024': 'sum', 'Numero dipendenti 2024': 'sum'
+        col_ragione: 'count', 'Totale valore della produzione migl EUR 2025': 'sum', 
+        'Totale Attivo migl EUR 2025': 'sum', 'Numero dipendenti 2025': 'sum'
     }).reset_index()
 
     # 3. Compilazione Righe
@@ -3929,12 +3976,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             row_cells[0].text = nome_regione
             row_cells[1].text = f"{int(r[col_ragione]):,}".replace(',', '.')
             row_cells[2].text = format_euro((r[col_ragione]/tot_imp)*100) if tot_imp else "0,00"
-            row_cells[3].text = format_euro(r['Totale valore della produzione migl EUR 2024'])
-            row_cells[4].text = format_euro((r['Totale valore della produzione migl EUR 2024']/tot_ric)*100) if tot_ric else "0,00"
-            row_cells[5].text = format_euro(r['Totale Attivo migl EUR 2024'])
-            row_cells[6].text = format_euro((r['Totale Attivo migl EUR 2024']/tot_att)*100) if tot_att else "0,00"
-            row_cells[7].text = f"{int(r['Numero dipendenti 2024']):,}".replace(',', '.')
-            row_cells[8].text = format_euro((r['Numero dipendenti 2024']/tot_dip)*100) if tot_dip else "0,00"
+            row_cells[3].text = format_euro(r['Totale valore della produzione migl EUR 2025'])
+            row_cells[4].text = format_euro((r['Totale valore della produzione migl EUR 2025']/tot_ric)*100) if tot_ric else "0,00"
+            row_cells[5].text = format_euro(r['Totale Attivo migl EUR 2025'])
+            row_cells[6].text = format_euro((r['Totale Attivo migl EUR 2025']/tot_att)*100) if tot_att else "0,00"
+            row_cells[7].text = f"{int(r['Numero dipendenti 2025']):,}".replace(',', '.')
+            row_cells[8].text = format_euro((r['Numero dipendenti 2025']/tot_dip)*100) if tot_dip else "0,00"
 
             # 🎯 EVIDENZIA LA REGIONE DELL'AZIENDA (Sfondo azzurro e grassetto)
             if nome_regione.strip().lower() == regione_target_pulita.strip().lower():
@@ -3952,12 +3999,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         row_cells[0].paragraphs[0].runs[0].bold = True
         row_cells[1].text = f"{int(df_m[col_ragione].sum()):,}".replace(',', '.')
         row_cells[2].text = format_euro((df_m[col_ragione].sum()/tot_imp)*100) if tot_imp else "0,00"
-        row_cells[3].text = format_euro(df_m['Totale valore della produzione migl EUR 2024'].sum())
-        row_cells[4].text = format_euro((df_m['Totale valore della produzione migl EUR 2024'].sum()/tot_ric)*100) if tot_ric else "0,00"
-        row_cells[5].text = format_euro(df_m['Totale Attivo migl EUR 2024'].sum())
-        row_cells[6].text = format_euro((df_m['Totale Attivo migl EUR 2024'].sum()/tot_att)*100) if tot_att else "0,00"
-        row_cells[7].text = f"{int(df_m['Numero dipendenti 2024'].sum()):,}".replace(',', '.')
-        row_cells[8].text = format_euro((df_m['Numero dipendenti 2024'].sum()/tot_dip)*100) if tot_dip else "0,00"
+        row_cells[3].text = format_euro(df_m['Totale valore della produzione migl EUR 2025'].sum())
+        row_cells[4].text = format_euro((df_m['Totale valore della produzione migl EUR 2025'].sum()/tot_ric)*100) if tot_ric else "0,00"
+        row_cells[5].text = format_euro(df_m['Totale Attivo migl EUR 2025'].sum())
+        row_cells[6].text = format_euro((df_m['Totale Attivo migl EUR 2025'].sum()/tot_att)*100) if tot_att else "0,00"
+        row_cells[7].text = f"{int(df_m['Numero dipendenti 2025'].sum()):,}".replace(',', '.')
+        row_cells[8].text = format_euro((df_m['Numero dipendenti 2025'].sum()/tot_dip)*100) if tot_dip else "0,00"
 
     # Inserimento Totale Italia Finale (Tutto in Grassetto)
     row_cells = t1.add_row().cells
@@ -4211,7 +4258,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # 🏗️ COSTRUZIONE TABELLA 7 E GRAFICI (COMPOSIZIONE VdP)
     # =================================================================
     # 1. RECUPERO DATI (Calcolo incidenza percentuale corretto e ANTI-CRASH)
-    anni = ['2021', '2022', '2023', '2024']
+    anni = list(ANNI)
     metriche = [
         ('Costo del venduto', 'Costo del venduto migl EUR'),
         ('Oneri di gestione', 'Oneri diversi di gestione migl EUR'),
@@ -4271,7 +4318,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
         # 2. COSTRUZIONE TABELLA 7 (Word) - Layout Split-Panel #?
         sd_tab7 = doc.new_subdoc()
-        t7 = sd_tab7.add_table(rows=1, cols=5)
+        t7 = sd_tab7.add_table(rows=1, cols=len(ANNI) + 1)
         t7.style = 'Table Grid'
         
         # Allineamento globale della tabella al centro
@@ -4281,7 +4328,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         tbl_pr.append(jc)
 
         # --- INTESTAZIONE PRINCIPALE ---
-        headers_t7 = ['% su Valore Produzione', '2021', '2022', '2023', '2024']
+        headers_t7 = ['% su Valore Produzione', *ANNI]
         for i, h in enumerate(headers_t7):
             cell = t7.cell(0, i)
             cell.text = h
@@ -4397,7 +4444,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # 🏗️ COSTRUZIONE TABELLA 8 E GRAFICO 3 (TREND MARGINE EBITDA)
     # =================================================================
     
-    anni = ['2021', '2022', '2023', '2024']
+    anni = list(ANNI)
     col_base_ebitda = 'Margine EBITDA (*) %'
     
     valori_settore_ebitda = []
@@ -4421,11 +4468,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 8
     sd_tab8 = doc.new_subdoc()
-    t8 = sd_tab8.add_table(rows=3, cols=5)
+    t8 = sd_tab8.add_table(rows=3, cols=len(ANNI) + 1)
     t8.style = 'Table Grid'
     
     # Intestazioni anni
-    headers_t8 = ['', '2021', '2022', '2023', '2024']
+    headers_t8 = ['', *ANNI]
     for i, h in enumerate(headers_t8):
         t8.cell(0, i).text = h
         t8.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -4540,7 +4587,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word
     img_ebitda_24_buf = genera_grafico_confronto_singolo(
-        val_az_ebitda_24, val_set_ebitda_24, nome_azienda, "Margine EBITDA (%) - 2024"
+        val_az_ebitda_24, val_set_ebitda_24, nome_azienda, f"Margine EBITDA (%) - {ULTIMO}"
     )
     context['grafico_ebitda_2024'] = InlineImage(doc, img_ebitda_24_buf, width=Mm(125))
 
@@ -4555,7 +4602,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     valori_azienda_ebit = []
     
     # 1. Recupero Dati
-    for anno in anni: # 'anni' è la lista ['2021', '2022', '2023', '2024'] già definita sopra
+    for anno in anni: # 'anni' è la lista list(ANNI) già definita sopra
         colonna = f"{col_base_ebit} {anno}"
         
         # Mediana Settore
@@ -4572,7 +4619,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 9
     sd_tab9 = doc.new_subdoc()
-    t9 = sd_tab9.add_table(rows=3, cols=5)
+    t9 = sd_tab9.add_table(rows=3, cols=len(ANNI) + 1)
     t9.style = 'Table Grid'
     
     # Intestazioni anni (riutilizziamo l'array headers_t8 che avevamo già)
@@ -4612,7 +4659,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_ebit_24_buf = genera_grafico_confronto_singolo(
-        val_az_ebit_24, val_set_ebit_24, nome_azienda, "Margine EBIT (%) - 2024"
+        val_az_ebit_24, val_set_ebit_24, nome_azienda, f"Margine EBIT (%) - {ULTIMO}"
     )
     context['grafico_ebit_2024'] = InlineImage(doc, img_ebit_24_buf, width=Mm(125))
 
@@ -4644,11 +4691,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 10
     sd_tab10 = doc.new_subdoc()
-    t10 = sd_tab10.add_table(rows=3, cols=5)
+    t10 = sd_tab10.add_table(rows=3, cols=len(ANNI) + 1)
     t10.style = 'Table Grid'
     
     # Intestazioni anni (questa volta la prima cella ha del testo)
-    headers_t10 = ['Margine di Profitto', '2021', '2022', '2023', '2024']
+    headers_t10 = ['Margine di Profitto', *ANNI]
     for i, h in enumerate(headers_t10):
         t10.cell(0, i).text = h
         t10.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -4684,7 +4731,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_profitto_24_buf = genera_grafico_confronto_singolo(
-        val_az_profitto_24, val_set_profitto_24, nome_azienda, "Margine di Profitto (%) - 2024"
+        val_az_profitto_24, val_set_profitto_24, nome_azienda, f"Margine di Profitto (%) - {ULTIMO}"
     )
     context['grafico_profitto_2024'] = InlineImage(doc, img_profitto_24_buf, width=Mm(125))
 
@@ -4715,11 +4762,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 11
     sd_tab11 = doc.new_subdoc()
-    t11 = sd_tab11.add_table(rows=3, cols=5)
+    t11 = sd_tab11.add_table(rows=3, cols=len(ANNI) + 1)
     t11.style = 'Table Grid'
     
     # Intestazioni anni 
-    headers_t11 = ['Indice Struttura 1° Liv.', '2021', '2022', '2023', '2024']
+    headers_t11 = ['Indice Struttura 1° Liv.', *ANNI]
     for i, h in enumerate(headers_t11):
         t11.cell(0, i).text = h
         t11.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -4756,7 +4803,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_strut1_24_buf = genera_grafico_confronto_singolo(
-        val_az_strut1_24, val_set_strut1_24, nome_azienda, "Indice Struttura 1° Liv. - 2024", percentuale=False
+        val_az_strut1_24, val_set_strut1_24, nome_azienda, f"Indice Struttura 1° Liv. - {ULTIMO}", percentuale=False
     )
     context['grafico_strut1_2024'] = InlineImage(doc, img_strut1_24_buf, width=Mm(125))
 
@@ -4787,11 +4834,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 12
     sd_tab12 = doc.new_subdoc()
-    t12 = sd_tab12.add_table(rows=3, cols=5)
+    t12 = sd_tab12.add_table(rows=3, cols=len(ANNI) + 1)
     t12.style = 'Table Grid'
     
     # Intestazioni anni 
-    headers_t12 = ['Indice Struttura 2° Liv.', '2021', '2022', '2023', '2024']
+    headers_t12 = ['Indice Struttura 2° Liv.', *ANNI]
     for i, h in enumerate(headers_t12):
         t12.cell(0, i).text = h
         t12.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -4827,7 +4874,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_strut2_24_buf = genera_grafico_confronto_singolo(
-        val_az_strut2_24, val_set_strut2_24, nome_azienda, "Indice Struttura 2° Liv. - 2024", percentuale=False
+        val_az_strut2_24, val_set_strut2_24, nome_azienda, f"Indice Struttura 2° Liv. - {ULTIMO}", percentuale=False
     )
     context['grafico_strut2_2024'] = InlineImage(doc, img_strut2_24_buf, width=Mm(125))
 
@@ -4858,11 +4905,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 13
     sd_tab13 = doc.new_subdoc()
-    t13 = sd_tab13.add_table(rows=3, cols=5)
+    t13 = sd_tab13.add_table(rows=3, cols=len(ANNI) + 1)
     t13.style = 'Table Grid'
     
     # Intestazioni anni 
-    headers_t13 = ['Gearing', '2021', '2022', '2023', '2024']
+    headers_t13 = ['Gearing', *ANNI]
     for i, h in enumerate(headers_t13):
         t13.cell(0, i).text = h
         t13.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -4898,7 +4945,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_gearing_24_buf = genera_grafico_confronto_singolo(
-        val_az_gearing_24, val_set_gearing_24, nome_azienda, "Gearing (%) - 2024"
+        val_az_gearing_24, val_set_gearing_24, nome_azienda, f"Gearing (%) - {ULTIMO}"
     )
     context['grafico_gearing_2024'] = InlineImage(doc, img_gearing_24_buf, width=Mm(125))
 
@@ -4929,11 +4976,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 14
     sd_tab14 = doc.new_subdoc()
-    t14 = sd_tab14.add_table(rows=3, cols=5)
+    t14 = sd_tab14.add_table(rows=3, cols=len(ANNI) + 1)
     t14.style = 'Table Grid'
     
     # Intestazioni anni 
-    headers_t14 = ['Current Ratio', '2021', '2022', '2023', '2024']
+    headers_t14 = ['Current Ratio', *ANNI]
     for i, h in enumerate(headers_t14):
         t14.cell(0, i).text = h
         t14.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -4969,7 +5016,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_cr_24_buf = genera_grafico_confronto_singolo(
-        val_az_cr_24, val_set_cr_24, nome_azienda, "Current Ratio - 2024", percentuale=False
+        val_az_cr_24, val_set_cr_24, nome_azienda, f"Current Ratio - {ULTIMO}", percentuale=False
     )
     context['grafico_cr_2024'] = InlineImage(doc, img_cr_24_buf, width=Mm(125))
 
@@ -5001,11 +5048,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 15
     sd_tab15 = doc.new_subdoc()
-    t15 = sd_tab15.add_table(rows=3, cols=5)
+    t15 = sd_tab15.add_table(rows=3, cols=len(ANNI) + 1)
     t15.style = 'Table Grid'
     
     # Intestazioni anni 
-    headers_t15 = ['Quick Ratio', '2021', '2022', '2023', '2024']
+    headers_t15 = ['Quick Ratio', *ANNI]
     for i, h in enumerate(headers_t15):
         t15.cell(0, i).text = h
         t15.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -5042,7 +5089,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_qr_24_buf = genera_grafico_confronto_singolo(
-        val_az_qr_24, val_set_qr_24, nome_azienda, "Quick Ratio - 2024", percentuale=False
+        val_az_qr_24, val_set_qr_24, nome_azienda, f"Quick Ratio - {ULTIMO}", percentuale=False
     )
     context['grafico_qr_2024'] = InlineImage(doc, img_qr_24_buf, width=Mm(125))
 
@@ -5075,11 +5122,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # 2. Costruzione Tabella 16
     sd_tab16 = doc.new_subdoc()
-    t16 = sd_tab16.add_table(rows=3, cols=5)
+    t16 = sd_tab16.add_table(rows=3, cols=len(ANNI) + 1)
     t16.style = 'Table Grid'
     
     # Intestazioni anni 
-    headers_t16 = ['Indice Rotazione Cap.Inv.', '2021', '2022', '2023', '2024']
+    headers_t16 = ['Indice Rotazione Cap.Inv.', *ANNI]
     for i, h in enumerate(headers_t16):
         t16.cell(0, i).text = h
         t16.cell(0, i).paragraphs[0].runs[0].bold = True
@@ -5115,7 +5162,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # Generazione Immagine e Iniezione nel Word (riutilizziamo la funzione a barre)
     img_rotazione_24_buf = genera_grafico_confronto_singolo(
-        val_az_rotazione_24, val_set_rotazione_24, nome_azienda, "Rotazione Cap. Inv. - 2024", percentuale=False
+        val_az_rotazione_24, val_set_rotazione_24, nome_azienda, f"Rotazione Cap. Inv. - {ULTIMO}", percentuale=False
     )
     context['grafico_rotazione_2024'] = InlineImage(doc, img_rotazione_24_buf, width=Mm(125))
 
@@ -5191,17 +5238,17 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
 
     # --- Creazione Tabella 1 (Profitto, EBITDA, EBIT) --- tutte variabili dirette
     headers_t1 = ['Margine di profitto', 'Margine EBITDA', 'Margine EBIT']
-    colonne_t1 = [f"{col_base_profitto} 2024", f"{col_base_ebitda} 2024", f"{col_base_ebit} 2024"]
+    colonne_t1 = [f"{col_base_profitto} {ULTIMO}", f"{col_base_ebitda} {ULTIMO}", f"{col_base_ebit} {ULTIMO}"]
     context['tabella_terzili_1'] = crea_tabella_terzili(doc, headers_t1, colonne_t1)
 
     # --- Creazione Tabella 2 (Struttura 1°, Struttura 2°, Gearing) --- Gearing è inversa
     headers_t2 = ['Indice Struttura 1° Livello', 'Indice Struttura 2° Livello', 'Indice Gearing']
-    colonne_t2 = [f"{col_base_strut1} 2024", f"{col_base_strut2} 2024", f"{col_base_gearing} 2024"]
-    context['tabella_terzili_2'] = crea_tabella_terzili(doc, headers_t2, colonne_t2, colonne_inverse=[f"{col_base_gearing} 2024"])
+    colonne_t2 = [f"{col_base_strut1} {ULTIMO}", f"{col_base_strut2} {ULTIMO}", f"{col_base_gearing} {ULTIMO}"]
+    context['tabella_terzili_2'] = crea_tabella_terzili(doc, headers_t2, colonne_t2, colonne_inverse=[f"{col_base_gearing} {ULTIMO}"])
 
     # --- Creazione Tabella 3 (Rotazione, Quick, Current) --- tutte variabili dirette
     headers_t3 = ['Indice Rotazione Cap.Inv.', 'Quick Ratio', 'Current Ratio']
-    colonne_t3 = [f"{col_base_rotazione} 2024", f"{col_base_qr} 2024", f"{col_base_cr} 2024"]
+    colonne_t3 = [f"{col_base_rotazione} {ULTIMO}", f"{col_base_qr} {ULTIMO}", f"{col_base_cr} {ULTIMO}"]
     context['tabella_terzili_3'] = crea_tabella_terzili(doc, headers_t3, colonne_t3)
 
     # =================================================================
@@ -5258,23 +5305,23 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return s.apply(assegna)
 
     # 1. Benchmark Economico (Più alto è meglio)
-    pt_prof = calcola_punti(f"{col_base_profitto} 2024", True)
-    pt_ebitda = calcola_punti(f"{col_base_ebitda} 2024", True)
-    pt_ebit = calcola_punti(f"{col_base_ebit} 2024", True)
+    pt_prof = calcola_punti(f"{col_base_profitto} {ULTIMO}", True)
+    pt_ebitda = calcola_punti(f"{col_base_ebitda} {ULTIMO}", True)
+    pt_ebit = calcola_punti(f"{col_base_ebit} {ULTIMO}", True)
     df_b['Score_Eco'] = pt_prof + pt_ebitda + pt_ebit
     df_b['Bench_Eco'] = df_b['Score_Eco'].apply(lambda x: 'A' if x >= 8 else ('B' if x >= 5 else 'C'))
 
     # 2. Benchmark Finanziario (Rotazione: Più basso è meglio - Quick/Current: Più alto è meglio)
-    pt_rot = calcola_punti(f"{col_base_rotazione} 2024", True) # in app.py cond_H <= T1
-    pt_qr = calcola_punti(f"{col_base_qr} 2024", True)
-    pt_cr = calcola_punti(f"{col_base_cr} 2024", True)
+    pt_rot = calcola_punti(f"{col_base_rotazione} {ULTIMO}", True) # in app.py cond_H <= T1
+    pt_qr = calcola_punti(f"{col_base_qr} {ULTIMO}", True)
+    pt_cr = calcola_punti(f"{col_base_cr} {ULTIMO}", True)
     df_b['Score_Fin'] = pt_rot + pt_qr + pt_cr
     df_b['Bench_Fin'] = df_b['Score_Fin'].apply(lambda x: 'A' if x >= 8 else ('B' if x >= 5 else 'C'))
 
     # 3. Benchmark Patrimoniale (Struttura: Più alto è meglio - Gearing: Più basso è meglio)
-    pt_s1 = calcola_punti(f"{col_base_strut1} 2024", True)
-    pt_s2 = calcola_punti(f"{col_base_strut2} 2024", True)
-    pt_gear = calcola_punti(f"{col_base_gearing} 2024", False) # in app.py cond_N <= T1
+    pt_s1 = calcola_punti(f"{col_base_strut1} {ULTIMO}", True)
+    pt_s2 = calcola_punti(f"{col_base_strut2} {ULTIMO}", True)
+    pt_gear = calcola_punti(f"{col_base_gearing} {ULTIMO}", False) # in app.py cond_N <= T1
     df_b['Score_Pat'] = pt_s1 + pt_s2 + pt_gear
     df_b['Bench_Pat'] = df_b['Score_Pat'].apply(lambda x: 'A' if x >= 8 else ('B' if x >= 5 else 'C'))
 
@@ -5522,7 +5569,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
                         
                         colonne_da_censurare = []
                         for c_idx, testo in enumerate(intestazioni):
-                            if '2024' in testo:
+                            if ULTIMO in testo:
                                 colonne_da_censurare.append(c_idx)
                                 if c_idx + 1 < len(intestazioni) and 'Δ' in intestazioni[c_idx + 1]:
                                     colonne_da_censurare.append(c_idx + 1)
@@ -5589,9 +5636,10 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # Produzione della Tabella 7.
     from testi_revisione import testi_report
 
-    def _incidenza_2024(dati, voce):
+    def _incidenza_ultimo_anno(dati, voce):
+        """L'incidenza dell'ultimo esercizio: l'ultima della serie, non la quarta."""
         valori = dati.get(voce) or []
-        return valori[3] if len(valori) > 3 else None
+        return valori[-1] if valori else None
 
     dati_revisione = {
         'nome': context.get('ragione_sociale', str(azienda_target)),
@@ -5599,14 +5647,14 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         'rating_eco': context['rating_eco'], 'rating_patr': context['rating_patr'],
         'rating_fin': context['rating_fin'], 'rating_tot': context['rating_tot'],
         'comp_az': {
-            'venduto': _incidenza_2024(dati_azienda, 'Costo del venduto'),
-            'oneri_gestione': _incidenza_2024(dati_azienda, 'Oneri di gestione'),
-            'finanziari': _incidenza_2024(dati_azienda, 'Proventi/Oneri fin.'),
+            'venduto': _incidenza_ultimo_anno(dati_azienda, 'Costo del venduto'),
+            'oneri_gestione': _incidenza_ultimo_anno(dati_azienda, 'Oneri di gestione'),
+            'finanziari': _incidenza_ultimo_anno(dati_azienda, 'Proventi/Oneri fin.'),
         },
         'comp_sett': {
-            'venduto': _incidenza_2024(dati_settore, 'Costo del venduto'),
-            'oneri_gestione': _incidenza_2024(dati_settore, 'Oneri di gestione'),
-            'finanziari': _incidenza_2024(dati_settore, 'Proventi/Oneri fin.'),
+            'venduto': _incidenza_ultimo_anno(dati_settore, 'Costo del venduto'),
+            'oneri_gestione': _incidenza_ultimo_anno(dati_settore, 'Oneri di gestione'),
+            'finanziari': _incidenza_ultimo_anno(dati_settore, 'Proventi/Oneri fin.'),
         },
     }
     try:
@@ -6493,7 +6541,7 @@ def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
             'sono ', 'ha ', 'garantendo', 'riflettendo',
             'evidenziando', 'e la ', 'e il ', 'e i ',
             'risulti ', 'rappresenta', 'conferma', 'indica ',
-            '- ', 'Anno ', 'mediano ', '2021', '2022', '2023', '2024',
+            '- ', 'Anno ', 'mediano ', *ANNI,
             'N.D. 20', 'N.D. 2021', 'N.D. 2022'
         ]
         # Confronto CASE-SENSITIVE: con .lower() un periodo nuovo che inizia per
