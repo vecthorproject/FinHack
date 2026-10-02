@@ -193,13 +193,13 @@ def elabora_capitolo_1(df_filtered, azienda_target, chiave_target=None):
     fg_macro.loc[m_mac] = ['Totale', f'=SUM(F5:F{tot_row_excel-1})', f'=SUM(G5:G{tot_row_excel-1})']
 
     # FOGLIO "Liv.Agg. per FG"
-    col_attivo = 'Totale Attivo migl EUR 2025'
-    col_ricavi = 'Totale valore della produzione migl EUR 2025'
+    col_attivo = f'Totale Attivo migl EUR {ULTIMO}'
+    col_ricavi = f'Totale valore della produzione migl EUR {ULTIMO}'
 
     fin_detail = df_cap1.groupby('Forma Giuridica Pulita')[[col_attivo, col_ricavi]].sum().reset_index()
-    fin_detail.columns = ['Etichette di riga', 'Somma di Totale Attivo migl EUR 2025', 'Somma di Totale valore della produzione migl EUR 2025']
-    fin_detail['Somma di Totale Attivo migl EUR 2025'] = fin_detail['Somma di Totale Attivo migl EUR 2025'].round(2)
-    fin_detail['Somma di Totale valore della produzione migl EUR 2025'] = fin_detail['Somma di Totale valore della produzione migl EUR 2025'].round(2)
+    fin_detail.columns = ['Etichette di riga', f'Somma di Totale Attivo migl EUR {ULTIMO}', f'Somma di Totale valore della produzione migl EUR {ULTIMO}']
+    fin_detail[f'Somma di Totale Attivo migl EUR {ULTIMO}'] = fin_detail[f'Somma di Totale Attivo migl EUR {ULTIMO}'].round(2)
+    fin_detail[f'Somma di Totale valore della produzione migl EUR {ULTIMO}'] = fin_detail[f'Somma di Totale valore della produzione migl EUR {ULTIMO}'].round(2)
     fin_detail = fin_detail.sort_values('Etichette di riga').reset_index(drop=True)
     m_fin_det = len(fin_detail)
     fin_detail.loc[m_fin_det] = ['Totale complessivo', f'=SUM(B2:B{m_fin_det+1})', f'=SUM(C2:C{m_fin_det+1})']
@@ -379,8 +379,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     # --- LOGICA PANDAS ---
     cols = [
-        'Ragione socialeCaratteri latini', 'NUTS2', 'Totale Attivo migl EUR 2025', 
-        'Totale valore della produzione migl EUR 2025', 'Numero dipendenti 2025'
+        'Ragione socialeCaratteri latini', 'NUTS2', f'Totale Attivo migl EUR {ULTIMO}', 
+        f'Totale valore della produzione migl EUR {ULTIMO}', f'Numero dipendenti {ULTIMO}'
     ]
     # Filtriamo solo le colonne che esistono realmente nel file
     cols_to_use = [c for c in cols if c in df_base.columns]
@@ -388,7 +388,7 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     
     df_base.rename(columns={
         'NUTS2': 'Regione', 
-        'Totale valore della produzione migl EUR 2025': COL_RICAVI_AGG,
+        f'Totale valore della produzione migl EUR {ULTIMO}': COL_RICAVI_AGG,
         'Ragione socialeCaratteri latini': 'Ragione Sociale'
     }, inplace=True)
 
@@ -402,12 +402,12 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     else:
         df_base['Nome Regione'] = 'Altro'
 
-    for col in ['Totale Attivo migl EUR 2025', COL_RICAVI_AGG]:
+    for col in [f'Totale Attivo migl EUR {ULTIMO}', COL_RICAVI_AGG]:
         if col in df_base.columns:
             df_base[col] = pd.to_numeric(df_base[col], errors='coerce')
             
-    if 'Numero dipendenti 2025' in df_base.columns:
-        df_base['Numero dipendenti 2025'] = pd.to_numeric(df_base['Numero dipendenti 2025'], errors='coerce')
+    if f'Numero dipendenti {ULTIMO}' in df_base.columns:
+        df_base[f'Numero dipendenti {ULTIMO}'] = pd.to_numeric(df_base[f'Numero dipendenti {ULTIMO}'], errors='coerce')
 
     def get_macro(nuts2):
         if pd.isna(nuts2): return 'Altro'
@@ -426,13 +426,13 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
     pivot_reg = df_base.groupby(['Macroregione', 'Nome Regione']).agg({
         'Ragione Sociale': 'count',
         COL_RICAVI_AGG: 'sum',
-        'Totale Attivo migl EUR 2025': 'sum',
-        'Numero dipendenti 2025': 'sum'
+        f'Totale Attivo migl EUR {ULTIMO}': 'sum',
+        f'Numero dipendenti {ULTIMO}': 'sum'
     }).rename(columns={'Ragione Sociale': 'Imprese'})
 
     pivot_reg[COL_RICAVI_AGG] = pivot_reg[COL_RICAVI_AGG].round(2)
-    pivot_reg['Totale Attivo migl EUR 2025'] = pivot_reg['Totale Attivo migl EUR 2025'].round(2)
-    pivot_reg['Numero dipendenti 2025'] = pivot_reg['Numero dipendenti 2025'].fillna(0).astype(int)
+    pivot_reg[f'Totale Attivo migl EUR {ULTIMO}'] = pivot_reg[f'Totale Attivo migl EUR {ULTIMO}'].round(2)
+    pivot_reg[f'Numero dipendenti {ULTIMO}'] = pivot_reg[f'Numero dipendenti {ULTIMO}'].fillna(0).astype(int)
     pivot_reg['Imprese'] = pivot_reg['Imprese'].fillna(0).astype(int)
 
     # 🟢 ESTRATTO TARGET: Trova la regione (NUTS2) e la macroregione dell'azienda bersaglio
@@ -517,8 +517,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
             worksheet.write(current_idx, 0, reg, f_r)
             worksheet.write(current_idx, 1, row_data['Imprese'], f_i)
             worksheet.write(current_idx, 3, row_data[COL_RICAVI_AGG], f_d)
-            worksheet.write(current_idx, 5, row_data['Totale Attivo migl EUR 2025'], f_d)
-            worksheet.write(current_idx, 7, row_data['Numero dipendenti 2025'], f_i)
+            worksheet.write(current_idx, 5, row_data[f'Totale Attivo migl EUR {ULTIMO}'], f_d)
+            worksheet.write(current_idx, 7, row_data[f'Numero dipendenti {ULTIMO}'], f_i)
             for c, v_col in zip([2, 4, 6, 8], ['B', 'D', 'F', 'H']):
                 worksheet.write_formula(current_idx, c, f"={v_col}{current_idx+1}/{v_col}${riga_italia_excel}", f_p)
             current_idx += 1
@@ -626,14 +626,14 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
 
     ws_quartili = workbook.add_worksheet('Quartili')
     
-    df_raw = df_base[['Totale Attivo migl EUR 2025', COL_RICAVI_AGG]].dropna()
+    df_raw = df_base[[f'Totale Attivo migl EUR {ULTIMO}', COL_RICAVI_AGG]].dropna()
     df_raw = df_raw.sort_values(by=COL_RICAVI_AGG, ascending=False)
     
     ws_quartili.write(0, 0, f'Totale Attivo mgl EUR {ULTIMO}', format_header_blue)
     ws_quartili.write(0, 1, f'Totale valore della produzione mgl EUR {ULTIMO}', format_header_blue)
     
     for r_idx, (_, row) in enumerate(df_raw.iterrows(), 1):
-        ws_quartili.write(r_idx, 0, row['Totale Attivo migl EUR 2025'], f_dec)
+        ws_quartili.write(r_idx, 0, row[f'Totale Attivo migl EUR {ULTIMO}'], f_dec)
         ws_quartili.write(r_idx, 1, row[COL_RICAVI_AGG], f_dec)
 
     ws_quartili.set_column('A:B', 35)
@@ -699,8 +699,8 @@ def elabora_capitolo_2(df_filtered, azienda_target, chiave_target=None):
             ('Macroregione Appartenenza', riga_g['Macroregione'], format_regione),
             ('Regione Specifica (NUTS2)', riga_g['Nome Regione'], format_regione),
             (f'Totale Ricavi - mgl EUR {ULTIMO}', riga_g[COL_RICAVI_AGG], f_dec),
-            (f'Totale Attivo - mgl EUR {ULTIMO}', riga_g['Totale Attivo migl EUR 2025'], f_dec),
-            (f'Numero Dipendenti {ULTIMO}', riga_g['Numero dipendenti 2025'], f_int)
+            (f'Totale Attivo - mgl EUR {ULTIMO}', riga_g[f'Totale Attivo migl EUR {ULTIMO}'], f_dec),
+            (f'Numero Dipendenti {ULTIMO}', riga_g[f'Numero dipendenti {ULTIMO}'], f_int)
         ]
         
         for idx, (voce, valore, formato_cella) in enumerate(voci_geo, 1):
@@ -2874,23 +2874,23 @@ if uploaded_file is not None:
 
         # --- 3. PULIZIA DATI E FILTRAGGIO VALORI (n.d., Rotazione e Gearing) ---
         righe_iniziali = len(df_orbis)
-        col_att_24 = 'Totale Attivo migl EUR 2025'
-        col_ric_24 = 'Totale valore della produzione migl EUR 2025'
-        col_rot_24 = 'Indice di Rotazione del Capitale Investito (*) 2025'
+        col_attivo_ultimo = f'Totale Attivo migl EUR {ULTIMO}'
+        col_ricavi_ultimo = f'Totale valore della produzione migl EUR {ULTIMO}'
+        col_rotazione_ultimo = f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'
         
-        col_g24 = 'Gearing (*) % 2025'
-        col_g23 = 'Gearing (*) % 2023'
-        col_g22 = 'Gearing (*) % 2022'
-        col_g21 = 'Gearing (*) % 2021'
+        col_gearing_ultimo = f'Gearing (*) % {ULTIMO}'
+        # Gli esercizi precedenti, quanti sono: erano elencati a mano e all'aggiunta
+        # del 2025 il 2024 era rimasto fuori dalla pulizia degli zeri.
+        col_gearing_passati = [f'Gearing (*) % {anno}' for anno in ANNI[:-1]]
 
         # Forza la conversione a numero per tutte le metriche chiave
-        for col in [col_att_24, col_ric_24, col_rot_24, col_g24, col_g23, col_g22, col_g21]:
+        for col in [col_attivo_ultimo, col_ricavi_ultimo, col_rotazione_ultimo, col_gearing_ultimo, *col_gearing_passati]:
             if col in df_orbis.columns:
                 df_orbis[col] = pd.to_numeric(df_orbis[col], errors='coerce')
 
         # --- FILTRO 1: ROTAZIONE E DATI BASE ---
-        df_orbis = df_orbis.dropna(subset=[col_att_24, col_ric_24, col_rot_24])
-        df_orbis = df_orbis[df_orbis[col_rot_24] > 0]
+        df_orbis = df_orbis.dropna(subset=[col_attivo_ultimo, col_ricavi_ultimo, col_rotazione_ultimo])
+        df_orbis = df_orbis[df_orbis[col_rotazione_ultimo] > 0]
         
         righe_post_rotazione = len(df_orbis)
         scartate_rotazione = righe_iniziali - righe_post_rotazione
@@ -2912,9 +2912,9 @@ if uploaded_file is not None:
         aziende_a_rischio_gearing = []   # indici di riga (chiave univoca), non nomi
         etichette_aziende_gearing = {}
         n_gearing_nullo = 0
-        if col_g24 in df_orbis.columns and col_ragione_gearing:
-            maschera_a_rischio = df_orbis[col_g24].isna() | (df_orbis[col_g24] <= 0)
-            n_gearing_nullo = int((df_orbis[col_g24] == 0).sum())
+        if col_gearing_ultimo in df_orbis.columns and col_ragione_gearing:
+            maschera_a_rischio = df_orbis[col_gearing_ultimo].isna() | (df_orbis[col_gearing_ultimo] <= 0)
+            n_gearing_nullo = int((df_orbis[col_gearing_ultimo] == 0).sum())
             df_rischio_gearing = df_orbis.loc[maschera_a_rischio].sort_values(
                 col_ragione_gearing, key=lambda s: s.astype(str).str.lower()
             )
@@ -2944,7 +2944,7 @@ if uploaded_file is not None:
                         f"({n_gearing_nullo} aziende scartate)",
                         value=True,
                         help=f"ATTIVO (default storico): le imprese con Gearing {ULTIMO} = 0 vengono scartate "
-                             "e gli zeri degli anni 2021-2023 diventano 'n.d.'.\n\n"
+                             f"e gli zeri degli esercizi precedenti ({PRIMO}-{PENULTIMO}) diventano 'n.d.'.\n\n"
                              "DISATTIVATO: lo zero viene letto come 'nessun debito finanziario', quindi un "
                              "valore reale. Le imprese restano nel campione e la mediana settoriale del "
                              "Gearing scende sensibilmente (sui file di prova da ~39% a ~9% e da ~32% a ~10%).",
@@ -2960,17 +2960,17 @@ if uploaded_file is not None:
                     )
 
         # --- FILTRO 2: GEARING ---
-        if col_g24 in df_orbis.columns:
+        if col_gearing_ultimo in df_orbis.columns:
             if disattiva_filtro_gearing:
                 maschera_gearing_ok = pd.Series(True, index=df_orbis.index)
             else:
                 if tratta_zero_come_nd:
                     # Elimina chi ha Gearing nullo o negativo nell'ultimo esercizio
-                    maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] > 0)
+                    maschera_gearing_ok = (df_orbis[col_gearing_ultimo].notna()) & (df_orbis[col_gearing_ultimo] > 0)
                 else:
                     # Lo zero e' un valore reale ("nessun debito finanziario"): si scartano
                     # solo i mancanti e i negativi (patrimonio netto negativo).
-                    maschera_gearing_ok = (df_orbis[col_g24].notna()) & (df_orbis[col_g24] >= 0)
+                    maschera_gearing_ok = (df_orbis[col_gearing_ultimo].notna()) & (df_orbis[col_gearing_ultimo] >= 0)
                 if indici_esenti_gearing:
                     maschera_gearing_ok |= df_orbis.index.isin(indici_esenti_gearing)
 
@@ -2978,7 +2978,7 @@ if uploaded_file is not None:
 
             if tratta_zero_come_nd and not disattiva_filtro_gearing:
                 # Nasconde gli zeri degli anni passati trasformandoli in 'n.d.'
-                for col_g in [col_g23, col_g22, col_g21]:
+                for col_g in col_gearing_passati:
                     if col_g in df_orbis.columns:
                         df_orbis[col_g] = df_orbis[col_g].replace(0, np.nan)
 
@@ -3336,8 +3336,8 @@ if uploaded_file is not None:
                 df_puliti = df_candidati.copy()
 
             # MINIMO INTERVENTO: Preferenza per chi ha dichiarato i dipendenti
-            if 'Numero dipendenti 2025' in df_puliti.columns:
-                df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti['Numero dipendenti 2025'], errors='coerce').notna()]
+            if f'Numero dipendenti {ULTIMO}' in df_puliti.columns:
+                df_con_dipendenti = df_puliti[pd.to_numeric(df_puliti[f'Numero dipendenti {ULTIMO}'], errors='coerce').notna()]
                 if not df_con_dipendenti.empty:
                     df_puliti = df_con_dipendenti.copy()
 

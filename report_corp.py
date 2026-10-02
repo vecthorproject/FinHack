@@ -1580,11 +1580,11 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # ---------------------------------------------------------------
 
     colonne_da_convertire = [
-        'Totale valore della produzione migl EUR 2025', 'Totale Attivo migl EUR 2025',
-        'Numero dipendenti 2025', 'Margine di Profitto (*) % 2025', 'Margine EBITDA (*) % 2025',
-        'Margine EBIT (*) % 2025', 'Indice di Struttura 1° livello (*) 2025',
-        'Indice di Struttura 2° livello (*) 2025', 'Gearing (*) % 2025',
-        'Indice di Rotazione del Capitale Investito (*) 2025', 'Current Ratio (*) 2025', 'Quick Ratio (*) 2025'
+        f'Totale valore della produzione migl EUR {ULTIMO}', f'Totale Attivo migl EUR {ULTIMO}',
+        f'Numero dipendenti {ULTIMO}', f'Margine di Profitto (*) % {ULTIMO}', f'Margine EBITDA (*) % {ULTIMO}',
+        f'Margine EBIT (*) % {ULTIMO}', f'Indice di Struttura 1° livello (*) {ULTIMO}',
+        f'Indice di Struttura 2° livello (*) {ULTIMO}', f'Gearing (*) % {ULTIMO}',
+        f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}', f'Current Ratio (*) {ULTIMO}', f'Quick Ratio (*) {ULTIMO}'
     ]
     for c in colonne_da_convertire:
         if c in df_orbis.columns:
@@ -1650,9 +1650,9 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     else: df_orbis['Macroregione'] = 'Altro'
 
     tot_imprese_settore = len(df_orbis)
-    tot_ricavi_settore = df_orbis['Totale valore della produzione migl EUR 2025'].sum()
-    tot_attivo_settore = df_orbis['Totale Attivo migl EUR 2025'].sum()
-    tot_dipendenti_settore = df_orbis['Numero dipendenti 2025'].sum()
+    tot_ricavi_settore = df_orbis[f'Totale valore della produzione migl EUR {ULTIMO}'].sum()
+    tot_attivo_settore = df_orbis[f'Totale Attivo migl EUR {ULTIMO}'].sum()
+    tot_dipendenti_settore = df_orbis[f'Numero dipendenti {ULTIMO}'].sum()
 
     # 🟢 LOGICA DETTAGLIATA FORME GIURIDICHE (Top 1, Top 2 e Altre)
     fg_counts = df_orbis['Forma Giuridica Pulita'].value_counts()
@@ -1693,15 +1693,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         else: pos_reg = "n.d."
         return format_euro(valore), pos_naz, pos_reg
 
-    mg_prof, rnk_naz_prof, rnk_reg_prof = get_val_and_rank('Margine di Profitto (*) % 2025', False)
-    mg_ebitda, rnk_naz_ebitda, rnk_reg_ebitda = get_val_and_rank('Margine EBITDA (*) % 2025', False)
-    mg_ebit, rnk_naz_ebit, rnk_reg_ebit = get_val_and_rank('Margine EBIT (*) % 2025', False)
-    ind_str1, rnk_naz_strut1, rnk_reg_strut1 = get_val_and_rank('Indice di Struttura 1° livello (*) 2025', False)
-    ind_str2, rnk_naz_strut2, rnk_reg_strut2 = get_val_and_rank('Indice di Struttura 2° livello (*) 2025', False)
-    gearing, rnk_naz_gear, rnk_reg_gear = get_val_and_rank('Gearing (*) % 2025', True) 
-    ind_rot, rnk_naz_rot, rnk_reg_rot = get_val_and_rank('Indice di Rotazione del Capitale Investito (*) 2025', False)
-    ind_cr, rnk_naz_cr, rnk_reg_cr = get_val_and_rank('Current Ratio (*) 2025', False)
-    ind_qr, rnk_naz_qr, rnk_reg_qr = get_val_and_rank('Quick Ratio (*) 2025', False)
+    mg_prof, rnk_naz_prof, rnk_reg_prof = get_val_and_rank(f'Margine di Profitto (*) % {ULTIMO}', False)
+    mg_ebitda, rnk_naz_ebitda, rnk_reg_ebitda = get_val_and_rank(f'Margine EBITDA (*) % {ULTIMO}', False)
+    mg_ebit, rnk_naz_ebit, rnk_reg_ebit = get_val_and_rank(f'Margine EBIT (*) % {ULTIMO}', False)
+    ind_str1, rnk_naz_strut1, rnk_reg_strut1 = get_val_and_rank(f'Indice di Struttura 1° livello (*) {ULTIMO}', False)
+    ind_str2, rnk_naz_strut2, rnk_reg_strut2 = get_val_and_rank(f'Indice di Struttura 2° livello (*) {ULTIMO}', False)
+    gearing, rnk_naz_gear, rnk_reg_gear = get_val_and_rank(f'Gearing (*) % {ULTIMO}', True) 
+    ind_rot, rnk_naz_rot, rnk_reg_rot = get_val_and_rank(f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}', False)
+    ind_cr, rnk_naz_cr, rnk_reg_cr = get_val_and_rank(f'Current Ratio (*) {ULTIMO}', False)
+    ind_qr, rnk_naz_qr, rnk_reg_qr = get_val_and_rank(f'Quick Ratio (*) {ULTIMO}', False)
 
     if not df_target.empty:
         riga = df_target.iloc[0]
@@ -1710,21 +1710,21 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         macroregione_target = riga.get('Macroregione', 'N.D.')
         num_fg_target = fg_counts.get(forma_giuridica, 0)
         perc_fg_target = (num_fg_target / tot_imprese_settore) * 100 if tot_imprese_settore > 0 else 0
-        ricavi_mgl = riga.get('Totale valore della produzione migl EUR 2025')
-        attivo_mgl = riga.get('Totale Attivo migl EUR 2025')
-        dipendenti = riga.get('Numero dipendenti 2025')
+        ricavi_mgl = riga.get(f'Totale valore della produzione migl EUR {ULTIMO}')
+        attivo_mgl = riga.get(f'Totale Attivo migl EUR {ULTIMO}')
+        dipendenti = riga.get(f'Numero dipendenti {ULTIMO}')
         ricavi_mln = ricavi_mgl / 1000 if pd.notna(ricavi_mgl) else 0
         attivo_mln = attivo_mgl / 1000 if pd.notna(attivo_mgl) else 0
         perc_ricavi_panel = (ricavi_mgl / tot_ricavi_settore * 100) if tot_ricavi_settore > 0 and pd.notna(ricavi_mgl) else 0
         perc_attivo_panel = (attivo_mgl / tot_attivo_settore * 100) if tot_attivo_settore > 0 and pd.notna(attivo_mgl) else 0
-        tot_dip_area = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Numero dipendenti 2025'].sum()
+        tot_dip_area = df_orbis[df_orbis['Macroregione'] == macroregione_target][f'Numero dipendenti {ULTIMO}'].sum()
         perc_dip_area = (dipendenti / tot_dip_area * 100) if tot_dip_area > 0 and pd.notna(dipendenti) else 0
         # --- NUOVI CALCOLI TERRITORIALI ---
         regione_grezza = str(riga.get(col_regione, 'N.D.'))
         regione_target_pulita = regione_grezza.split(' - ')[1] if ' - ' in regione_grezza else regione_grezza
         tot_imprese_regione = len(df_orbis[df_orbis[col_regione] == riga.get(col_regione)]) if col_regione else 0
         perc_imprese_regione = (tot_imprese_regione / tot_imprese_settore * 100) if tot_imprese_settore > 0 else 0
-        tot_ricavi_macro_mgl = df_orbis[df_orbis['Macroregione'] == macroregione_target]['Totale valore della produzione migl EUR 2025'].sum()
+        tot_ricavi_macro_mgl = df_orbis[df_orbis['Macroregione'] == macroregione_target][f'Totale valore della produzione migl EUR {ULTIMO}'].sum()
         tot_ricavi_macro_mln = tot_ricavi_macro_mgl / 1000
         perc_ricavi_macroregione = (tot_ricavi_macro_mgl / tot_ricavi_settore * 100) if tot_ricavi_settore > 0 else 0
         perc_ricavi_target_su_macro = (ricavi_mgl / tot_ricavi_macro_mgl * 100) if tot_ricavi_macro_mgl > 0 and pd.notna(ricavi_mgl) else 0
@@ -1735,15 +1735,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         # Filtriamo il database prendendo SOLO le aziende con la stessa forma giuridica (es. solo le S.p.A.)
         df_categoria = df_orbis[df_orbis['Forma Giuridica Pulita'] == forma_giuridica]
         
-        tot_ricavi_categoria = df_categoria['Totale valore della produzione migl EUR 2025'].sum()
-        tot_attivo_categoria = df_categoria['Totale Attivo migl EUR 2025'].sum()
+        tot_ricavi_categoria = df_categoria[f'Totale valore della produzione migl EUR {ULTIMO}'].sum()
+        tot_attivo_categoria = df_categoria[f'Totale Attivo migl EUR {ULTIMO}'].sum()
         
         perc_ricavi_categoria = (ricavi_mgl / tot_ricavi_categoria * 100) if tot_ricavi_categoria > 0 and pd.notna(ricavi_mgl) else 0
         perc_attivo_categoria = (attivo_mgl / tot_attivo_categoria * 100) if tot_attivo_categoria > 0 and pd.notna(attivo_mgl) else 0
 
-        try: quartile_ricavi_target = pd.qcut(df_orbis['Totale valore della produzione migl EUR 2025'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
+        try: quartile_ricavi_target = pd.qcut(df_orbis[f'Totale valore della produzione migl EUR {ULTIMO}'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
         except: quartile_ricavi_target = "N.D."
-        try: quartile_attivo_target = pd.qcut(df_orbis['Totale Attivo migl EUR 2025'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
+        try: quartile_attivo_target = pd.qcut(df_orbis[f'Totale Attivo migl EUR {ULTIMO}'].dropna(), 4, labels=[1, 2, 3, 4]).loc[riga.name]
         except: quartile_attivo_target = "N.D."
     else:
         p_iva, forma_giuridica, macroregione_target, num_fg_target, perc_fg_target, ricavi_mln, attivo_mln, dipendenti = "N.D.", "N.D.", "N.D.", 0, 0, 0, 0, 0
@@ -1961,15 +1961,15 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         return 'A' if punti >= 8 else ('B' if punti >= 5 else 'C')
 
     # Identificatori metriche
-    c_prof = 'Margine di Profitto (*) % 2025'
-    c_ebitda = 'Margine EBITDA (*) % 2025'
-    c_ebit = 'Margine EBIT (*) % 2025'
-    c_rot = 'Indice di Rotazione del Capitale Investito (*) 2025'
-    c_quick = 'Quick Ratio (*) 2025'
-    c_curr = 'Current Ratio (*) 2025'
-    c_str1 = 'Indice di Struttura 1° livello (*) 2025'
-    c_str2 = 'Indice di Struttura 2° livello (*) 2025'
-    c_gear = 'Gearing (*) % 2025'
+    c_prof = f'Margine di Profitto (*) % {ULTIMO}'
+    c_ebitda = f'Margine EBITDA (*) % {ULTIMO}'
+    c_ebit = f'Margine EBIT (*) % {ULTIMO}'
+    c_rot = f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'
+    c_quick = f'Quick Ratio (*) {ULTIMO}'
+    c_curr = f'Current Ratio (*) {ULTIMO}'
+    c_str1 = f'Indice di Struttura 1° livello (*) {ULTIMO}'
+    c_str2 = f'Indice di Struttura 2° livello (*) {ULTIMO}'
+    c_gear = f'Gearing (*) % {ULTIMO}'
 
     metriche_dirette = [c_prof, c_ebitda, c_ebit, c_rot, c_quick, c_curr, c_str1, c_str2]
     metriche_inverse = [c_gear]
@@ -2645,30 +2645,30 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # =================================================================
     if not df_target.empty:
         riga_az_target = df_target.iloc[0]
-        val_az_ebitda_24 = pd.to_numeric(riga_az_target.get('Margine EBITDA (*) % 2025'), errors='coerce')
-        val_az_ebit_24 = pd.to_numeric(riga_az_target.get('Margine EBIT (*) % 2025'), errors='coerce')
-        val_az_profitto_24 = pd.to_numeric(riga_az_target.get('Margine di Profitto (*) % 2025'), errors='coerce')
-        val_az_strut1_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 1° livello (*) 2025'), errors='coerce')
-        val_az_strut2_24 = pd.to_numeric(riga_az_target.get('Indice di Struttura 2° livello (*) 2025'), errors='coerce')
-        val_az_gearing_24 = pd.to_numeric(riga_az_target.get('Gearing (*) % 2025'), errors='coerce')
-        val_az_cr_24 = pd.to_numeric(riga_az_target.get('Current Ratio (*) 2025'), errors='coerce')
-        val_az_qr_24 = pd.to_numeric(riga_az_target.get('Quick Ratio (*) 2025'), errors='coerce')
-        val_az_rot_24 = pd.to_numeric(riga_az_target.get('Indice di Rotazione del Capitale Investito (*) 2025'), errors='coerce')
+        val_az_ebitda_24 = pd.to_numeric(riga_az_target.get(f'Margine EBITDA (*) % {ULTIMO}'), errors='coerce')
+        val_az_ebit_24 = pd.to_numeric(riga_az_target.get(f'Margine EBIT (*) % {ULTIMO}'), errors='coerce')
+        val_az_profitto_24 = pd.to_numeric(riga_az_target.get(f'Margine di Profitto (*) % {ULTIMO}'), errors='coerce')
+        val_az_strut1_24 = pd.to_numeric(riga_az_target.get(f'Indice di Struttura 1° livello (*) {ULTIMO}'), errors='coerce')
+        val_az_strut2_24 = pd.to_numeric(riga_az_target.get(f'Indice di Struttura 2° livello (*) {ULTIMO}'), errors='coerce')
+        val_az_gearing_24 = pd.to_numeric(riga_az_target.get(f'Gearing (*) % {ULTIMO}'), errors='coerce')
+        val_az_cr_24 = pd.to_numeric(riga_az_target.get(f'Current Ratio (*) {ULTIMO}'), errors='coerce')
+        val_az_qr_24 = pd.to_numeric(riga_az_target.get(f'Quick Ratio (*) {ULTIMO}'), errors='coerce')
+        val_az_rot_24 = pd.to_numeric(riga_az_target.get(f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'), errors='coerce')
     else:
         val_az_ebitda_24 = val_az_ebit_24 = val_az_profitto_24 = 0
         val_az_strut1_24 = val_az_strut2_24 = val_az_gearing_24 = 0
         val_az_cr_24 = val_az_qr_24 = val_az_rot_24 = 0
 
     # Mediane del settore (2024)
-    val_set_ebitda_24 = df_orbis['Margine EBITDA (*) % 2025'].median() if 'Margine EBITDA (*) % 2025' in df_orbis.columns else 0
-    val_set_ebit_24 = df_orbis['Margine EBIT (*) % 2025'].median() if 'Margine EBIT (*) % 2025' in df_orbis.columns else 0
-    val_set_profitto_24 = df_orbis['Margine di Profitto (*) % 2025'].median() if 'Margine di Profitto (*) % 2025' in df_orbis.columns else 0
-    val_set_strut1_24 = df_orbis['Indice di Struttura 1° livello (*) 2025'].median() if 'Indice di Struttura 1° livello (*) 2025' in df_orbis.columns else 0
-    val_set_strut2_24 = df_orbis['Indice di Struttura 2° livello (*) 2025'].median() if 'Indice di Struttura 2° livello (*) 2025' in df_orbis.columns else 0
-    val_set_gearing_24 = df_orbis['Gearing (*) % 2025'].median() if 'Gearing (*) % 2025' in df_orbis.columns else 0
-    val_set_cr_24 = df_orbis['Current Ratio (*) 2025'].median() if 'Current Ratio (*) 2025' in df_orbis.columns else 0
-    val_set_qr_24 = df_orbis['Quick Ratio (*) 2025'].median() if 'Quick Ratio (*) 2025' in df_orbis.columns else 0
-    val_set_rot_24 = df_orbis['Indice di Rotazione del Capitale Investito (*) 2025'].median() if 'Indice di Rotazione del Capitale Investito (*) 2025' in df_orbis.columns else 0
+    val_set_ebitda_24 = df_orbis[f'Margine EBITDA (*) % {ULTIMO}'].median() if f'Margine EBITDA (*) % {ULTIMO}' in df_orbis.columns else 0
+    val_set_ebit_24 = df_orbis[f'Margine EBIT (*) % {ULTIMO}'].median() if f'Margine EBIT (*) % {ULTIMO}' in df_orbis.columns else 0
+    val_set_profitto_24 = df_orbis[f'Margine di Profitto (*) % {ULTIMO}'].median() if f'Margine di Profitto (*) % {ULTIMO}' in df_orbis.columns else 0
+    val_set_strut1_24 = df_orbis[f'Indice di Struttura 1° livello (*) {ULTIMO}'].median() if f'Indice di Struttura 1° livello (*) {ULTIMO}' in df_orbis.columns else 0
+    val_set_strut2_24 = df_orbis[f'Indice di Struttura 2° livello (*) {ULTIMO}'].median() if f'Indice di Struttura 2° livello (*) {ULTIMO}' in df_orbis.columns else 0
+    val_set_gearing_24 = df_orbis[f'Gearing (*) % {ULTIMO}'].median() if f'Gearing (*) % {ULTIMO}' in df_orbis.columns else 0
+    val_set_cr_24 = df_orbis[f'Current Ratio (*) {ULTIMO}'].median() if f'Current Ratio (*) {ULTIMO}' in df_orbis.columns else 0
+    val_set_qr_24 = df_orbis[f'Quick Ratio (*) {ULTIMO}'].median() if f'Quick Ratio (*) {ULTIMO}' in df_orbis.columns else 0
+    val_set_rot_24 = df_orbis[f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'].median() if f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}' in df_orbis.columns else 0
 
     # =================================================================
     # 🎯 POPOLAMENTO REALE DEL DIZIONARIO CON CHIAMATE POSIZIONALI CORRETTE
@@ -3842,7 +3842,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # FORMA DELLA DISTRIBUZIONE (Asimmetria e Curtosi sui Margini)
     # Utilizziamo l'EBITDA 2024 come proxy rappresentativo della redditività
     # =================================================================
-    col_ebitda = 'Margine EBITDA (*) % 2025'
+    col_ebitda = f'Margine EBITDA (*) % {ULTIMO}'
     if col_ebitda in df_orbis.columns:
         skew_val = asimmetria_bowley(df_orbis[col_ebitda])
         kurt_val = df_orbis[col_ebitda].kurt() # In Pandas > 0 è leptocurtica
@@ -3874,7 +3874,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # FORMA DELLA DISTRIBUZIONE (Asimmetria e Curtosi Patrimoniale)
     # Utilizziamo l'Indice di Struttura 1° livello come proxy rappresentativo
     # =================================================================
-    col_strut = 'Indice di Struttura 1° livello (*) 2025'
+    col_strut = f'Indice di Struttura 1° livello (*) {ULTIMO}'
     if col_strut in df_orbis.columns:
         skew_patr = asimmetria_bowley(df_orbis[col_strut])
         kurt_patr = df_orbis[col_strut].kurt()
@@ -3902,7 +3902,7 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     # FORMA DELLA DISTRIBUZIONE (Asimmetria e Curtosi Finanziaria)
     # Utilizziamo il Current Ratio come proxy rappresentativo
     # =================================================================
-    col_fin = 'Current Ratio (*) 2025'
+    col_fin = f'Current Ratio (*) {ULTIMO}'
     if col_fin in df_orbis.columns:
         skew_fin = asimmetria_bowley(df_orbis[col_fin])
         kurt_fin = df_orbis[col_fin].kurt()
@@ -3954,13 +3954,13 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
     df_terr['Reg_Clean'] = df_terr[col_regione].apply(pulisci_regione) if col_regione else 'Altro'
 
     tot_imp = len(df_terr)
-    tot_ric = df_terr['Totale valore della produzione migl EUR 2025'].sum()
-    tot_att = df_terr['Totale Attivo migl EUR 2025'].sum()
-    tot_dip = df_terr['Numero dipendenti 2025'].sum()
+    tot_ric = df_terr[f'Totale valore della produzione migl EUR {ULTIMO}'].sum()
+    tot_att = df_terr[f'Totale Attivo migl EUR {ULTIMO}'].sum()
+    tot_dip = df_terr[f'Numero dipendenti {ULTIMO}'].sum()
 
     pivot_terr = df_terr.groupby(['Macroregione', 'Reg_Clean']).agg({
-        col_ragione: 'count', 'Totale valore della produzione migl EUR 2025': 'sum', 
-        'Totale Attivo migl EUR 2025': 'sum', 'Numero dipendenti 2025': 'sum'
+        col_ragione: 'count', f'Totale valore della produzione migl EUR {ULTIMO}': 'sum', 
+        f'Totale Attivo migl EUR {ULTIMO}': 'sum', f'Numero dipendenti {ULTIMO}': 'sum'
     }).reset_index()
 
     # 3. Compilazione Righe
@@ -3976,12 +3976,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
             row_cells[0].text = nome_regione
             row_cells[1].text = f"{int(r[col_ragione]):,}".replace(',', '.')
             row_cells[2].text = format_euro((r[col_ragione]/tot_imp)*100) if tot_imp else "0,00"
-            row_cells[3].text = format_euro(r['Totale valore della produzione migl EUR 2025'])
-            row_cells[4].text = format_euro((r['Totale valore della produzione migl EUR 2025']/tot_ric)*100) if tot_ric else "0,00"
-            row_cells[5].text = format_euro(r['Totale Attivo migl EUR 2025'])
-            row_cells[6].text = format_euro((r['Totale Attivo migl EUR 2025']/tot_att)*100) if tot_att else "0,00"
+            row_cells[3].text = format_euro(r[f'Totale valore della produzione migl EUR {ULTIMO}'])
+            row_cells[4].text = format_euro((r[f'Totale valore della produzione migl EUR {ULTIMO}']/tot_ric)*100) if tot_ric else "0,00"
+            row_cells[5].text = format_euro(r[f'Totale Attivo migl EUR {ULTIMO}'])
+            row_cells[6].text = format_euro((r[f'Totale Attivo migl EUR {ULTIMO}']/tot_att)*100) if tot_att else "0,00"
             row_cells[7].text = f"{int(r['Numero dipendenti 2025']):,}".replace(',', '.')
-            row_cells[8].text = format_euro((r['Numero dipendenti 2025']/tot_dip)*100) if tot_dip else "0,00"
+            row_cells[8].text = format_euro((r[f'Numero dipendenti {ULTIMO}']/tot_dip)*100) if tot_dip else "0,00"
 
             # 🎯 EVIDENZIA LA REGIONE DELL'AZIENDA (Sfondo azzurro e grassetto)
             if nome_regione.strip().lower() == regione_target_pulita.strip().lower():
@@ -3999,12 +3999,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         row_cells[0].paragraphs[0].runs[0].bold = True
         row_cells[1].text = f"{int(df_m[col_ragione].sum()):,}".replace(',', '.')
         row_cells[2].text = format_euro((df_m[col_ragione].sum()/tot_imp)*100) if tot_imp else "0,00"
-        row_cells[3].text = format_euro(df_m['Totale valore della produzione migl EUR 2025'].sum())
-        row_cells[4].text = format_euro((df_m['Totale valore della produzione migl EUR 2025'].sum()/tot_ric)*100) if tot_ric else "0,00"
-        row_cells[5].text = format_euro(df_m['Totale Attivo migl EUR 2025'].sum())
-        row_cells[6].text = format_euro((df_m['Totale Attivo migl EUR 2025'].sum()/tot_att)*100) if tot_att else "0,00"
+        row_cells[3].text = format_euro(df_m[f'Totale valore della produzione migl EUR {ULTIMO}'].sum())
+        row_cells[4].text = format_euro((df_m[f'Totale valore della produzione migl EUR {ULTIMO}'].sum()/tot_ric)*100) if tot_ric else "0,00"
+        row_cells[5].text = format_euro(df_m[f'Totale Attivo migl EUR {ULTIMO}'].sum())
+        row_cells[6].text = format_euro((df_m[f'Totale Attivo migl EUR {ULTIMO}'].sum()/tot_att)*100) if tot_att else "0,00"
         row_cells[7].text = f"{int(df_m['Numero dipendenti 2025'].sum()):,}".replace(',', '.')
-        row_cells[8].text = format_euro((df_m['Numero dipendenti 2025'].sum()/tot_dip)*100) if tot_dip else "0,00"
+        row_cells[8].text = format_euro((df_m[f'Numero dipendenti {ULTIMO}'].sum()/tot_dip)*100) if tot_dip else "0,00"
 
     # Inserimento Totale Italia Finale (Tutto in Grassetto)
     row_cells = t1.add_row().cells
@@ -6542,7 +6542,7 @@ def unisci_paragrafi_frammentati(output_buffer, ragione_sociale):
             'evidenziando', 'e la ', 'e il ', 'e i ',
             'risulti ', 'rappresenta', 'conferma', 'indica ',
             '- ', 'Anno ', 'mediano ', *ANNI,
-            'N.D. 20', 'N.D. 2021', 'N.D. 2022'
+            'N.D. 20',
         ]
         # Confronto CASE-SENSITIVE: con .lower() un periodo nuovo che inizia per
         # maiuscola ("Una volta applicate le variabili...") veniva scambiato per il

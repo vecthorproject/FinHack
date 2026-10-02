@@ -1162,15 +1162,15 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         return 'A' if punti >= 8 else ('B' if punti >= 5 else 'C')
 
     # --- 1. IL MOTORE DI CALCOLO COMPLETO A 9 METRICHE (Copiatodal Word) ---
-    c_prof = 'Margine di Profitto (*) % 2025'
-    c_ebitda = 'Margine EBITDA (*) % 2025'
-    c_ebit = 'Margine EBIT (*) % 2025'
-    c_rot = 'Indice di Rotazione del Capitale Investito (*) 2025'
-    c_quick = 'Quick Ratio (*) 2025'
-    c_curr = 'Current Ratio (*) 2025'
-    c_str1 = 'Indice di Struttura 1° livello (*) 2025'
-    c_str2 = 'Indice di Struttura 2° livello (*) 2025'
-    c_gear = 'Gearing (*) % 2025'
+    c_prof = f'Margine di Profitto (*) % {ULTIMO}'
+    c_ebitda = f'Margine EBITDA (*) % {ULTIMO}'
+    c_ebit = f'Margine EBIT (*) % {ULTIMO}'
+    c_rot = f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'
+    c_quick = f'Quick Ratio (*) {ULTIMO}'
+    c_curr = f'Current Ratio (*) {ULTIMO}'
+    c_str1 = f'Indice di Struttura 1° livello (*) {ULTIMO}'
+    c_str2 = f'Indice di Struttura 2° livello (*) {ULTIMO}'
+    c_gear = f'Gearing (*) % {ULTIMO}'
 
     # La Rotazione (c_rot) è tra le dirette: più alto è, più punti prende!
     metriche_dirette = [c_prof, c_ebitda, c_ebit, c_rot, c_quick, c_curr, c_str1, c_str2]
@@ -1222,8 +1222,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Produzione e la 148ª per Totale Attivo su 11.259 imprese). La leadership di mercato
     # e' una questione di dimensione, non di rating: si ordina su tutto il campione, con il
     # Totale Attivo come criterio di spareggio a parita' di Valore della Produzione.
-    _col_prod = 'Totale valore della produzione migl EUR 2025'
-    _col_att  = 'Totale Attivo migl EUR 2025'
+    _col_prod = f'Totale valore della produzione migl EUR {ULTIMO}'
+    _col_att  = f'Totale Attivo migl EUR {ULTIMO}'
     _sort_cols = [c for c in [_col_prod, _col_att] if c in df_raw.columns]
     if _sort_cols:
         idx_leader = df_raw.sort_values(by=_sort_cols, ascending=False, na_position='last').index[0]
@@ -1429,8 +1429,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
                                 'sicilia', 'sardegna']): return 'Sud e Isole'
         return None
     valori_macro_panel = {}
-    if col_regione and 'Totale valore della produzione migl EUR 2025' in df_raw.columns:
-        vdp_panel = pd.to_numeric(df_raw['Totale valore della produzione migl EUR 2025'], errors='coerce')
+    if col_regione and f'Totale valore della produzione migl EUR {ULTIMO}' in df_raw.columns:
+        vdp_panel = pd.to_numeric(df_raw[f'Totale valore della produzione migl EUR {ULTIMO}'], errors='coerce')
         macro_panel = df_raw[col_regione].map(_macroarea_da_regione)
         valori_macro_panel = vdp_panel.groupby(macro_panel).sum().to_dict()
     testo_rilevanza_revisione = testo_distribuzione_territoriale(
@@ -1461,8 +1461,8 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         'tot_imprese_regione': f"{tot_imprese_regione:,}".replace(',', '.'),
         'regione_target': regione_target_pulita,
         # Valori diretti per i riquadri del Market Leader (Senza decimali)
-        'tot_ricavi': format_euro(df_raw.loc[idx_leader].get('Totale valore della produzione migl EUR 2025', 0), 0) if pd.notna(idx_leader) else "n.d.",
-        'tot_attivo': format_euro(df_raw.loc[idx_leader].get('Totale Attivo migl EUR 2025', 0), 0) if pd.notna(idx_leader) else "n.d.",
+        'tot_ricavi': format_euro(df_raw.loc[idx_leader].get(f'Totale valore della produzione migl EUR {ULTIMO}', 0), 0) if pd.notna(idx_leader) else "n.d.",
+        'tot_attivo': format_euro(df_raw.loc[idx_leader].get(f'Totale Attivo migl EUR {ULTIMO}', 0), 0) if pd.notna(idx_leader) else "n.d.",
         'market_leader': market_leader,
         'rating_tot': rat_tot_c,
         'rating_eco': rat_eco_c,
@@ -1702,18 +1702,18 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         return f"{format_euro(pos_ottenuta, 0)}/{format_euro(tot_valide, 0)}"
 
     # ECO
-    az_ebitda, az_ebit, az_prof = riga.get('Margine EBITDA (*) % 2025', 0), riga.get('Margine EBIT (*) % 2025', 0), riga.get('Margine di Profitto (*) % 2025', 0)
-    ita_ebitda = df_raw['Margine EBITDA (*) % 2025'].median() if 'Margine EBITDA (*) % 2025' in df_raw.columns else 0
-    ita_ebit = df_raw['Margine EBIT (*) % 2025'].median() if 'Margine EBIT (*) % 2025' in df_raw.columns else 0
-    ita_prof = df_raw['Margine di Profitto (*) % 2025'].median() if 'Margine di Profitto (*) % 2025' in df_raw.columns else 0
-    reg_ebitda = df_regione['Margine EBITDA (*) % 2025'].median() if not df_regione.empty and 'Margine EBITDA (*) % 2025' in df_regione.columns else 0
-    reg_ebit = df_regione['Margine EBIT (*) % 2025'].median() if not df_regione.empty and 'Margine EBIT (*) % 2025' in df_regione.columns else 0
-    reg_prof = df_regione['Margine di Profitto (*) % 2025'].median() if not df_regione.empty and 'Margine di Profitto (*) % 2025' in df_regione.columns else 0
+    az_ebitda, az_ebit, az_prof = riga.get(f'Margine EBITDA (*) % {ULTIMO}', 0), riga.get(f'Margine EBIT (*) % {ULTIMO}', 0), riga.get(f'Margine di Profitto (*) % {ULTIMO}', 0)
+    ita_ebitda = df_raw[f'Margine EBITDA (*) % {ULTIMO}'].median() if f'Margine EBITDA (*) % {ULTIMO}' in df_raw.columns else 0
+    ita_ebit = df_raw[f'Margine EBIT (*) % {ULTIMO}'].median() if f'Margine EBIT (*) % {ULTIMO}' in df_raw.columns else 0
+    ita_prof = df_raw[f'Margine di Profitto (*) % {ULTIMO}'].median() if f'Margine di Profitto (*) % {ULTIMO}' in df_raw.columns else 0
+    reg_ebitda = df_regione[f'Margine EBITDA (*) % {ULTIMO}'].median() if not df_regione.empty and f'Margine EBITDA (*) % {ULTIMO}' in df_regione.columns else 0
+    reg_ebit = df_regione[f'Margine EBIT (*) % {ULTIMO}'].median() if not df_regione.empty and f'Margine EBIT (*) % {ULTIMO}' in df_regione.columns else 0
+    reg_prof = df_regione[f'Margine di Profitto (*) % {ULTIMO}'].median() if not df_regione.empty and f'Margine di Profitto (*) % {ULTIMO}' in df_regione.columns else 0
 
     img_barre_eco = crea_grafico_barre_confronto(['EBITDA Margin', 'EBIT Margin', 'Profit Margin'], [ita_ebitda, ita_ebit, ita_prof], [reg_ebitda, reg_ebit, reg_prof], [az_ebitda, az_ebit, az_prof], regione_target_pulita)
-    rnk_naz_ebitda, rnk_reg_ebitda = calc_rank_str(df_raw, 'Margine EBITDA (*) % 2025', az_ebitda, True), calc_rank_str(df_regione, 'Margine EBITDA (*) % 2025', az_ebitda, True)
-    rnk_naz_ebit, rnk_reg_ebit = calc_rank_str(df_raw, 'Margine EBIT (*) % 2025', az_ebit, True), calc_rank_str(df_regione, 'Margine EBIT (*) % 2025', az_ebit, True)
-    rnk_naz_prof, rnk_reg_prof = calc_rank_str(df_raw, 'Margine di Profitto (*) % 2025', az_prof, True), calc_rank_str(df_regione, 'Margine di Profitto (*) % 2025', az_prof, True)
+    rnk_naz_ebitda, rnk_reg_ebitda = calc_rank_str(df_raw, f'Margine EBITDA (*) % {ULTIMO}', az_ebitda, True), calc_rank_str(df_regione, f'Margine EBITDA (*) % {ULTIMO}', az_ebitda, True)
+    rnk_naz_ebit, rnk_reg_ebit = calc_rank_str(df_raw, f'Margine EBIT (*) % {ULTIMO}', az_ebit, True), calc_rank_str(df_regione, f'Margine EBIT (*) % {ULTIMO}', az_ebit, True)
+    rnk_naz_prof, rnk_reg_prof = calc_rank_str(df_raw, f'Margine di Profitto (*) % {ULTIMO}', az_prof, True), calc_rank_str(df_regione, f'Margine di Profitto (*) % {ULTIMO}', az_prof, True)
 
     img_tabella_eco = crea_tabella_confronto_img([
         ['EBITDA Margin %', format_euro(ita_ebitda), format_euro(reg_ebitda), format_euro(az_ebitda), rnk_naz_ebitda, rnk_reg_ebitda],
@@ -1722,20 +1722,20 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     ], f"Equilibrio Economico - Anno {ULTIMO}")
 
     # PATR
-    az_str1, az_str2, az_gear = riga.get('Indice di Struttura 1° livello (*) 2025', 0), riga.get('Indice di Struttura 2° livello (*) 2025', 0), riga.get('Gearing (*) % 2025', 0)
-    ita_str1 = df_raw['Indice di Struttura 1° livello (*) 2025'].median() if 'Indice di Struttura 1° livello (*) 2025' in df_raw.columns else 0
-    ita_str2 = df_raw['Indice di Struttura 2° livello (*) 2025'].median() if 'Indice di Struttura 2° livello (*) 2025' in df_raw.columns else 0
-    ita_gear = df_raw['Gearing (*) % 2025'].median() if 'Gearing (*) % 2025' in df_raw.columns else 0
-    reg_str1 = df_regione['Indice di Struttura 1° livello (*) 2025'].median() if not df_regione.empty and 'Indice di Struttura 1° livello (*) 2025' in df_regione.columns else 0
-    reg_str2 = df_regione['Indice di Struttura 2° livello (*) 2025'].median() if not df_regione.empty and 'Indice di Struttura 2° livello (*) 2025' in df_regione.columns else 0
-    reg_gear = df_regione['Gearing (*) % 2025'].median() if not df_regione.empty and 'Gearing (*) % 2025' in df_regione.columns else 0
+    az_str1, az_str2, az_gear = riga.get(f'Indice di Struttura 1° livello (*) {ULTIMO}', 0), riga.get(f'Indice di Struttura 2° livello (*) {ULTIMO}', 0), riga.get(f'Gearing (*) % {ULTIMO}', 0)
+    ita_str1 = df_raw[f'Indice di Struttura 1° livello (*) {ULTIMO}'].median() if f'Indice di Struttura 1° livello (*) {ULTIMO}' in df_raw.columns else 0
+    ita_str2 = df_raw[f'Indice di Struttura 2° livello (*) {ULTIMO}'].median() if f'Indice di Struttura 2° livello (*) {ULTIMO}' in df_raw.columns else 0
+    ita_gear = df_raw[f'Gearing (*) % {ULTIMO}'].median() if f'Gearing (*) % {ULTIMO}' in df_raw.columns else 0
+    reg_str1 = df_regione[f'Indice di Struttura 1° livello (*) {ULTIMO}'].median() if not df_regione.empty and f'Indice di Struttura 1° livello (*) {ULTIMO}' in df_regione.columns else 0
+    reg_str2 = df_regione[f'Indice di Struttura 2° livello (*) {ULTIMO}'].median() if not df_regione.empty and f'Indice di Struttura 2° livello (*) {ULTIMO}' in df_regione.columns else 0
+    reg_gear = df_regione[f'Gearing (*) % {ULTIMO}'].median() if not df_regione.empty and f'Gearing (*) % {ULTIMO}' in df_regione.columns else 0
 
     # 👇 MODIFICA: Gearing rimosso dall'istogramma, mantenendo solo i due indici di struttura
     img_barre_patr = crea_grafico_barre_confronto(['Ind. Struttura 1°', 'Ind. Struttura 2°'], [ita_str1, ita_str2], [reg_str1, reg_str2], [az_str1, az_str2], regione_target_pulita)
     
-    rnk_naz_str1, rnk_reg_str1 = calc_rank_str(df_raw, 'Indice di Struttura 1° livello (*) 2025', az_str1, True), calc_rank_str(df_regione, 'Indice di Struttura 1° livello (*) 2025', az_str1, True)
-    rnk_naz_str2, rnk_reg_str2 = calc_rank_str(df_raw, 'Indice di Struttura 2° livello (*) 2025', az_str2, True), calc_rank_str(df_regione, 'Indice di Struttura 2° livello (*) 2025', az_str2, True)
-    rnk_naz_gear, rnk_reg_gear = calc_rank_str(df_raw, 'Gearing (*) % 2025', az_gear, False), calc_rank_str(df_regione, 'Gearing (*) % 2025', az_gear, False)
+    rnk_naz_str1, rnk_reg_str1 = calc_rank_str(df_raw, f'Indice di Struttura 1° livello (*) {ULTIMO}', az_str1, True), calc_rank_str(df_regione, f'Indice di Struttura 1° livello (*) {ULTIMO}', az_str1, True)
+    rnk_naz_str2, rnk_reg_str2 = calc_rank_str(df_raw, f'Indice di Struttura 2° livello (*) {ULTIMO}', az_str2, True), calc_rank_str(df_regione, f'Indice di Struttura 2° livello (*) {ULTIMO}', az_str2, True)
+    rnk_naz_gear, rnk_reg_gear = calc_rank_str(df_raw, f'Gearing (*) % {ULTIMO}', az_gear, False), calc_rank_str(df_regione, f'Gearing (*) % {ULTIMO}', az_gear, False)
 
     img_tabella_patr = crea_tabella_confronto_img([
         ['Ind. Struttura 1°', format_euro(ita_str1), format_euro(reg_str1), format_euro(az_str1), rnk_naz_str1, rnk_reg_str1],
@@ -1744,18 +1744,18 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     ], f"Equilibrio Patrimoniale - Anno {ULTIMO}")
 
     # FIN
-    az_cr, az_qr, az_rot = riga.get('Current Ratio (*) 2025', 0), riga.get('Quick Ratio (*) 2025', 0), riga.get('Indice di Rotazione del Capitale Investito (*) 2025', 0)
-    ita_cr = df_raw['Current Ratio (*) 2025'].median() if 'Current Ratio (*) 2025' in df_raw.columns else 0
-    ita_qr = df_raw['Quick Ratio (*) 2025'].median() if 'Quick Ratio (*) 2025' in df_raw.columns else 0
-    ita_rot = df_raw['Indice di Rotazione del Capitale Investito (*) 2025'].median() if 'Indice di Rotazione del Capitale Investito (*) 2025' in df_raw.columns else 0
-    reg_cr = df_regione['Current Ratio (*) 2025'].median() if not df_regione.empty and 'Current Ratio (*) 2025' in df_regione.columns else 0
-    reg_qr = df_regione['Quick Ratio (*) 2025'].median() if not df_regione.empty and 'Quick Ratio (*) 2025' in df_regione.columns else 0
-    reg_rot = df_regione['Indice di Rotazione del Capitale Investito (*) 2025'].median() if not df_regione.empty and 'Indice di Rotazione del Capitale Investito (*) 2025' in df_regione.columns else 0
+    az_cr, az_qr, az_rot = riga.get(f'Current Ratio (*) {ULTIMO}', 0), riga.get(f'Quick Ratio (*) {ULTIMO}', 0), riga.get(f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}', 0)
+    ita_cr = df_raw[f'Current Ratio (*) {ULTIMO}'].median() if f'Current Ratio (*) {ULTIMO}' in df_raw.columns else 0
+    ita_qr = df_raw[f'Quick Ratio (*) {ULTIMO}'].median() if f'Quick Ratio (*) {ULTIMO}' in df_raw.columns else 0
+    ita_rot = df_raw[f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'].median() if f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}' in df_raw.columns else 0
+    reg_cr = df_regione[f'Current Ratio (*) {ULTIMO}'].median() if not df_regione.empty and f'Current Ratio (*) {ULTIMO}' in df_regione.columns else 0
+    reg_qr = df_regione[f'Quick Ratio (*) {ULTIMO}'].median() if not df_regione.empty and f'Quick Ratio (*) {ULTIMO}' in df_regione.columns else 0
+    reg_rot = df_regione[f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}'].median() if not df_regione.empty and f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}' in df_regione.columns else 0
 
     img_barre_fin = crea_grafico_barre_confronto(['Current Ratio', 'Quick Ratio', 'Rotazione Cap.'], [ita_cr, ita_qr, ita_rot], [reg_cr, reg_qr, reg_rot], [az_cr, az_qr, az_rot], regione_target_pulita)
-    rnk_naz_cr, rnk_reg_cr = calc_rank_str(df_raw, 'Current Ratio (*) 2025', az_cr, True), calc_rank_str(df_regione, 'Current Ratio (*) 2025', az_cr, True)
-    rnk_naz_qr, rnk_reg_qr = calc_rank_str(df_raw, 'Quick Ratio (*) 2025', az_qr, True), calc_rank_str(df_regione, 'Quick Ratio (*) 2025', az_qr, True)
-    rnk_naz_rot, rnk_reg_rot = calc_rank_str(df_raw, 'Indice di Rotazione del Capitale Investito (*) 2025', az_rot, True), calc_rank_str(df_regione, 'Indice di Rotazione del Capitale Investito (*) 2025', az_rot, True)
+    rnk_naz_cr, rnk_reg_cr = calc_rank_str(df_raw, f'Current Ratio (*) {ULTIMO}', az_cr, True), calc_rank_str(df_regione, f'Current Ratio (*) {ULTIMO}', az_cr, True)
+    rnk_naz_qr, rnk_reg_qr = calc_rank_str(df_raw, f'Quick Ratio (*) {ULTIMO}', az_qr, True), calc_rank_str(df_regione, f'Quick Ratio (*) {ULTIMO}', az_qr, True)
+    rnk_naz_rot, rnk_reg_rot = calc_rank_str(df_raw, f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}', az_rot, True), calc_rank_str(df_regione, f'Indice di Rotazione del Capitale Investito (*) {ULTIMO}', az_rot, True)
 
     img_tabella_fin = crea_tabella_confronto_img([
         ['Current Ratio', format_euro(ita_cr), format_euro(reg_cr), format_euro(az_cr), rnk_naz_cr, rnk_reg_cr],
@@ -1895,24 +1895,24 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Estrazione Dati e Calcolo Rating del Leader
     if pd.notna(idx_leader):
         riga_leader = df_raw.loc[idx_leader]
-        ml_ricavi = format_euro(riga_leader.get('Totale valore della produzione migl EUR 2025', 0), 0)
-        ml_attivo = format_euro(riga_leader.get('Totale Attivo migl EUR 2025', 0), 0)
+        ml_ricavi = format_euro(riga_leader.get(f'Totale valore della produzione migl EUR {ULTIMO}', 0), 0)
+        ml_attivo = format_euro(riga_leader.get(f'Totale Attivo migl EUR {ULTIMO}', 0), 0)
         # MODIFICATO: era == 3 (vecchia scala 3=best); ora 1=primo terzile=best, 3=terzo terzile=worst
-        ml_eco = 'A' if riga_leader.get('pts_Margine EBITDA (*) % 2025', 3) == 1 else ('B' if riga_leader.get('pts_Margine EBITDA (*) % 2025', 3) == 2 else 'C')
-        ml_pat = 'A' if riga_leader.get('pts_Gearing (*) % 2025', 3) == 1 else ('B' if riga_leader.get('pts_Gearing (*) % 2025', 3) == 2 else 'C')
-        ml_fin = 'A' if riga_leader.get('pts_Current Ratio (*) 2025', 3) == 1 else ('B' if riga_leader.get('pts_Current Ratio (*) 2025', 3) == 2 else 'C')
+        ml_eco = 'A' if riga_leader.get(f'pts_Margine EBITDA (*) % {ULTIMO}', 3) == 1 else ('B' if riga_leader.get(f'pts_Margine EBITDA (*) % {ULTIMO}', 3) == 2 else 'C')
+        ml_pat = 'A' if riga_leader.get(f'pts_Gearing (*) % {ULTIMO}', 3) == 1 else ('B' if riga_leader.get(f'pts_Gearing (*) % {ULTIMO}', 3) == 2 else 'C')
+        ml_fin = 'A' if riga_leader.get(f'pts_Current Ratio (*) {ULTIMO}', 3) == 1 else ('B' if riga_leader.get(f'pts_Current Ratio (*) {ULTIMO}', 3) == 2 else 'C')
         ml_bench = f"{ml_eco}{ml_pat}{ml_fin}" # Es: "AAA"
     else:
         ml_ricavi, ml_attivo, ml_bench = "n.d.", "n.d.", "N.D."
 
     # Valori Mediana Settore
-    med_ricavi = format_euro(df_raw['Totale valore della produzione migl EUR 2025'].median(), 0)
-    med_attivo = format_euro(df_raw['Totale Attivo migl EUR 2025'].median(), 0)
+    med_ricavi = format_euro(df_raw[f'Totale valore della produzione migl EUR {ULTIMO}'].median(), 0)
+    med_attivo = format_euro(df_raw[f'Totale Attivo migl EUR {ULTIMO}'].median(), 0)
     med_bench = "BBB"
 
     # Valori Azienda Target
-    az_ricavi = format_euro(riga.get('Totale valore della produzione migl EUR 2025', 0), 0)
-    az_attivo = format_euro(riga.get('Totale Attivo migl EUR 2025', 0), 0)
+    az_ricavi = format_euro(riga.get(f'Totale valore della produzione migl EUR {ULTIMO}', 0), 0)
+    az_attivo = format_euro(riga.get(f'Totale Attivo migl EUR {ULTIMO}', 0), 0)
     az_bench = f"{rat_eco}{rat_pat}{rat_fin}" # Es: "ABA"
 
     # Costruzione Matrice Tabella (Colonna Benchmark singola e pulita)
