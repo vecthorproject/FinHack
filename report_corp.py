@@ -5186,9 +5186,12 @@ def genera_report_word(zip_buffer, template_path, azienda_target, df_orbis, sett
         if s.empty:
             return ["N.D.", "N.D.", "N.D."]
 
+        # 1/3 e 2/3 esatti, come i motori che assegnano le classi: con 0,3333 e
+        # 0,6666 la tabella stampava soglie diverse da quelle davvero applicate
+        # (13,55 invece di 13,56, 4,51 invece di 4,52, 36,36 invece di 36,37).
         vmin = s.min()
-        v33 = s.quantile(0.3333)
-        v66 = s.quantile(0.6666)
+        v33 = s.quantile(1 / 3)
+        v66 = s.quantile(2 / 3)
         vmax = s.max()
 
         # Funzione per formattare i numeri in stile italiano (1.234,56)
