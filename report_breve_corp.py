@@ -1245,13 +1245,22 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
         file_val = os.path.join(cartella, "TotValEcoIST.xlsx")
 
         def trova_riga_sicura(df):
-            # Analizza ogni riga unita come testo per trovare il tag NACE, indipendentemente dalla colonna
-            for i, riga in df.iterrows():
-                testo_riga = " ".join(riga.fillna("").astype(str))
-                for tag in tags_nace:
-                    if tag in testo_riga: return riga
-                for n in nace_puliti:
-                    if f"{n} " in testo_riga or f"{n[:2]}.{n[2:]}" in testo_riga: return riga
+            """Cerca il NACE nella colonna delle etichette, non nella riga intera.
+
+            Cercarlo in tutta la riga lo fa pescare dentro ai numeri: "62.01" si
+            trova dentro "2362.01", e il software prendeva gli addetti del vetro
+            piano. Prima si prova il tag fra parentesi su tutto il file, poi il
+            codice nudo, cosi' una corrispondenza esatta piu' in basso batte un
+            ripiego piu' in alto.
+            """
+            etichette = df.iloc[:, 0].fillna("").astype(str)
+            for n, etichetta in etichette.items():
+                if any(tag in etichetta for tag in tags_nace):
+                    return df.loc[n]
+            for n, etichetta in etichette.items():
+                for cod in nace_puliti:
+                    if re.search(r'(?<!\d)' + cod[:2] + r'\.?' + cod[2:] + r'(?!\d)', etichetta):
+                        return df.loc[n]
             return None
 
         # 1. LETTURA SOCIETA'
@@ -1307,9 +1316,15 @@ def genera_presentazione_ppt(template_path, azienda_target, df_orbis, settore_na
     # Prepariamo le stringhe formattate con "n.d." se i file non ci sono o non trova nulla
     tot_is = dati_istat['tot_imprese']
     
-    str_tot_imprese = f"{tot_is:,}".replace(',', '.') if ha_dati_istat else "n.d."
-    str_tot_vprod = f"{dati_istat['tot_val_prod_mln']:,.0f}".replace(',', '.') if ha_dati_istat else "n.d."
-    str_tot_dip = f"{dati_istat['tot_dipendenti']:,}".replace(',', '.') if ha_dati_istat else "n.d."
+    def num_istat(valore):
+        """Ogni numero risponde del suo: se manca la riga in quel file, "n.d."."""
+        if not ha_dati_istat or not valore:
+            return "n.d."
+        return f"{valore:,.0f}".replace(',', '.')
+
+    str_tot_imprese = num_istat(tot_is)
+    str_tot_vprod = num_istat(dati_istat['tot_val_prod_mln'])
+    str_tot_dip = num_istat(dati_istat['tot_dipendenti'])
     
     str_no_num = f"{dati_istat['no_num']:,}".replace(',', '.') if ha_dati_istat else "n.d."
     str_ne_num = f"{dati_istat['ne_num']:,}".replace(',', '.') if ha_dati_istat else "n.d."
