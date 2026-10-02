@@ -6725,6 +6725,7 @@ def sistema_salti_pagina(output_buffer):
     unisci_fini_sezione_doppie(doc)
     togli_salti_pagina_inutili(doc)
     togli_righe_vuote_prima_dei_salti(doc)
+    togli_righe_vuote_in_coda(doc)
     tieni_insieme_forme_flottanti(doc)
     risultato = io.BytesIO()
     doc.save(risultato)
@@ -6813,6 +6814,36 @@ def togli_righe_vuote_prima_dei_salti(doc):
             da_togliere, precedente = precedente, precedente.getprevious()
             da_togliere.getparent().remove(da_togliere)
             tolte += 1
+    return tolte
+
+
+def togli_righe_vuote_in_coda(doc, tieni=1):
+    """La coda del template lascia una ventina di righe vuote dopo il glossario.
+
+    Qui non si guadagna una pagina: l'ultima sezione del template ha margini
+    propri, quindi Word le da' una pagina comunque, vuota o piena (verificato
+    rendendo il PDF con e senza queste righe: 50 pagine in entrambi i casi).
+    Si levano perche' il documento finisca dove finisce il testo; se un giorno
+    quella sezione spuntera' dal template, queste righe tornerebbero in fondo
+    al glossario, e la' lo spazio conterebbe. Se ne tiene una come chiusura del
+    corpo, e ci si ferma davanti a qualunque cosa porti testo, una forma o una
+    fine di sezione.
+    """
+    coda = []
+    for p in reversed(doc.paragraphs):
+        testo = ''.join(x.text or '' for x in p._p.iter(qn('w:t'))).strip()
+        pPr = p._p.find(qn('w:pPr'))
+        protetto = (testo
+                    or p._p.findall('.//' + qn('w:drawing'))
+                    or p._p.findall('.//' + qn('w:pict'))
+                    or (pPr is not None and pPr.find(qn('w:sectPr')) is not None))
+        if protetto:
+            break
+        coda.append(p)
+    tolte = 0
+    for p in coda[:max(0, len(coda) - tieni)]:
+        p._p.getparent().remove(p._p)
+        tolte += 1
     return tolte
 
 
