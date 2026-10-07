@@ -555,18 +555,30 @@ def costruisci_catena_filtri(info_filtri):
         )
 
     scarti = []
+
+    def _quante(n, cosa='imprese', una='impresa'):
+        """"1 impresa", "1.150 imprese": il numero e il sostantivo che gli va dietro."""
+        return f"{f'{n:,}'.replace(',', '.')} {una if n == 1 else cosa}"
+
+    # I due motivi di scarto restano distinti: il primo non si puo' disattivare
+    # (senza quei dati non si calcola nulla), il secondo e' una scelta della
+    # piattaforma e puo' essere escluso dal pannello dei filtri.
     n_dati = info_filtri.get('scartate_dati') or 0
+    n_rotazione = info_filtri.get('scartate_rotazione') or 0
     n_gearing = info_filtri.get('scartate_gearing') or 0
     if n_dati:
         scarti.append(
-            f"{f'{n_dati:,}'.replace(',', '.')} imprese prive dei valori di bilancio "
-            f"necessari al calcolo delle nove variabili o con indice di rotazione del "
-            f"capitale investito non positivo"
+            f"{_quante(n_dati)} {'priva' if n_dati == 1 else 'prive'} dei valori di "
+            f"bilancio necessari al calcolo delle nove variabili"
+        )
+    if n_rotazione:
+        scarti.append(
+            f"{_quante(n_rotazione)} con indice di rotazione del capitale investito "
+            f"non positivo"
         )
     if n_gearing:
         scarti.append(
-            f"{f'{n_gearing:,}'.replace(',', '.')} imprese il cui Gearing {ULTIMO} non "
-            f"risulta valorizzato"
+            f"{_quante(n_gearing)} il cui Gearing {ULTIMO} non risulta valorizzato"
         )
     n_outlier = info_filtri.get('scartate_outlier') or 0
     if n_outlier:

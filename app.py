@@ -2888,12 +2888,72 @@ if uploaded_file is not None:
             if col in df_orbis.columns:
                 df_orbis[col] = pd.to_numeric(df_orbis[col], errors='coerce')
 
-        # --- FILTRO 1: ROTAZIONE E DATI BASE ---
+        # --- FILTRO 1: DATI BASE ---
+        # Senza attivo, valore della produzione o rotazione dell'ultimo esercizio non
+        # si calcola niente: queste escono e non c'e' opzione che tenga.
         df_orbis = df_orbis.dropna(subset=[col_attivo_ultimo, col_ricavi_ultimo, col_rotazione_ultimo])
-        df_orbis = df_orbis[df_orbis[col_rotazione_ultimo] > 0]
-        
+        righe_post_dati = len(df_orbis)
+        scartate_dati = righe_iniziali - righe_post_dati
+
+        # --- ⚙️ FILTRO ROTAZIONE: OPZIONI AVANZATE ---
+        # Un indice di rotazione non positivo nasce da un capitale investito negativo o
+        # nullo (patrimonio netto sotto zero, circolante fortemente negativo): il rapporto
+        # perde significato economico e il default storico scarta l'impresa. Come per il
+        # Gearing, qui si puo' tenerla: serve quando interessa proprio quella coda, o
+        # quando l'impresa target e' una di quelle.
+        col_ragione_rot, col_piva_rot, col_bvd_rot = trova_colonne_identita(df_orbis)
+
+        aziende_a_rischio_rotazione = []
+        etichette_aziende_rotazione = {}
+        if col_ragione_rot:
+            df_rischio_rotazione = df_orbis.loc[df_orbis[col_rotazione_ultimo] <= 0].sort_values(
+                col_ragione_rot, key=lambda s: s.astype(str).str.lower()
+            )
+            aziende_a_rischio_rotazione = df_rischio_rotazione.index.tolist()
+            etichette_aziende_rotazione = {
+                idx: etichetta_azienda(row, df_orbis) for idx, row in df_rischio_rotazione.iterrows()
+            }
+
+        disattiva_filtro_rotazione = False
+        indici_esenti_rotazione = []
+        if aziende_a_rischio_rotazione:
+            with st.expander(
+                f"⚙️ Filtro Rotazione: {len(aziende_a_rischio_rotazione)} aziende con indice "
+                f"non positivo al {ULTIMO} — opzioni avanzate"
+            ):
+                disattiva_filtro_rotazione = st.toggle(
+                    "🔓 Non applicare il Filtro Rotazione a nessuna azienda del campione",
+                    value=False,
+                    help=f"ATTIVO di default: le imprese con Indice di Rotazione del Capitale "
+                         f"Investito {ULTIMO} minore o uguale a zero vengono scartate, perche' il "
+                         f"loro capitale investito e' negativo o nullo e il rapporto non ha "
+                         f"significato.\n\nDISATTIVATO: restano nel campione. Entrano quindi nelle "
+                         f"mediane e nei terzili della Rotazione, che possono spostarsi "
+                         f"sensibilmente.\n\nResta in ogni caso fuori chi non ha attivo, valore "
+                         f"della produzione o rotazione {ULTIMO} valorizzati: senza quei dati non "
+                         f"si calcola nulla.",
+                    key="disattiva_filtro_rotazione"
+                )
+                if not disattiva_filtro_rotazione:
+                    indici_esenti_rotazione = st.multiselect(
+                        "Escludi singolarmente una o più aziende dal Filtro Rotazione (restano nel campione anche con indice non positivo)",
+                        options=aziende_a_rischio_rotazione,
+                        format_func=lambda idx: etichette_aziende_rotazione.get(idx, str(idx)),
+                        default=[],
+                        help="Ogni azienda è identificata da Ragione Sociale, P.IVA/Codice Fiscale e BvD ID (quando disponibili), per distinguere eventuali omonimie. Puoi digitare uno di questi dati per cercarla nell'elenco.",
+                        key="indici_esenti_rotazione"
+                    )
+
+        if disattiva_filtro_rotazione:
+            maschera_rotazione_ok = pd.Series(True, index=df_orbis.index)
+        else:
+            maschera_rotazione_ok = df_orbis[col_rotazione_ultimo] > 0
+            if indici_esenti_rotazione:
+                maschera_rotazione_ok |= df_orbis.index.isin(indici_esenti_rotazione)
+        df_orbis = df_orbis[maschera_rotazione_ok]
+
         righe_post_rotazione = len(df_orbis)
-        scartate_rotazione = righe_iniziali - righe_post_rotazione
+        scartate_rotazione = righe_post_dati - righe_post_rotazione
         
         # --- ⚙️ FILTRO GEARING: OPZIONI AVANZATE ---
         # Comportamento di default (storico): il Gearing dell'ultimo esercizio pari a zero
@@ -3376,7 +3436,8 @@ if uploaded_file is not None:
         st.metric(
             label="🗑️ Aziende Scartate", 
             value=righe_scartate, 
-            delta=(f"-{scartate_rotazione} Rotazione | -{scartate_gearing} Gearing"
+            delta=((f"-{scartate_dati} Dati | " if scartate_dati else "")
+                   + f"-{scartate_rotazione} Rotazione | -{scartate_gearing} Gearing"
                    + (f" | -{scartate_outlier} Outlier" if scartate_outlier else "")
                    + (f" | {winsor_imprese} winsorizzate" if winsor_imprese else "")), 
             delta_color="inverse"
@@ -3628,7 +3689,8 @@ if uploaded_file is not None:
                             info_filtri = {
                                 'passi_orbis': st.session_state.get('passi_orbis', []),
                                 'estratte': righe_iniziali,
-                                'scartate_dati': scartate_rotazione,
+                                'scartate_dati': scartate_dati,
+                                'scartate_rotazione': scartate_rotazione,
                                 'scartate_gearing': scartate_gearing,
                                 'scartate_outlier': scartate_outlier,
                                 'winsor_imprese': winsor_imprese,
