@@ -118,7 +118,14 @@ def con_articolo(valore_formattato, preposizione=None):
         con_articolo("0,26", 'a')    -> "allo 0,26"
         con_articolo("8,26", 'a')    -> "all'8,26"
         con_articolo("159,50", 'di') -> "del 159,50"
+
+    Un numero negativo si legge "meno uno virgola quarantasette" e non prende
+    articolo: "pari a -1,47", non "pari all'-1,47". Succede da quando il Filtro
+    Rotazione si puo' disattivare e nel campione entrano indici negativi.
     """
+    if str(valore_formattato).strip().startswith('-'):
+        return (f'{preposizione} {valore_formattato}' if preposizione
+                else str(valore_formattato))
     articolo = articolo_numero(valore_formattato)
     if preposizione:
         articolo = _PREPOSIZIONI_ARTICOLATE[_PREPOSIZIONI_SEMPLICI[preposizione]][articolo]
